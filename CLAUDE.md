@@ -53,4 +53,5 @@
 - 파일 삭제 전에는 반드시 확인.
 - **이 파일(루트 `CLAUDE.md`)을 대상으로 `/init`을 실행하지 않는다.** 코드에서 유도할 수 없는 제품 결정·페르소나·문서 인덱스가 들어 있다. 패키지 관례는 `web/`·`api/` 디렉터리 **안에서** `/init`을 돌려 각자의 `CLAUDE.md`에 채운다.
 - 저장소 구조: `web/` `api/` `landing/` `infra/` `docs/` `api-requests/` (평면 구조, 공유 패키지 없음 — 프론트 타입은 `make contracts`로 api OpenAPI에서 생성). 결정 기록은 `docs/adr/`. `api-requests/`는 프론트가 직접 쓰는 API 수정요청 폴더 — `open/`(대기) → `done/`(완료, 백엔드가 이동). **PM 소유가 아닌 유일한 문서 폴더.**
-- `docs/`는 PM 소유(CODEOWNERS `*` 기본값). **개발자는 `docs/`를 직접 수정하지 않는다** — PRD·API 명세를 바꿔야 하면 PR 본문의 「명세 변경 요약」으로 제안하고, PM이 반영한다. 소유자는 CODEOWNERS `*  @PM` 한 줄 — 개발자 2명이 각자 `web/`·`api/`에서 feature 브랜치 → PR → **PM 승인** → `main`. 패키지별 소유자를 두면 PR 작성자가 곧 유일한 승인자가 되어 머지가 막힌다.
+- **팀은 둘.** `@jinioh88`(PM 겸 백엔드, 저장소 소유자) · `@jjub0217`(프론트). feature 브랜치 → PR → 승인 → `main`.
+- `docs/`는 **PM(@jinioh88) 소유**(CODEOWNERS `*`). **@jjub0217은 `docs/`를 직접 수정하지 않는다** — PR 본문의 「명세 변경 요약」으로 제안하고 PM이 반영한다. @jinioh88도 `api/` 작업 중에는 문서를 함께 고치지 말고, PM 모자를 쓴 별도 PR에서 반영한다.
