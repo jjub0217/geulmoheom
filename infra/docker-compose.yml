@@ -1,0 +1,28 @@
+# 로컬 개발용 Postgres + Redis. 파일럿 배포는 fly.toml / railway 설정 별도.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: geulmoheom-postgres
+    environment:
+      POSTGRES_DB: geulmoheom
+      POSTGRES_USER: geulmoheom
+      POSTGRES_PASSWORD: geulmoheom
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geulmoheom"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: geulmoheom-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+volumes:
+  pgdata:
