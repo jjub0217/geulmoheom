@@ -26,8 +26,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 패키지 초기화 전에는 검사를 건너뛴다. pyproject.toml 이 생기는 순간 자동으로 켜진다.
+      - id: init
+        run: |
+          if [ -f api/pyproject.toml ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=api 미초기화::api/pyproject.toml 이 없어 lint·test를 건너뜁니다"
+          fi
       - uses: astral-sh/setup-uv@v3
-      - run: cd api && uv sync && uv run ruff check . && uv run pytest
+        if: steps.init.outputs.ready == 'true'
+      - if: steps.init.outputs.ready == 'true'
+        run: cd api && uv sync && uv run ruff check . && uv run pytest
 
   web:
     needs: changes
@@ -35,10 +46,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: init
+        run: |
+          if [ -f web/package.json ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=web 미초기화::web/package.json 이 없어 lint·test를 건너뜁니다"
+          fi
       - uses: pnpm/action-setup@v4
+        if: steps.init.outputs.ready == 'true'
         with: { version: 9 }
       - uses: actions/setup-node@v4
+        if: steps.init.outputs.ready == 'true'
         with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: cd web && pnpm lint && pnpm test
+      - if: steps.init.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile && cd web && pnpm lint && pnpm test
+
+  # 브랜치 보호에서 필수로 걸 유일한 체크.
+  # api·web 은 변경 경로에 따라 skip 되므로 직접 필수로 걸면 안 된다 —
+  # docs 만 바꾼 PR이 보고되지 않은 체크를 기다리며 영구히 막힐 수 있다.
+  all-green:
+    needs: [changes, api, web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 잡 결과 집계
+        run: |
+          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  web=${{ needs.web.result }}"
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
+            echo "::error::실패한 잡이 있습니다"; exit 1
+          fi
+          if [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::취소된 잡이 있습니다"; exit 1
+          fi
+          echo "통과"
+
   # TODO(W1): contracts 검증 job — api 기동 → make contracts → git diff --exit-code web/src/api/types.gen.ts
+  #           all-green 의 needs 에 추가할 것
