@@ -48,6 +48,7 @@ allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Read, Glob, Grep, Edit
 
 - `tasks/` 에 계획에 없는 항목이 생겼다 → 범위가 조용히 늘었다는 뜻
 - 계획 항목이 `tasks/` 에 없다 → 누락
+- **「범위」 표의 담당이 `공동`인 항목이 한쪽 `tasks/` 에만 있다** → 나머지 쪽 몫에 담당자가 없다. 계획의 「작업 쪼갬」을 고쳐야 한다
 - 완료 판정 중 기계로 확인 가능한 것(`make contracts`, CI)은 체크 상태와 실제가 맞는지 의심해 볼 것을 권한다
 
 **5. 커밋은 사용자에게 맡긴다.** 제안만 한다 — `git add docs/주차계획/ && git commit -m "$ARGUMENTS 진행 현황 갱신"`
