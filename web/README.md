@@ -12,4 +12,4 @@
 - 클라이언트 1차 PII 마스킹 정규식은 `GET /config/pii-patterns`에서 로드 (API 명세 11절)
 - 스크립트 이름 고정: `dev`, `build`, `lint`, `test` (Makefile·CI가 이 이름을 호출)
 
-참조: `docs/MVP_PRD.md` 2·3장, `docs/Stage0_API명세.md`
+참조: `docs/MVP_PRD.md` 2·3장, `docs/api/`
