@@ -17,6 +17,9 @@ allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Read, Glob, Grep, Edit
 
 ## 할 일
 
+**0. `tasks/` 파일이 없으면 그렇다고 보고한다.**
+`api/tasks/$ARGUMENTS.md` 또는 `web/tasks/$ARGUMENTS.md` 가 없으면 **그 역할은 아직 `/my-week $ARGUMENTS` 를 돌리지 않았다는 뜻**이다. 해당 역할을 "미착수"로 표시하고, 그 사람에게 말하라고 알린다. 파일을 대신 만들지 않는다 — `web/`은 프론트 소유다.
+
 **1. 세 곳의 체크 상태를 모은다.** `- [x]` 는 완료, `- [ ]` 는 미완. 하위 체크박스는 상위 항목의 진척으로만 쓰고 표에는 상위 항목만 싣는다.
 
 **2. `docs/주차계획/$ARGUMENTS.md` 의 `## 진행 현황` 절만 통째로 갱신한다.** 다른 절은 건드리지 않는다.
