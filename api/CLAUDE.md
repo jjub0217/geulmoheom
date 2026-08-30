@@ -25,7 +25,7 @@
 
 ## api-requests 처리
 
-`api-requests/open/`에 프론트가 올린 요청과 양쪽 합의 항목이 있다 (`api-requests/README.md`).
+`api-requests/open/`에 프론트가 개발 중 올린 요청이 있다 (`api-requests/README.md`). 비어 있으면 기다리는 요청이 없다는 뜻이다.
 **`/api-check` 로 현황을 본다** — 새 요청이 왔는지 알려주는 장치가 그것뿐이다.
 
 1. 읽었으면 파일 머리말의 **`접수`에 날짜를 적는다.** 비어 있으면 상대는 아직 이 항목을 모른다

@@ -30,7 +30,7 @@ api/       FastAPI + LangGraph (백엔드)  — api/README.md
 landing/   Fake Door 랜딩 (PM, W1)
 infra/     docker-compose (로컬 Postgres·Redis), 배포 설정
 docs/      사람이 읽는 문서 전부 (PM 소유)
-api-requests/  프론트 → 백엔드 API 수정요청 — open/ 이 비면 대기 중인 요청 없음
+api-requests/  프론트가 개발 중 올리는 API 수정요청 — open/ 이 비면 대기 없음
 ```
 
 공유 패키지는 없습니다. 프론트 타입은 `api`의 OpenAPI에서 생성합니다 (`make contracts`).
