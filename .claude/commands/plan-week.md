@@ -52,6 +52,9 @@ allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Read, Glob, Grep, Write, Ed
 ## 목표
 한 문장. 이 주가 끝났을 때 무엇이 가능해지는가.
 
+## 진행 현황
+<!-- `/progress-week` 이 갱신하는 절. 최초 생성 시에는 전 항목 ⬜ 로 둔다 -->
+
 ## 범위
 | 항목 | 코드 | 담당 | 선행 | 완료 조건 | 크기 |
 
