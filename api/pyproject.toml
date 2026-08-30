@@ -1,0 +1,6 @@
+[project]
+name = "geulmoheom-api"
+version = "0.1.0"
+description = "글모험 백엔드 (FastAPI + LangGraph)"
+requires-python = ">=3.12,<3.13"
+dependencies = []
