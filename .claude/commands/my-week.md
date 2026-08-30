@@ -16,7 +16,7 @@ allowed-tools: Bash(git:*), Bash(pwd:*), Bash(ls:*), Bash(cat:*), Read, Glob, Gr
 
 ## 읽을 것
 
-- !`git pull --rebase -q 2>&1 | head -3; ls docs/주차계획/ 2>/dev/null`
+- !`git pull --rebase -q 2>&1 | head -3; ls "$(git rev-parse --show-toplevel)/docs/주차계획/" 2>/dev/null || true`
 - `docs/주차계획/$ARGUMENTS.md` — **계획. 이것이 유일한 출처다**
 - 그 패키지의 `tasks/README.md` — 이 폴더의 규칙
 
