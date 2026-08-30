@@ -25,8 +25,8 @@
 ## 구조
 
 ```
-web/       Next.js PWA (프론트)          — web/README.md
-api/       FastAPI + LangGraph (백엔드)  — api/README.md
+web/       Next.js PWA (프론트)          — web/README.md · tasks/ 는 주차 진척
+api/       FastAPI + LangGraph (백엔드)  — api/README.md · tasks/ 는 주차 진척
 landing/   Fake Door 랜딩 (PM, W1)
 infra/     docker-compose (로컬 Postgres·Redis), 배포 설정
 docs/      사람이 읽는 문서 전부 (PM 소유)

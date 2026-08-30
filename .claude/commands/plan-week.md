@@ -37,6 +37,10 @@ allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Read, Glob, Grep, Write, Ed
 3. **과부하·위험을 지적한다.** 덜어낼 후보를 제안한다
 4. **PM에게 확인받는다.** 무엇을 이번에 하고 무엇을 미룰지는 PM의 결정이다. 임의로 정하지 마라
 5. 확인된 뒤에 `docs/주차계획/$ARGUMENTS.md` 를 아래 형식으로 쓴다
+6. 이어서 **진척 체크리스트 두 개**를 만든다 — `api/tasks/$ARGUMENTS.md`, `web/tasks/$ARGUMENTS.md`.
+   해당 역할의 「작업 쪼갬」 항목을 체크박스로 옮기되 **소요·상세는 옮기지 않는다** (계획 쪽에 둔다).
+   각 파일 머리에 "계획은 `docs/주차계획/$ARGUMENTS.md`, 범위를 여기서 바꾸지 않는다"를 적는다.
+   PM 항목은 옮기지 않는다 — 계획 문서에서 직접 체크한다
 
 ## 출력 문서 형식
 

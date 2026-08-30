@@ -18,6 +18,11 @@
 - `POST /attempts`는 `outcome` 3분기(`result` / `scaffold` / `blocked`)를 항상 명시적으로 반환한다. 프론트가 이 값으로 화면을 가른다.
 - 응답 스키마를 바꿨으면 `/openapi.json`이 갱신되는지 확인한다. 프론트의 `make contracts`가 그것만 본다.
 
+## 이번 주에 할 일
+
+계획은 `docs/주차계획/W<n>.md` 「작업 쪼갬 · 백엔드」, 진척 체크는 **`api/tasks/W<n>.md`**.
+**범위를 진척 파일에서 바꾸지 않는다** — 계획이 틀렸으면 PM에게 말하라고 사용자에게 알린다.
+
 ## 커밋하기 전
 
 - `uv run ruff check . && uv run pytest` — **로컬에서 먼저 돌린다.** CI는 `main` push 후에 도는 사후 통보다
