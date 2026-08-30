@@ -7,10 +7,14 @@ allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Bash(curl:*), Bash(make:*),
 
 ## 현재 상태
 
-- 미결: !`ls -1 api-requests/open/*.md 2>/dev/null | xargs -n1 basename 2>/dev/null || echo "(없음)"`
-- 완료: !`ls -1 api-requests/done/*.md 2>/dev/null | xargs -n1 basename 2>/dev/null || echo "(없음)"`
-- 최근 변경: !`git log --oneline -8 -- api-requests/ 2>/dev/null || echo "(없음)"`
-- 원격 대비: !`git fetch -q origin 2>/dev/null; git log --oneline HEAD..origin/main -- api-requests/ 2>/dev/null || echo "(확인 불가)"`
+> 경로는 저장소 루트 기준이다. 이 명령은 `api/`·`web/` 안에서도 돌기 때문에
+> 상대 경로로 두면 조용히 「없음」이 된다.
+> **「미결」·「완료」의 출력이 비어 있으면 그 폴더에 항목이 없다는 뜻**이다(`.gitkeep` 은 안 보인다).
+
+- 미결: !`ls -1 "$(git rev-parse --show-toplevel)/api-requests/open/" 2>/dev/null || echo "(디렉터리 없음)"`
+- 완료: !`ls -1 "$(git rev-parse --show-toplevel)/api-requests/done/" 2>/dev/null || echo "(디렉터리 없음)"`
+- 최근 변경: !`git log --oneline -8 -- :/api-requests/ 2>/dev/null || true`
+- 원격 대비: !`git fetch -q origin 2>/dev/null; git log --oneline HEAD..origin/main -- :/api-requests/ 2>/dev/null || true`
 
 ## 할 일
 
