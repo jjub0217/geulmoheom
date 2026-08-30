@@ -4,6 +4,8 @@ argument-hint: W1 (주차 번호)
 allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Read, Glob, Grep, Write, Edit
 ---
 
+<!-- 이름 주의: `/plan` 은 Claude Code 내장 plan mode 와 충돌해 가려진다. plan-week 로 둔다. -->
+
 너는 지금 **PM 역할**이다. 대상 주차: **$ARGUMENTS** (비어 있으면 어느 주차인지 먼저 물어라).
 
 ## 읽을 것 (순서대로, 전부)
