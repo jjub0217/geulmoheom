@@ -1,4 +1,13 @@
 # 로컬 개발용 Postgres + Redis. 파일럿 배포는 fly.toml / railway 설정 별도.
+#
+# ⚠️ 반드시 `make db-up` 으로 띄운다. 직접 `docker compose -f ...` 를 치지 말 것.
+#    Makefile 이 -p geulmoheom 을 붙인다. 빼면 프로젝트 이름이 폴더명 infra 가 되고,
+#    이 머신의 PopupReady-mobile/infra/ 와 같은 프로젝트로 합쳐져 남의 컨테이너를 지운다.
+#
+# ⚠️ 포트가 5433 / 6381 이다. 되돌리지 말 것 (2026-08-30).
+#    이 머신에서 5432 는 popupready-postgres, 6379 는 mvno-backoffice-redis,
+#    6380 은 popupready-redis 가 이미 쓴다. 기본 포트를 쓰면 우리 컨테이너가
+#    조용히 뜨지 못하고(Created 상태로 남는다) 앱이 남의 DB·Redis 에 붙는다.
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,7 +17,7 @@ services:
       POSTGRES_USER: geulmoheom
       POSTGRES_PASSWORD: geulmoheom
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +30,7 @@ services:
     image: redis:7-alpine
     container_name: geulmoheom-redis
     ports:
-      - "6379:6379"
+      - "6381:6379"
     command: ["redis-server", "--save", "", "--appendonly", "no"]
 
 volumes:

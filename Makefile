@@ -1,11 +1,16 @@
 .PHONY: dev db-up db-down contracts test lint clean
 
 # ── 로컬 인프라 ──────────────────────────────────────────
+# -p geulmoheom 을 반드시 붙인다. compose 는 파일의 상위 폴더 이름을 프로젝트로 쓰는데,
+# 이 머신의 다른 저장소도 infra/ 를 쓴다. 빼면 두 프로젝트가 하나로 합쳐져
+# 같은 서비스 이름(postgres·redis)의 남의 컨테이너를 지운다. 2026-08-30 실제 발생.
+COMPOSE = docker compose -p geulmoheom -f infra/docker-compose.yml
+
 db-up:
-	docker compose -f infra/docker-compose.yml up -d
+	$(COMPOSE) up -d
 
 db-down:
-	docker compose -f infra/docker-compose.yml down
+	$(COMPOSE) down
 
 # ── 개발 서버 (web + api 동시) ───────────────────────────
 dev:
