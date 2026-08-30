@@ -56,10 +56,10 @@ jobs:
           fi
       - uses: pnpm/action-setup@v4
         if: steps.init.outputs.ready == 'true'
-        with: { version: 9 }
+        with: { version: 11 }
       - uses: actions/setup-node@v4
         if: steps.init.outputs.ready == 'true'
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }   # web/.nvmrc 와 같이 움직인다
       - if: steps.init.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile && cd web && pnpm lint && pnpm test
 
