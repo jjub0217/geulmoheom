@@ -21,6 +21,10 @@ SAFE_EXTRA_KEYS = (
     "duration_ms",
     "query_keys",
     "exc_type",
+    # 비용 알람 (app/cost.py)
+    "kind",
+    "total_usd",
+    "limit_usd",
 )
 
 
