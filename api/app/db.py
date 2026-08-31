@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -29,3 +30,6 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
     """FastAPI 의존성."""
     async with SessionLocal() as session:
         yield session
+
+
+redis_client: Redis = Redis.from_url(_settings.redis_url, decode_responses=True)

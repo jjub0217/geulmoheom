@@ -3,9 +3,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.system import router as system_router
 from app.api.v1.router import router as v1_router
 from app.config import Settings, get_settings
 from app.errors import register_error_handlers
+from app.logging_config import configure_logging
 from app.middleware import RequestLogMiddleware, silence_uvicorn_access_log
 
 API_V1_PREFIX = "/api/v1"  # docs/api/공통규약.md
@@ -13,6 +15,7 @@ API_V1_PREFIX = "/api/v1"  # docs/api/공통규약.md
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    configure_logging()
     silence_uvicorn_access_log()
 
     app = FastAPI(
@@ -36,6 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     register_error_handlers(app)
+    app.include_router(system_router)
     app.include_router(v1_router, prefix=API_V1_PREFIX)
     return app
 
