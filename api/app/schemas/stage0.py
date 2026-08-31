@@ -1,0 +1,314 @@
+"""Stage 0 요청·응답 스키마. `docs/api/Stage0.md` 그대로다.
+
+**이 파일이 프론트 계약이다.** `/openapi.json` → `make contracts` → `web/src/api/types.gen.ts`.
+필드를 바꾸면 커밋 메시지에 `명세 변경:` 줄을 남긴다.
+
+아이 화면에 나가는 문자열은 `docs/용어사전.md` 「아이 화면」 열을 따른다.
+**등급(G0~G3)은 어떤 응답에도 넣지 않는다** — 로그 전용이다 (용어사전 3장).
+"""
+
+from datetime import datetime
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field
+
+CardType = Literal["crisis", "discovery", "encounter"]
+Tier = Literal["basic", "rare", "legendary"]
+ArtworkStatus = Literal["pending", "ready", "failed"]
+Visibility = Literal["private", "family", "public"]
+GuideExpression = Literal["default", "compass_bright", "compass_dim", "session_end"]
+BlockedReason = Literal["moderation", "pii"]
+HighlightKind = Literal["adj", "adv", "clause"]
+
+
+class Guide(BaseModel):
+    """가이드 캐릭터의 표정과 대사. 프론트는 `expression` → PNG 매핑만 한다."""
+
+    expression: GuideExpression
+    line: str
+
+
+class Today(BaseModel):
+    cards_done: int
+    cap: int
+
+
+class TodayState(Today):
+    """`locked` 가 true 면 프론트는 세션 종료 화면만 표시한다 (A0-5)."""
+
+    locked: bool
+
+
+class ChildToday(TodayState):
+    resets_at: datetime = Field(description="기기 로컬 자정. 클라이언트가 X-Timezone 을 보낸다")
+
+
+# ── 1. 학부모 ────────────────────────────────────────────
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    consent: bool = Field(description="false 면 422. 동의 문구 버전은 서버가 기록한다")
+    labeling_consent: bool = Field(
+        default=False,
+        description="아이 문장을 Evaluator 개선용 라벨링에 활용. 거부해도 서비스 이용 가능",
+    )
+
+
+class SignupResponse(BaseModel):
+    parent_id: str
+    token: str
+    consent_at: datetime
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    token: str
+
+
+class ChildSummary(BaseModel):
+    child_id: str
+    nickname: str
+    age_band: int
+    daily_cap: int
+    played_today: bool
+    last_active_at: datetime | None
+
+
+class ParentMe(BaseModel):
+    """성장 데이터·입력 내용은 반환하지 않는다 (P1 대시보드 범위)."""
+
+    parent_id: str
+    email: str
+    consent_at: datetime
+    children: list[ChildSummary]
+
+
+class CreateChildRequest(BaseModel):
+    nickname: str = Field(description="PII 검사 통과 필수. 실패 시 422 detail.reason=PII_DETECTED")
+    age_band: Literal[10, 11, 12]
+
+
+class AccessCode(BaseModel):
+    access_code: str = Field(description="6자리, 24시간, 1회용. 서버는 해시만 저장한다")
+    access_code_expires_at: datetime
+
+
+class CreateChildResponse(AccessCode):
+    child_id: str
+    nickname: str
+
+
+class UpdateChildRequest(BaseModel):
+    daily_cap: int = Field(ge=10, le=20)
+
+
+class UpdateChildResponse(BaseModel):
+    daily_cap: int
+
+
+# ── 2. 자녀 인증 ─────────────────────────────────────────
+
+
+class ChildAuthRequest(BaseModel):
+    access_code: str
+
+
+class ChildIdentity(BaseModel):
+    child_id: str
+    nickname: str
+    guide_name: str | None
+
+
+class ChildAuthResponse(BaseModel):
+    token: str
+    child: ChildIdentity
+
+
+class ChildMe(BaseModel):
+    child_id: str
+    nickname: str
+    guide_name: str | None
+    today: ChildToday
+
+
+class UpdateGuideRequest(BaseModel):
+    guide_name: str = Field(description="아이가 지어주는 이름. 1회. PII 검사")
+
+
+class UpdateGuideResponse(BaseModel):
+    guide_name: str
+
+
+# ── 3. 카드 ──────────────────────────────────────────────
+
+
+class Card(BaseModel):
+    card_id: str
+    type: CardType
+    situation: str
+    prompt_label: str
+    sketch_url: str
+    guide: Guide
+    today: Today
+
+
+# ── 4. 시도 ──────────────────────────────────────────────
+
+
+class AttemptRequest(BaseModel):
+    card_id: str
+    text: str = Field(
+        min_length=1,
+        max_length=500,
+        description="클라이언트 1차 PII 마스킹 후 전송. 서버는 마스킹된 텍스트를 책 콘텐츠로 저장",
+    )
+    retry_of: str | None = Field(
+        default=None, description="재시도면 이전 attempt_id. 카운트 미소모"
+    )
+    prompted: bool = Field(
+        default=False, description="캐릭터 권유로 인한 재시도. Stage 0은 항상 false"
+    )
+
+
+class Highlight(BaseModel):
+    """Evaluator 가 감지한 묘사어. 프론트는 입력문 위에 하이라이트한다."""
+
+    text: str
+    kind: HighlightKind
+
+
+class ArtworkRef(BaseModel):
+    artwork_id: str
+    status: ArtworkStatus
+    url: str | None
+    placeholder_url: str
+
+
+class AttemptResult(BaseModel):
+    """정상 — 결과 연출."""
+
+    outcome: Literal["result"]
+    attempt_id: str
+    tier: Tier
+    highlights: list[Highlight]
+    guide: Guide
+    artwork: ArtworkRef
+    today: TodayState
+    can_retry: bool
+
+
+class AttemptScaffold(BaseModel):
+    """되묻기 — 카드 미소모. 프론트는 입력창과 기존 텍스트를 유지한다."""
+
+    outcome: Literal["scaffold"]
+    attempt_id: str
+    guide: Guide
+    scaffold_count: int = Field(description="2 이후 같은 카드 재제출은 서버가 result 로 돌려준다")
+    today: TodayState
+
+
+class AttemptBlocked(BaseModel):
+    """차단 — 카드 미소모. **카테고리·사유를 아이에게 말하지 않는다.**"""
+
+    outcome: Literal["blocked"]
+    reason: BlockedReason
+    guide: Guide
+    today: TodayState
+
+
+# 프론트는 `outcome` 으로 화면을 가른다 (api/CLAUDE.md).
+AttemptResponse = Annotated[
+    AttemptResult | AttemptScaffold | AttemptBlocked,
+    Field(discriminator="outcome"),
+]
+
+
+# ── 5. 삽화 ──────────────────────────────────────────────
+
+
+class Artwork(BaseModel):
+    artwork_id: str
+    status: ArtworkStatus
+    url: str | None
+    tier: Tier
+    fallback: bool = Field(description="15초 초과 시 기본 에셋으로 확정된 것 (B-3)")
+
+
+# ── 6. 내 책 ─────────────────────────────────────────────
+
+
+class BookPage(BaseModel):
+    page_no: int
+    source: Literal["card", "chapter"]
+    source_id: str
+    tier: Tier
+    artwork_url: str | None
+    text: str = Field(description="아이 원문 그대로. 맞춤법·AI 보정 없음")
+    achieved_at: datetime
+
+
+class BookCounts(BaseModel):
+    basic: int
+    rare: int
+    legendary: int
+
+
+class Book(BaseModel):
+    book_id: str
+    title: str
+    visibility: Visibility = Field(description="Stage 0 에서는 항상 private. 필드만 선반영")
+    pages: list[BookPage]
+    counts: BookCounts
+
+
+class BookToday(BaseModel):
+    """세션 종료 화면용. 오늘 추가·교체된 페이지만."""
+
+    pages: list[BookPage]
+
+
+class UpdateBookRequest(BaseModel):
+    title: str
+
+
+class UpdateBookResponse(BaseModel):
+    title: str
+
+
+# ── 7. 이벤트 ────────────────────────────────────────────
+
+
+class ClientEvent(BaseModel):
+    """클라이언트만 아는 이벤트. **원문 필드 없음.**"""
+
+    event: str
+    ts: datetime
+    card_id: str | None = None
+    locked: bool | None = None
+    layer: Literal["client", "server"] | None = None
+    kind: str | None = None
+
+
+class EventBatch(BaseModel):
+    events: list[ClientEvent] = Field(max_length=50)
+
+
+# ── 오류 ─────────────────────────────────────────────────
+
+
+class ErrorDetail(BaseModel):
+    code: str = Field(description="기계용 식별자")
+    message: str = Field(description="아이가 읽는 문장")
+    detail: dict = Field(default_factory=dict)
+
+
+class ErrorEnvelope(BaseModel):
+    """`docs/api/공통규약.md` 오류 형식."""
+
+    error: ErrorDetail
