@@ -3,4 +3,60 @@ name = "geulmoheom-api"
 version = "0.1.0"
 description = "글모험 백엔드 (FastAPI + LangGraph)"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
+    "httpx>=0.28",
+    "anthropic>=0.40",
+]
+
+# LangGraph 는 Stage 1(GM 서사·상태 그래프)에서 들어온다. Stage 0 에는 쓰이지 않아
+# 지금 넣지 않는다 — 안 쓰는 무거운 의존성이 uv sync 를 느리게 한다.
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.uv]
+package = false
+
+# ── ruff ────────────────────────────────────────────────
+# Makefile lint 는 `ruff check .` 와 `ruff format --check .` 를 함께 돌린다.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "SIM",       # simplify
+    "ASYNC",     # 비동기 함수 안의 블로킹 호출
+    "G",         # flake8-logging-format
+    "LOG",       # 로깅 오용
+    "RUF",
+]
+# G004(로깅에 f-string) 는 끄지 않는다. `logger.info(f"...{text}")` 로 아이 원문이
+# 로그에 새는 것을 기계적으로 막는 유일한 장치다 (api/CLAUDE.md 「절대 하지 않는 것」).
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+# ── pytest ──────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# app 을 tests 에서 import 하려면 필요하다 ([tool.uv] package = false 라 설치되지 않는다)
+pythonpath = ["."]
+asyncio_mode = "auto"
+addopts = "-q"
