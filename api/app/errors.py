@@ -17,6 +17,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.middleware import current_request_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,6 +152,10 @@ def register_error_handlers(app: FastAPI) -> None:
         # 남기는 것은 경로와 예외 타입뿐이다.
         logger.error(
             "처리되지 않은 예외",
-            extra={"path": request.url.path, "exc_type": type(exc).__name__},
+            extra={
+                "request_id": current_request_id(),
+                "path": request.url.path,
+                "exc_type": type(exc).__name__,
+            },
         )
         return error_response(ErrorCode.INTERNAL_ERROR)
