@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# paths-filter 는 pull_request 에서 PR 변경 파일 목록을 GitHub API 로 읽는다.
+# 저장소 기본 토큰 권한(contents 만)으로는 403 이 나 changes 잡이 통째로 실패하고,
+# api·web 이 skip 되면서 all-green 까지 빨개진다. push 이벤트에서는 커밋 diff 라 안 드러난다.
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   changes:
     runs-on: ubuntu-latest
