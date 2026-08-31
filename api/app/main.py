@@ -6,12 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import router as v1_router
 from app.config import Settings, get_settings
 from app.errors import register_error_handlers
+from app.middleware import RequestLogMiddleware, silence_uvicorn_access_log
 
 API_V1_PREFIX = "/api/v1"  # docs/api/공통규약.md
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    silence_uvicorn_access_log()
 
     app = FastAPI(
         title="글모험 API",
@@ -22,6 +24,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
 
+    # 미들웨어는 나중에 추가한 것이 바깥이다. 로깅을 CORS 보다 먼저 추가해
+    # CORS 응답까지 같은 request_id 로 남게 한다.
+    app.add_middleware(RequestLogMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
