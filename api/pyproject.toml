@@ -12,9 +12,11 @@ dependencies = [
     "alembic>=1.14",
     "redis>=5.2",
     "httpx>=0.28",
-    "anthropic>=0.40",
+    "google-genai>=1.0",
 ]
 
+# LLM 프로바이더는 Google Gemini (docs/adr/0005). 모델명은 미정이라 코드에 기본값을
+# 두지 않는다 — W1 스모크로 후보 압축, W2 벤치로 확정.
 # LangGraph 는 Stage 1(GM 서사·상태 그래프)에서 들어온다. Stage 0 에는 쓰이지 않아
 # 지금 넣지 않는다 — 안 쓰는 무거운 의존성이 uv sync 를 느리게 한다.
 
@@ -23,6 +25,9 @@ dev = [
     "ruff>=0.8",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    # starlette TestClient 가 httpx2 를 쓴다. 없으면 deprecation 경고가 뜬다
+    # (anthropic 이 끌고 오던 것이 google-genai 로 바뀌며 빠졌다).
+    "httpx2>=0.28",
 ]
 
 [tool.uv]

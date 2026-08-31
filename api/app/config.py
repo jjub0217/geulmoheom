@@ -6,6 +6,10 @@
 
 **키는 서버에만 둔다.** 비밀 값은 `SecretStr` 이라 `repr`·로그·오류 리포트에 찍히지 않는다.
 클라이언트로 나가는 값은 `NEXT_PUBLIC_*` 뿐이고 여기서 읽지 않는다.
+
+LLM 프로바이더는 Google Gemini (`docs/adr/0005`). **모델명 기본값을 두지 않는다** —
+ADR 결정 2번이 "구체 모델명은 지금 정하지 않는다"이고, 코드에 임시값을 박으면
+그게 사실상의 결정이 되어 W2 벤치 전에 굳는다.
 """
 
 import os
@@ -23,8 +27,9 @@ AppEnv = Literal["dev", "pilot"]
 # 어느 파일을 읽을지부터 환경 변수로 정해진다. 파일 안의 APP_ENV 로는 파일 선택을 못 한다.
 _APP_ENV: str = os.getenv("APP_ENV", "dev")
 
-# pilot 에서 비어 있으면 뜨지 않는 키. dev 는 비어 있어도 목 서버가 돈다.
-PILOT_REQUIRED = ("anthropic_api_key", "jwt_secret", "image_api_key")
+# pilot 에서 비어 있으면 뜨지 않는 설정. dev 는 비어 있어도 목 서버가 돈다.
+# 모델명도 넣는다 — 미정인 채로 파일럿이 뜨면 첫 Evaluator 호출에서 터진다.
+PILOT_REQUIRED = ("gemini_api_key", "jwt_secret", "image_api_key", "evaluator_model")
 
 
 class Settings(BaseSettings):
@@ -41,9 +46,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://geulmoheom:geulmoheom@localhost:5433/geulmoheom"
     redis_url: str = "redis://localhost:6381/0"
 
-    anthropic_api_key: SecretStr = SecretStr("")
-    evaluator_model: str = "claude-opus-5"
-    gm_model: str = "claude-opus-5"
+    # 유료 티어 키다. 무료 티어는 입력이 제품 개선에 활용되어 아이 원문
+    # 라벨링 동의 게이트(PRD 1.1b)를 깬다 (adr/0005 근거 5번).
+    gemini_api_key: SecretStr = SecretStr("")
+    # 미정. W1 스모크로 후보 압축 → W2 벤치로 확정 (adr/0005 미결 표).
+    evaluator_model: str = ""
+    gm_model: str = ""
 
     image_provider: str = ""
     image_api_key: SecretStr = SecretStr("")
@@ -69,9 +77,14 @@ def missing_pilot_keys(settings: Settings) -> list[str]:
     if settings.app_env != "pilot":
         return []
 
-    return [
-        이름 for 이름 in PILOT_REQUIRED if not getattr(settings, 이름).get_secret_value().strip()
-    ]
+    빈것: list[str] = []
+    for 이름 in PILOT_REQUIRED:
+        값 = getattr(settings, 이름)
+        # 비밀 키(SecretStr)와 평문(모델명)을 함께 본다.
+        원문 = 값.get_secret_value() if isinstance(값, SecretStr) else str(값)
+        if not 원문.strip():
+            빈것.append(이름)
+    return 빈것
 
 
 @lru_cache
