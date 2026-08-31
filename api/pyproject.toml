@@ -33,6 +33,9 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# alembic 이 만든 마이그레이션은 생성물이다. 손으로 포맷을 맞추면 다음 autogenerate 에서
+# 다시 어긋난다. 손으로 쓰는 migrations/env.py 는 계속 검사한다.
+extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = [
