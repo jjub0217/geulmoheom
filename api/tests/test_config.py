@@ -82,3 +82,21 @@ def test_모델명에_기본값이_없다():
 
     assert 기본값["evaluator_model"].default == ""
     assert 기본값["gm_model"].default == ""
+
+
+def test_설정값에_주석이_섞이지_않는다():
+    """`.env` 의 `KEY=   # 설명` 은 값이 비었을 때 주석 전체가 값이 된다.
+
+    dotenv 는 값이 **있을 때만** 인라인 주석을 떼어낸다. 빈 값 뒤의 주석은 그대로 값이 된다.
+    2026-09-01 에 `IMAGE_PROVIDER` 가 `'# fal | replicate'` 로 읽히고 있었다 —
+    프로바이더 분기가 조용히 어긋나는 종류의 버그다.
+    """
+    설정 = Settings()
+
+    섞인것 = [
+        이름
+        for 이름, 값 in 설정.model_dump().items()
+        if isinstance(값, str) and 값.lstrip().startswith("#")
+    ]
+
+    assert 섞인것 == []
