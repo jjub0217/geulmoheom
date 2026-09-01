@@ -28,3 +28,6 @@ __pycache__/
 # data
 infra/pgdata/
 *.log
+
+# 벤치 생성물 (이미지). 수치·판정만 문서에 남긴다
+api/benchmarks/out/
