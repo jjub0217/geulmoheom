@@ -2,6 +2,7 @@
 
 작성 2026-09-01 · 근거 PRD 9장 #1b · B-5 화풍 일관성 · `docs/api/미결.md` 11-1
 **아직 실행하지 않았다.** `IMAGE_API_KEY` 가 비어 있고 결제수단이 정리되지 않았다.
+**2026-09-01 개정** — PM 검토로 화풍·장면·장수 3건을 고쳤다. 실행 후였다면 전량 재실행이었다.
 
 이 문서는 키가 들어오는 즉시 기계적으로 돌릴 수 있도록 **무엇을 고정하고 무엇을 잴지**를
 먼저 정해둔 것이다. 프롬프트는 대표·PM 검토 대상이다.
@@ -15,28 +16,58 @@
 
 ### 1. 화풍·캐릭터 태그 (B-5 MUST — 모든 프롬프트에 시스템 주입)
 
-`docs/캐릭터/도우미캐릭터설명.md` 색상코드를 그대로 쓴다.
+**2026-09-01 개정.** 초판은 `도우미캐릭터설명.md` 본문의 "3D 애니메이션 스타일"을 그대로
+옮겼는데, **본문이 1차 디자인 기준이고 실제 2차 에셋은 2D 셀 셰이딩**이다 (PM 지적,
+`캐릭터(기본_안내_서사_진행중).png` 육안 확인). 잘못된 화풍으로 벤치를 돌리면 전량 재실행이었다.
 
 ```
-STYLE: warm 3D-animated storybook illustration, soft rim light, rounded shapes,
-       children's picture-book palette, no text, no watermark
+STYLE: 2D cel-shaded webtoon illustration, bold dark outlines, flat shading,
+       warm storybook palette, soft ambient glow, no text, no watermark
 GUIDE: red panda explorer-scholar, cream face markings (#F6EADB),
-       orange-russet fur (#D45B28), brown leather explorer vest (#8F5C3E),
-       blue scarf (#457B9D), scholar cap, brass-rimmed magic compass (#C29B59)
+       orange-russet fur (#D45B28), leather explorer vest (#8F5C3E),
+       dark scholar cap with tassel, brass-rimmed magic compass (#C29B59)
        with cyan glowing crystal (#33E1FF)
 ```
 
-### 2. 장면 프롬프트 — 카드 c01 (위기)
+**에셋과 색상코드 표가 어긋나는 곳 — 반영 전 확인 필요**
 
-`docs/장면카드_초안.md` c01 의 상황문을 영어 장면 묘사로 옮긴 것. 아이 입력이 아니다.
+| 항목 | 표 | 실제 에셋 | 조치 |
+|---|---|---|---|
+| SCARF `#457B9D` | 있음 | **없음.** 스카프 자체가 안 보인다 | 태그에서 뺐다. 넣으면 실제 캐릭터에 없는 요소가 생성된다 |
+| 학사모 | **표에 없음** | 짙은 차콜/네이비, 금색 술 | 색상코드를 못 박아야 한다 — 모델마다 모자 색이 달라진다 |
+| VEST `#8F5C3E` | 중간 갈색 | 더 밝은 탠에 가까워 보인다 | 조명 탓일 수 있다. 색상코드 확정 필요 |
 
-```
-SCENE: misty forest at dusk, a huge shadow moving slowly between tall trees,
-       a snapped twig on the ground, the explorer standing alert with the guide
-```
+B-5 MUST 가 "외형·색상코드 고정 태그"인데 표에 없는 부위(학사모)가 있으면 그 부위는
+고정되지 않는다. **표를 먼저 채우는 것이 벤치보다 앞선다.**
+
+### 2. 장면 프롬프트 — **문서의 것을 그대로 쓴다**
+
+**2026-09-01 개정.** 초판은 상황문을 내가 영어로 옮겨 썼는데, `docs/장면카드_초안.md`
+표의 **다섯째 열 「스케치 프롬프트」에 이미 영어 프롬프트가 20장 전부 있다** (PM 지적).
+지어낸 것으로 재면 제품 프롬프트가 아니라 내 문장을 재는 셈이 된다.
+
+| 카드 | 스케치 프롬프트 (문서 원문) |
+|---|---|
+| 01 위기 | `misty forest at dusk, huge silhouette between trees, broken twig in foreground` |
+| 04 위기 | `giant sitting in the middle of a road crying, leaves falling from the sound, blocking the way` |
+
+**인물을 더하지 않는다.** 원본에 탐험가도 가이드도 없고, 같은 문서 「설계 원칙」이
+*"캐릭터 고정 태그는 시스템에서 주입하므로 장면만 기술"* 이라고 정한 대로다.
 
 **무기 접촉 장면을 만들지 않는다** — `안전_어휘_기준.md` 5장이 이미지 프롬프트를 서사보다
-엄격히 두고 "대치·준비 자세·승리 후" 컷만 허용한다. 위 장면은 대치 컷이다.
+엄격히 두고 "대치·준비 자세·승리 후" 컷만 허용한다. 위 둘 다 대치/정지 컷이다.
+
+### 2b. 주인공 태그는 넣지 않는다 (제품 결정 공백)
+
+B-5 MUST 는 "**주인공**·GM 캐릭터 고정 태그"인데 **주인공 외형은 저장소 어느 문서에도
+정의된 적이 없다.** 벤치의 누락이 아니라 제품 결정이 비어 있는 것이다 (PM 확인).
+
+정해지기 전까지 **인물 없이** 돌린다. `the explorer` 처럼 두면 모델마다 제각각 나와서
+모델 간 비교가 오염된다 — 화풍 차이를 보는 자리에 무작위 변수를 넣는 셈이다.
+
+같은 이유로 **가이드 태그도 이번 벤치에서는 넣지 않는다.** 카드 프롬프트가 장면만
+기술하도록 설계돼 있고, 캐릭터 주입은 B-3/B-5 구현(W3) 시점의 일이다. 이번에 재는 것은
+**화풍·시드·지연**이다.
 
 ### 3. 티어 접미어 3종 (B-5 SHOULD)
 
@@ -50,7 +81,13 @@ SCENE: misty forest at dusk, a huge shadow moving slowly between tall trees,
 
 - **시드 고정** (같은 시드를 전 모델에 사용). 시드를 못 받는 모델은 그 자체가 탈락 사유다 — B-5 MUST 가 "동일 시드 계열 사용"이다
 - 해상도·종횡비 1024x1024 통일
-- 티어 3종 x 모델 N개 = 비교 대상. 카드는 c01 하나로 고정
+- **카드 2장**을 쓴다 — 01(안개 숲·그림자)과 04(우는 거인·길). 배경·조명·대상이 갈린다.
+  `아키텍처 및 구현난의도.md` 71행이 화풍 일관성의 실패 모드를 *"씬마다 캐릭터 외형이
+  바뀌는 문제"* 로 적었는데, **한 장면으로는 그걸 못 잰다** (PM 지적)
+- 장수: 01 x 티어 3종 + 04 x legendary 1종 = **모델당 4장**. 티어 차이는 같은 장면에서만
+  비교되므로 01 에 몰고, 04 는 장면이 바뀌어도 화풍이 유지되는지만 본다
+- **비용 때문에 티어를 줄이지 않는다.** 모델당 1장 더 = 약 $0.05 다. 그걸 아끼려고
+  티어 비교를 버리면 정작 B-3 보상 설계의 근거가 사라진다
 
 ## 잴 것
 
@@ -83,3 +120,14 @@ SCENE: misty forest at dusk, a huge shadow moving slowly between tall trees,
 주차계획 W1 위험 표는 "이미지 벤치가 2일을 넘기면" 미결 11-1이 밀린다고 보고 대응책을
 "모델 2개로 줄인다"로 적어뒀다. **이번 차단은 벤치 시간이 아니라 결제라 그 대응이 듣지
 않는다.** 11-1 → W3 B-3 삽화 보상까지 연쇄로 걸려 있다.
+
+## 남은 확인 — 실행 전 PM/대표 판단이 필요한 것
+
+1. **색상코드 표에 학사모가 없다.** B-5 가 색상코드로 외형을 고정하는데 표에 없는 부위는
+   고정되지 않는다. VEST 색도 에셋과 어긋나 보인다
+2. **주인공을 삽화에 등장시킬 것인가** — 정의된 적이 없다. 등장시킨다면 외형 정의가 B-5
+   선행 조건이 된다
+3. **카드 식별자 표기** — `장면카드_초안.md` 표의 첫 열은 `#`(목록 번호)로 `01` 이고,
+   `docs/api/Stage0.md` 계약과 목 서버·DB 는 `c01` 을 쓴다. 둘 중 하나로 맞추거나
+   "표의 # 는 목록 번호, 식별자는 `c01`" 임을 `용어사전.md` 에 등록해야 한다.
+   **계약이 이미 `c01` 이라 바꾸면 프론트에 영향이 간다**
