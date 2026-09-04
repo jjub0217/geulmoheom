@@ -1,3 +1,5 @@
 packages:
   - web
   - landing
+allowBuilds:
+  unrs-resolver: true
