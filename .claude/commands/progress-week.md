@@ -18,7 +18,7 @@ allowed-tools: Bash(git:*), Bash(ls:*), Bash(cat:*), Read, Glob, Grep, Edit
 ## 할 일
 
 **0. `tasks/` 파일이 없으면 그렇다고 보고한다.**
-`api/tasks/$ARGUMENTS.md` 또는 `web/tasks/$ARGUMENTS.md` 가 없으면 **그 역할은 아직 `/my-week $ARGUMENTS` 를 돌리지 않았다는 뜻**이다. 해당 역할을 "미착수"로 표시하고, 그 사람에게 말하라고 알린다. 파일을 대신 만들지 않는다 — `web/`은 프론트 소유다.
+`api/tasks/$ARGUMENTS.md` 또는 `web/tasks/$ARGUMENTS.md` 가 없으면 **그 모자로 아직 `/my-week $ARGUMENTS` 를 돌리지 않았다는 뜻**이다. 해당 역할을 "미착수"로 표시한다. **PM 세션에서 대신 만들지 않는다** — 그 패키지 세션에서 만든다. 실무는 1인이지만 모자가 셋이라(`adr/0008`) 세션과 파일은 그대로 갈린다.
 
 **1. 세 곳의 체크 상태를 모은다.** `- [x]` 는 완료, `- [ ]` 는 미완. 하위 체크박스는 상위 항목의 진척으로만 쓰고 표에는 상위 항목만 싣는다.
 
