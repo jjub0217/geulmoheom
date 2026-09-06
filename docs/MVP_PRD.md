@@ -416,8 +416,10 @@ Stage 0에는 GM 서사 생성이 없다. 카드 제시·결과 반응·되묻�
 - `card_attempts` [S0] (id, child_id, card_id, attempt, grade, tier, artwork_id, char_len, **text**, created_at) — `text`는 책 콘텐츠로 보관 (1.1b). 라벨링 활용 여부는 `parents.labeling_consent`
 - `chapters` [S1] (id, title, beat_sheet JSON, order)
 - `sessions` (id, child_id, chapter_id, status, started_at, completed_at, turns, snapshot JSON)
-- `books` (id, child_id, title, visibility: private|family|public, created_at) · `book_pages` (id, book_id, source: card|chapter, source_id, order, page JSON{artwork_id, text, caption}) — **Stage 0부터** 카드 페이지로 생성, Stage 1에서 챕터 페이지 추가. 공유(P1)를 전제로 `visibility` 선반영
-- `artworks` (id, session_id, scene, tier, r2_key, created_at)
+- `books` (id, child_id, title, visibility: private|family|public, created_at) · `book_pages` (id, book_id, source: card|chapter, source_id, page_no, **card_attempt_id, artwork_id, text, tier**, achieved_at) — **Stage 0부터** 카드 페이지로 생성, Stage 1에서 챕터 페이지 추가. 공유(P1)를 전제로 `visibility` 선반영
+  - **2026-09-06 변경: `page JSON{...}` → 평면 컬럼.** 「카드별 최고 티어 upsert」(`Stage0.md` 10b)를 JSON 안에서 하면 유니크 제약을 걸 수 없다. 실제 제약은 `UNIQUE(book_id, source, source_id)`
+- `artworks` (id, **card_attempt_id**, tier, status, r2_key, fallback, created_at, ready_at)
+  - **2026-09-06 변경: `session_id` → `card_attempt_id`.** Stage 0에는 세션 테이블이 없다. `session_id`는 Stage 1(W6)에서 추가한다
 - `events` (append-only, 5절)
 - Redis: `state:{session_id}` (4.2 스키마, TTL 24h)
 

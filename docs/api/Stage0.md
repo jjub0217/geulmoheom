@@ -156,8 +156,27 @@
 { "artwork_id": "...", "status": "ready", "url": "https://r2/.../a.webp", "tier": "rare", "fallback": false }
 ```
 - `status` ∈ `pending | ready | failed`
-- 프론트: 2초 간격 폴링, **15초 초과 시** 폴링 중단하고 `placeholder_url` 유지. 서버도 15초 초과 시 `status = ready, fallback = true, url = 캐시 기본 에셋`으로 확정 (B-3)
-- SHOULD: `GET /attempts/{id}/stream` (SSE) — `artwork_ready` 이벤트 1회. 폴링 대체
+
+**통지 방식: 폴링.** 미결 11-1 확정 (2026-09-06, 근거 `api/benchmarks/W1-image-bench.md` 실측 평균 6.2초·최대 8.1초).
+**SSE는 Stage 0에서 만들지 않는다** — 이벤트 1회를 위해 연결 유지·프록시 타임아웃·재연결·모바일 백그라운드 전환을 다 얹을 값이 없다. Stage 1 GM 서사 스트리밍과 함께 판단한다.
+
+| 항목 | 값 |
+|---|---|
+| **첫 폴링** | `POST /attempts` 응답(`artwork.status = pending`) 후 **3초 뒤** |
+| 이후 간격 | 2초 |
+| 타임아웃 | 15초 |
+
+**첫 폴링을 3초 미룬다.** 즉시 시작하면 평균 6.2초 동안 확실히 헛도는 요청이 3회 나간다. 요청 수가 7~8회 → 4~5회로 준다. 실측 최소가 6초대라 3초는 안전하다.
+
+**폴링 중단 조건 — 생성 실패와 네트워크 실패를 구분한다**
+
+| 상황 | 처리 |
+|---|---|
+| 네트워크 오류·5xx | 같은 간격으로 계속. **별도 재시도 카운터를 두지 않는다** — 15초 타임아웃이 이미 상한이다 |
+| `status = failed` | **즉시 중단.** `placeholder_url` 유지 |
+| 15초 초과 | 중단. 서버도 15초 초과 시 `status = ready, fallback = true, url = 캐시 기본 에셋`으로 확정하므로 마지막 응답이 기본 에셋을 준다 (B-3) |
+
+**기다리는 6~8초는 가이드 대사로 메운다** — C-1 대사 세트에 「삽화 대기」가 MUST로 추가됐다 (W2).
 
 ---
 
