@@ -28,8 +28,12 @@ AppEnv = Literal["dev", "pilot"]
 _APP_ENV: str = os.getenv("APP_ENV", "dev")
 
 # pilot 에서 비어 있으면 뜨지 않는 설정. dev 는 비어 있어도 목 서버가 돈다.
-# 모델명도 넣는다 — 미정인 채로 파일럿이 뜨면 첫 Evaluator 호출에서 터진다.
-PILOT_REQUIRED = ("gemini_api_key", "jwt_secret", "image_api_key", "evaluator_model")
+# 모델명도 넣는다 — 미정인 채로 파일럿이 뜨면 첫 호출에서 터진다.
+#
+# `image_api_key` 를 뺐다 (2026-09-07). `adr/0006` 이 이미지 생성을 Gemini 네이티브로
+# 통합해 **LLM 과 같은 키**를 쓴다. 따로 두면 늘 `gemini_api_key` 와 같은 값이 되고,
+# 필수 목록에 둘 다 있는 것이 「둘이 다를 수 있다」는 오해를 만든다.
+PILOT_REQUIRED = ("gemini_api_key", "jwt_secret", "evaluator_model", "image_model")
 
 
 class Settings(BaseSettings):
@@ -49,12 +53,15 @@ class Settings(BaseSettings):
     # 유료 티어 키다. 무료 티어는 입력이 제품 개선에 활용되어 아이 원문
     # 라벨링 동의 게이트(PRD 1.1b)를 깬다 (adr/0005 근거 5번).
     gemini_api_key: SecretStr = SecretStr("")
-    # 미정. W1 스모크로 후보 압축 → W2 벤치로 확정 (adr/0005 미결 표).
+    # 코드에 기본값을 두지 않는다. 값이 박히면 `.env` 를 안 채워도 도는 것처럼 보이고,
+    # 그 임시값이 사실상의 결정이 된다 (adr/0005 결정 2번). 확정된 이름은 `.env.example` 에 있다.
+    #
+    # W2 벤치로 `gemini-3.1-flash-lite` 확정 (`benchmarks/W2-evaluator-bench.md`).
     evaluator_model: str = ""
+    # Stage 1 GM. 아직 미정이라 PILOT_REQUIRED 에 넣지 않는다 — Stage 0 은 GM 을 안 쓴다.
     gm_model: str = ""
-
-    image_provider: str = ""
-    image_api_key: SecretStr = SecretStr("")
+    # W1 벤치로 `gemini-3.1-flash-lite-image` 확정 (`adr/0006`).
+    # 프로바이더·키는 따로 두지 않는다. Gemini 네이티브라 `gemini_api_key` 하나를 쓴다.
     image_model: str = ""
 
     r2_account_id: str = ""

@@ -23,7 +23,7 @@ def test_비밀값은_명시적으로_꺼내야_읽힌다():
 def test_dev_는_키가_비어도_뜬다():
     """목 서버 단계에서는 키 없이 개발할 수 있어야 한다."""
     settings = Settings(
-        app_env="dev", gemini_api_key="", jwt_secret="", image_api_key="", evaluator_model=""
+        app_env="dev", gemini_api_key="", jwt_secret="", image_model="", evaluator_model=""
     )
 
     assert missing_pilot_keys(settings) == []
@@ -32,7 +32,7 @@ def test_dev_는_키가_비어도_뜬다():
 def test_pilot_은_키가_비면_뜨지_않는다():
     """조용히 뜨면 아이 문장을 받아 놓고 Evaluator 호출에서 터진다."""
     settings = Settings(
-        app_env="pilot", gemini_api_key="", jwt_secret="", image_api_key="", evaluator_model=""
+        app_env="pilot", gemini_api_key="", jwt_secret="", image_model="", evaluator_model=""
     )
 
     assert sorted(missing_pilot_keys(settings)) == sorted(PILOT_REQUIRED)
@@ -46,7 +46,7 @@ def test_기동이_실패해도_키_값이_새지_않는다(monkeypatch: pytest.
     """
     monkeypatch.setenv("APP_ENV", "pilot")
     monkeypatch.setenv("GEMINI_API_KEY", "")
-    monkeypatch.setenv("IMAGE_API_KEY", "")
+    monkeypatch.setenv("IMAGE_MODEL", "")
     monkeypatch.setenv("JWT_SECRET", "채워진-비밀")
     monkeypatch.setenv("EVALUATOR_MODEL", "어떤-모델")
     get_settings.cache_clear()
@@ -66,7 +66,7 @@ def test_키가_다_있으면_pilot_이_뜬다():
         app_env="pilot",
         gemini_api_key="k",
         jwt_secret="s",
-        image_api_key="i",
+        image_model="어떤-이미지-모델",
         evaluator_model="어떤-모델",
     )
 
@@ -74,9 +74,12 @@ def test_키가_다_있으면_pilot_이_뜬다():
 
 
 def test_모델명에_기본값이_없다():
-    """adr/0005 결정 2번 — 구체 모델명은 지금 정하지 않는다.
+    """구체 모델명은 코드가 아니라 `.env` 에 있다.
 
-    코드에 임시값을 박으면 그게 사실상의 결정이 되어 W2 벤치 전에 굳는다.
+    처음 이유는 adr/0005 결정 2번(「지금 정하지 않는다」)이었고, W2 벤치로
+    `evaluator_model` 은 확정됐다 (`benchmarks/W2-evaluator-bench.md`).
+    그래도 기본값은 두지 않는다 — 코드에 값이 박히면 `.env` 를 안 채워도 도는 것처럼
+    보이고, `PILOT_REQUIRED` 검사가 그대로 무력해진다.
     """
     기본값 = Settings.model_fields
 
