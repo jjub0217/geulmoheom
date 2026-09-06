@@ -16,8 +16,10 @@ export default function manifest(): MetadataRoute.Manifest {
     // 「태블릿 가로 우선」은 CSS 레이아웃으로 한다 — 잠금이 아니다.
     lang: "ko",
     dir: "ltr",
-    background_color: "#457B9D",
-    theme_color: "#457B9D",
+    // 매니페스트는 미디어 쿼리를 못 쓴다. 스플래시는 밝을 때 배경(MARKINGS)으로 고정한다 —
+    // 모드별 분기는 layout.tsx 의 themeColor 배열이 맡는다.
+    background_color: "#F6EADB",
+    theme_color: "#F6EADB",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

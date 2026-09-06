@@ -40,7 +40,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#457B9D",
+  // 상태바 색은 실제 배경과 맞춘다 — globals.css 의 --background 와 같은 값이다.
+  // 어긋나면 홈 화면에서 띄웠을 때 상태바만 다른 색으로 뜨며 경계선이 보인다.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F6EADB" },
+    { media: "(prefers-color-scheme: dark)", color: "#1B527A" },
+  ],
   // 홈 화면에서 띄운 iPad 의 노치·홈 인디케이터 영역까지 배경을 깔기 위한 것.
   viewportFit: "cover",
   // 확대를 막지 않는다.
@@ -48,13 +53,19 @@ export const viewport: Viewport = {
   width: "device-width",
 };
 
+// 기준 골격은 여기서 「무대」까지만 잡는다 — 화면 높이, 세로 흐름, 글꼴.
+// 헤더·네비게이션은 두지 않고, <main> 도 두지 않는다 (각 page 가 자기 <main> 을 가진다).
+// 기준 폭·좌우 여백은 globals.css 의 `page-frame` 유틸리티이고, 화면마다 붙인다 —
+// 삽화를 화면 끝까지 깔아야 하는 화면이 있어 레이아웃에서 강제하지 않는다.
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* min-h-dvh — 모바일 세로에서 주소창이 접혔다 펴져도 높이가 맞는다.
+          100vh 는 접힌 상태 기준이라 세로에서 화면이 잘린다. */}
+      <body className="flex min-h-dvh flex-col">
         {children}
         <ServiceWorkerRegistrar />
       </body>
