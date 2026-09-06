@@ -28,6 +28,10 @@ dev = [
     # starlette TestClient 가 httpx2 를 쓴다. 없으면 deprecation 경고가 뜬다
     # (anthropic 이 끌고 오던 것이 google-genai 로 바뀌며 빠졌다).
     "httpx2>=0.28",
+    # scripts/ 전용. 정본 턴어라운드에서 글자·스와치 영역을 잘라내는 데 쓴다 —
+    # 시트를 통째로 레퍼런스로 넣으면 모델이 라벨 글자까지 따라 그린다 (2026-09-07 실측).
+    # app/ 은 쓰지 않으므로 런타임 의존성이 아니다.
+    "pillow>=11.0",
 ]
 
 [tool.uv]
