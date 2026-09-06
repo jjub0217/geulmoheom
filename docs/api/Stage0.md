@@ -14,12 +14,17 @@
 // req
 { "email": "a@b.c", "password": "...", "consent": true }
 // res 201
-{ "parent_id": "...", "token": "<parent_jwt>", "consent_at": "2026-09-01T00:00:00Z" }
+{ "parent_id": "...", "consent_at": "2026-09-01T00:00:00Z" }
 ```
+- **토큰은 body에 없다.** `Set-Cookie: __Host-gm_parent=...`로 내려간다 (`공통규약.md` 「인증 쿠키」)
 - `consent: true`가 아니면 422. 동의 문구 버전은 서버가 `consent_version`으로 기록
 - 라벨링 동의(아이 문장을 Evaluator 개선용 라벨링에 활용, 파일럿 종료 시 사본 파기)는 **별도 체크박스** → `labeling_consent: bool`. 거부해도 서비스 이용 가능, 책에는 원문이 그대로 남음
 
-### POST `/parents/login` → `{ token }`
+### POST `/parents/login` → `{ "parent_id": "..." }` + `Set-Cookie: __Host-gm_parent`
+
+### POST `/parents/logout` → 204
+- `Set-Cookie: __Host-gm_parent=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax` — **이름·`Path`·`Domain` 유무가 발급 때와 하나라도 다르면 안 지워진다**
+- HttpOnly라 클라이언트가 스스로 지울 수 없다. 로컬 상태만 비우면 쿠키는 살아 있다
 
 ### GET `/parents/me`
 ```json
@@ -39,10 +44,12 @@
 - `access_code` 6자리, 24시간 유효, 1회 사용. 서버는 해시만 저장
 
 ### POST `/parents/children/{child_id}/access-code` → 재발급 `{ access_code, access_code_expires_at }`
+- **`children.token_version`을 1 올린다 → 이전 기기의 자녀 토큰이 즉시 401이 된다** (`공통규약.md` 「폐기」)
 
 ### PATCH `/parents/children/{child_id}` → `{ daily_cap }` (SHOULD, 10~20)
 
 ### DELETE `/parents/children/{child_id}` → 204. 자녀 데이터 즉시 파기 (attempts, books, artworks, events, Redis)
+- 파기 대상에 **자녀 토큰도 포함**된다. `token_version`을 올려 남아 있는 기기를 끊는다
 
 ---
 
@@ -53,9 +60,14 @@
 // req
 { "access_code": "482913" }
 // res
-{ "token": "<child_jwt>", "child": { "child_id": "...", "nickname": "...", "guide_name": null } }
+{ "child": { "child_id": "...", "nickname": "...", "guide_name": null } }
 ```
-- 코드 소진 후 재사용 불가. 토큰 30일, 기기 쿠키(HttpOnly)에 보관
+- **토큰은 body에 없다.** `Set-Cookie: __Host-gm_child=...` (`공통규약.md` 「인증 쿠키」)
+- 코드 소진 후 재사용 불가. JWT는 **절대 30일**이고 쿠키 만료만 슬라이딩한다
+- **이 화면은 standalone(홈 화면 실행)에서만 연다.** iOS 홈 화면 앱은 Safari와 쿠키를 공유하지 않는데 코드는 1회 사용이라, 브라우저 탭에서 교환하면 홈 화면 앱에서 **재발급 없이는 못 들어온다**
+
+### POST `/child/logout` → 204
+- `Set-Cookie: __Host-gm_child=; Max-Age=0; ...` — 가족 공용 태블릿에서 아이가 내려오는 경로
 
 ### GET `/child/me`
 ```json
@@ -231,7 +243,7 @@
 ## 9. 서버 내부 처리 순서 (POST /attempts)
 
 ```
-1. 토큰·역할 검증, rate limit
+1. 쿠키(`__Host-gm_child`)·역할 검증, **`token_version` DB 대조**(다르면 401), rate limit
 2. 일일 카운트 확인 (retry_of 없으면) → 소진 시 409
 3. PII 2차 검사 (NER) → 감지 시 outcome=blocked(pii), pii_masked 로그
 4. 입력 Moderation → 차단 시 outcome=blocked(moderation), moderation_blocked 로그
@@ -253,7 +265,7 @@
 | 테이블 | 이 명세에서 쓰는 곳 |
 |---|---|
 | `parents` | 1절 |
-| `children` | 1·2절. `guide_name`, `access_code_hash`, `daily_cap`, `timezone` 추가 |
+| `children` | 1·2절. `guide_name`, `access_code_hash`, `daily_cap`, `timezone`, **`token_version INTEGER NOT NULL DEFAULT 1`** 추가 |
 | `cards` | 3절. `type`, `situation`, `noun_tags[]`, `sketch_r2_key` |
 | `card_attempts` | 4절. `grade`, `tier`, `signals JSON`, `scaffold_count`, `retry_of`, `prompted`, `text` (항상 보관, 책 콘텐츠) |
 | `books` / `book_pages` | 6절. 자녀당 1권 자동 생성, 카드 최고 티어 시도 → 페이지 upsert |
