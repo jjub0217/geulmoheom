@@ -28,7 +28,7 @@
 ```
 web/       Next.js PWA (프론트)          — web/README.md · tasks/ 는 주차 진척
 api/       FastAPI + LangGraph (백엔드)  — api/README.md · tasks/ 는 주차 진척
-landing/   Fake Door 랜딩 (PM, W1)
+landing/   랜딩페이지 (PM, W1 → W2 이월 — 도메인 미등록)
 infra/     docker-compose (로컬 Postgres·Redis), 배포 설정
 docs/      사람이 읽는 문서 전부 (PM 소유)
 api-requests/  프론트가 개발 중 올리는 API 수정요청 — open/ 이 비면 대기 없음
@@ -38,13 +38,44 @@ api-requests/  프론트가 개발 중 올리는 API 수정요청 — open/ 이 
 
 ## 시작하기
 
+**한 번 하는 것과 매번 하는 것이 섞여 있으면 순서대로 치게 된다.** 나눠 둔다.
+패키지별 도구 설치·초기화는 `api/README.md`·`web/README.md`의 「개발환경 구축」에 있다. 여기는 저장소 전체 몫만.
+
+### 처음 한 번 — 머신당
+
 ```bash
-cp .env.example .env        # 키 값 채우기
-make db-up                  # Postgres + Redis
-make dev                    # web + api 동시 실행
-make contracts              # api OpenAPI → web/src/api/types.gen.ts
-make test
+cp .env.example .env        # 키를 채운다
 ```
+
+- **`.env`가 없어도 목 응답 서버는 뜬다.** `app_env` 기본값이 `dev`라 필수 키 검사를 건너뛴다. 막히는 것은 **Gemini 키가 필요한 것**(Evaluator 스모크·이미지 생성)과 파일럿 설정뿐이다
+- 파일럿용은 `.env.pilot.example` → `.env.pilot`. **`APP_ENV`만은 파일이 아니라 프로세스 환경 변수로 준다** — 어느 파일을 읽을지 정하는 값이라 파일 안에 적으면 늦다
+
+### 필요할 때
+
+```bash
+make db-up                  # Postgres + Redis. Docker Desktop이 떠 있어야 한다
+```
+
+**DB 없이 되는 작업이 많다.** 목 응답 서버와 타입 생성은 Postgres·Redis 없이 돈다. 화면 작업만 할 거면 안 띄워도 된다.
+
+### 개발 중 — 터미널을 따로 연다
+
+```bash
+make dev-api                # 터미널 1 · 백엔드 세션에서만 (포트 8000 충돌)
+make dev-web                # 터미널 2 · 프론트 세션
+```
+
+**`make dev`는 둘을 한꺼번에 띄우고 끝나지 않는다.** 아래 명령을 그 뒤에 이어 치면 영원히 실행되지 않는다.
+세션 셋을 나눠 쓰는 지금 체제(`adr/0008`)에서는 `dev-api`·`dev-web`을 각자 세션에서 따로 띄운다. `make dev`는 혼자 한 터미널로 다 볼 때만 쓴다.
+
+```bash
+make contracts              # api OpenAPI → web/src/api/types.gen.ts
+make lint                   # 커밋 전
+make test                   # 커밋 전
+```
+
+- **`make contracts`는 api가 떠 있어야 한다.** `localhost:8000/openapi.json`을 읽는다. **명세가 바뀐 뒤에만** 돌리면 되고, 생성물(`types.gen.ts`)은 손으로 고치지 않는다
+- **`lint`·`test`는 커밋 전에 로컬에서 돌린다.** CI는 `main` push 후에 도는 사후 통보라, 깨진 코드가 이미 들어간 다음 빨간불이 뜬다
 
 ## 규칙 요약 (자세한 건 `docs/비전.md` 7장, `CLAUDE.md`)
 
