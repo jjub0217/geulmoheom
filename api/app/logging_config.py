@@ -34,6 +34,11 @@ SAFE_EXTRA_KEYS = (
     "latency_ms",
     "eval_fallback",
     "prompt_chars",
+    # 되묻기 (app/scaffold.py) — PRD 5장 `scaffold_triggered`.
+    # 질문은 카드 명사 태그로 만든 것이라 원문이 아니지만, **로그에 담지 않는다.**
+    # 세는 데 필요한 것은 몇 번째였는지와 어느 카드였는지뿐이다.
+    "card_id",
+    "attempt",
 )
 
 

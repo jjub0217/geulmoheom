@@ -125,6 +125,67 @@ def test_어떤_분기도_등급을_노출하지_않는다(client: TestClient):
         assert "grade" not in 전문
 
 
+# ── 되묻기 (W2 3번) ──────────────────────────────────────
+
+
+def _G0(monkeypatch: pytest.MonkeyPatch, 횟수: int | None) -> None:
+    async def _판정(text: str) -> 평가결과:
+        return 평가결과(grade="G0")
+
+    async def _횟수(아이: str, card_id: str) -> int | None:
+        return 횟수
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    monkeypatch.setattr(attempts, "되묻기횟수", _횟수)
+
+
+def test_G0_이면_되묻는다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    _G0(monkeypatch, 1)
+
+    body = _attempt(client)
+
+    assert body["outcome"] == "scaffold"
+    assert body["scaffold_count"] == 1
+    assert body["guide"]["expression"] == "compass_dim"
+    assert "그림자" in body["guide"]["line"]  # c01 의 명사 태그
+
+
+def test_되묻기는_카드를_소모하지_않는다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """프론트는 입력창과 쓰던 글을 그대로 둔다."""
+    _G0(monkeypatch, 2)
+    결과 = _attempt(client, **{"X-Mock-Outcome": "result"})
+
+    되물음 = _attempt(client)
+
+    assert 되물음["today"]["cards_done"] < 결과["today"]["cards_done"]
+
+
+def test_두_번_되묻고_나면_결과로_간다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """`scaffold_count` 2 이후 같은 카드 재제출은 G1 취급이다 (`Stage0.md` 4절)."""
+    _G0(monkeypatch, 3)
+
+    body = _attempt(client)
+
+    assert body["outcome"] == "result"
+    assert body["tier"] == "basic"
+
+
+def test_횟수를_못_세면_되묻지_않는다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """같은 카드에서 무한히 되물어 아이를 가두는 쪽이 더 나쁘다."""
+    _G0(monkeypatch, None)
+
+    assert _attempt(client)["outcome"] == "result"
+
+
+def test_되묻기에도_등급이_안_나간다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    _G0(monkeypatch, 1)
+
+    전문 = str(_attempt(client))
+
+    assert not any(g in 전문 for g in ("G0", "G1", "G2", "G3"))
+    assert "grade" not in 전문
+
+
 def test_blocked_는_차단_카테고리를_말하지_않는다(client: TestClient):
     """아이에게 "나쁜 말" 피드백을 주지 않는다."""
     body = _attempt(client, **{"X-Mock-Outcome": "blocked"})

@@ -7,10 +7,10 @@
 
 - `today` 카운트·`can_retry` — 일일 카운트는 DB 가 들어와야 센다
 - `artwork` — 이미지 큐(B-3)가 아직 없다. `pending` 고정
-- **`outcome=scaffold`·`blocked`** — 되묻기는 W2 3번, PII·Moderation 은 `Stage0.md`
-  9절 3·4번이다. 지금은 G0 도 `Stage0.md` 9절 7번대로 `basic` 결과로 나간다
+- **`outcome=blocked`** — PII·Moderation 은 `Stage0.md` 9절 3·4번이고 아직이다
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -19,6 +19,8 @@ from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import MockOutcome, mock_daily_cap_reached, mock_outcome, require_child
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights
+from app.middleware import current_request_id
+from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 질문
 from app.schemas.stage0 import (
     AttemptBlocked,
     AttemptRequest,
@@ -30,6 +32,8 @@ from app.schemas.stage0 import (
     Tier,
     TodayState,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/attempts", tags=["attempts"])
 
@@ -108,7 +112,7 @@ def _guide(tier: Tier, 하이라이트: list[Highlight]) -> Guide:
 @router.post("")
 async def create_attempt(
     payload: AttemptRequest,
-    _: Child,
+    아이: Child,
     outcome: Annotated[MockOutcome | None, Depends(mock_outcome)],
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> AttemptResponse:
@@ -120,6 +124,12 @@ async def create_attempt(
         return {"result": _result, "scaffold": _scaffold, "blocked": _blocked}[outcome]()
 
     평가 = await evaluate(payload.text)
+
+    if 평가.grade == "G0":
+        되물음 = await _되묻기(아이, payload.card_id)
+        if 되물음 is not None:
+            return 되물음
+
     하이라이트 = highlights(평가, payload.text)
 
     # **등급은 여기서 끝난다.** 응답에 담기는 것은 티어뿐이다 (`Stage0.md` 4절).
@@ -137,6 +147,39 @@ async def create_attempt(
         },
         today=TodayState(cards_done=3, cap=5, locked=False),
         can_retry=True,
+    )
+
+
+async def _되묻기(아이: str, card_id: str) -> AttemptScaffold | None:
+    """G0 되묻기 (`Stage0.md` 9절 6번). 되묻지 않을 상황이면 `None` — 결과로 진행한다.
+
+    **카드를 소모하지 않는다.** 프론트는 입력창과 쓰던 글을 그대로 둔다.
+    """
+    횟수 = await 되묻기횟수(아이, card_id)
+
+    # 못 셌으면 되묻지 않는다. 같은 카드에서 무한히 되물어 아이를 가두는 쪽이 더 나쁘다.
+    if 횟수 is None or 횟수 > MAX_SCAFFOLD:
+        logger.info(
+            "scaffold_skipped",  # 2회를 채웠거나(=G1 취급) 셀 수 없었다
+            extra={
+                "request_id": current_request_id(),
+                "card_id": card_id,
+                "attempt": 횟수 if 횟수 is not None else -1,
+                "grade": "G1",  # 여기서부터 G1 취급으로 진행한다
+            },
+        )
+        return None
+
+    logger.info(
+        "scaffold_triggered",  # PRD 5장. 발동률·재입력률이 H2 지표다
+        extra={"request_id": current_request_id(), "card_id": card_id, "attempt": 횟수},
+    )
+    return AttemptScaffold(
+        outcome="scaffold",
+        attempt_id=fx.ATTEMPT_ID,
+        guide=Guide(expression="compass_dim", line=질문(card_id, 횟수)),
+        scaffold_count=횟수,
+        today=TodayState(cards_done=2, cap=5, locked=False),
     )
 
 

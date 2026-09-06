@@ -11,10 +11,10 @@
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
 from typing import Literal
 
 from app.config import REPO_ROOT
+from app.docs_md import 민, 읽기, 표행
 
 예시셋문서 = REPO_ROOT / "docs" / "루브릭_예시셋.md"
 PRD = REPO_ROOT / "docs" / "MVP_PRD.md"
@@ -35,28 +35,12 @@ class 예시:
         return self.유형 == "비전투"
 
 
-def _읽기(문서: Path) -> str:
-    try:
-        return 문서.read_text(encoding="utf-8")
-    except OSError as exc:  # 배포 형태가 바뀌어 docs/ 가 함께 오지 않은 경우
-        raise RuntimeError(f"루브릭 문서를 읽지 못했다: {문서.name}") from exc
-
-
-def _표행(줄: str) -> list[str]:
-    return [칸.strip() for 칸 in 줄.strip().strip("|").split("|")]
-
-
-def _민(글: str) -> str:
-    """마크다운 강조·인라인 코드를 뗀다. 프롬프트에 별표가 들어갈 이유가 없다."""
-    return re.sub(r"[*`]", "", 글).strip()
-
-
 @lru_cache
 def 예시셋읽기() -> tuple[예시, ...]:
     """`## G0 — …` 섹션마다 표를 읽는다. 열 개수가 등급마다 다르므로 앞 4열만 쓴다."""
     묶음: list[예시] = []
     현재: str | None = None
-    for 줄 in _읽기(예시셋문서).splitlines():
+    for 줄 in 읽기(예시셋문서).splitlines():
         머리 = re.match(r"^## (G[0-3]) ", 줄)
         if 머리:
             현재 = 머리.group(1)
@@ -65,7 +49,7 @@ def 예시셋읽기() -> tuple[예시, ...]:
             현재 = None
         if 현재 is None or not 줄.startswith("|"):
             continue
-        칸 = _표행(줄)
+        칸 = 표행(줄)
         if len(칸) < 4 or not 칸[0].isdigit():
             continue  # 머리글·구분선
         묶음.append(예시(등급=현재, 카드=칸[1], 입력=칸[2], 유형=칸[3]))
@@ -79,7 +63,7 @@ def 경계읽기() -> tuple[str, ...]:
     """「판정 경계」 표를 규칙 줄로. 예시셋만으로는 안 잡히는 것들이다."""
     규칙: list[str] = []
     구간 = False
-    for 줄 in _읽기(예시셋문서).splitlines():
+    for 줄 in 읽기(예시셋문서).splitlines():
         if 줄.startswith("## 판정 경계"):
             구간 = True
             continue
@@ -87,24 +71,24 @@ def 경계읽기() -> tuple[str, ...]:
             break
         if not 구간 or not 줄.startswith("|"):
             continue
-        칸 = _표행(줄)
+        칸 = 표행(줄)
         if len(칸) != 2 or 칸[0] in {"상황", ""} or set(칸[0]) <= {"-", ":"}:
             continue
-        규칙.append(f"- {_민(칸[0])} → {_민(칸[1])}")
+        규칙.append(f"- {민(칸[0])} → {민(칸[1])}")
     return tuple(규칙)
 
 
 @lru_cache
 def 루브릭읽기() -> str:
     """PRD 4.3절의 표와 규칙을 그대로 가져온다. 요약하지 않는다 — 요약이 곧 해석이다."""
-    조각 = re.search(r"^### 4\.3 .*?$(.*?)^### 4\.4 ", _읽기(PRD), re.S | re.M)
+    조각 = re.search(r"^### 4\.3 .*?$(.*?)^### 4\.4 ", 읽기(PRD), re.S | re.M)
     if not 조각:
         raise RuntimeError("PRD 4.3절을 못 찾았다. 절 번호가 바뀌었으면 여기를 고친다")
     줄들 = []
     for 줄 in 조각.group(1).strip().splitlines():
         if set(줄.strip()) <= {"-", "|", ":", " "} and 줄.strip():
             continue  # 표 구분선
-        줄들.append(_민(줄))
+        줄들.append(민(줄))
     return "\n".join(줄들).strip()
 
 
