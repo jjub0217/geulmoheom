@@ -25,6 +25,15 @@ SAFE_EXTRA_KEYS = (
     "kind",
     "total_usd",
     "limit_usd",
+    # Evaluator (app/evaluator.py) — PRD 5장 `eval_result`.
+    # **등급은 남기고 문장 조각은 남기지 않는다.** signals·descriptors 는 아이 문장에서
+    # 그대로 뽑은 말이라 원문과 같다. 그래서 개수(`signal_count`)만 목록에 있다.
+    "grade",
+    "tier",
+    "signal_count",
+    "latency_ms",
+    "eval_fallback",
+    "prompt_chars",
 )
 
 

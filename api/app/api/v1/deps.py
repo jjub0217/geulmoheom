@@ -40,8 +40,13 @@ async def mock_outcome(
         MockOutcome | None,
         Header(description="**목 서버 전용.** outcome 3분기를 강제한다. 실서버에는 없다"),
     ] = None,
-) -> MockOutcome:
-    return x_mock_outcome or "result"
+) -> MockOutcome | None:
+    """헤더가 없으면 `None` — **실제 판정 경로로 간다.**
+
+    W2 2번에서 기본값 `"result"` 를 걷어냈다. 프론트 화면 작업(W3)이 아직 이 헤더로
+    3분기를 강제하므로 **헤더 자체는 남긴다.**
+    """
+    return x_mock_outcome
 
 
 async def mock_daily_cap_reached(

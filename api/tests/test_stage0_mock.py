@@ -6,6 +6,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.v1 import attempts
+from app.evaluator import 평가결과
 from app.main import create_app
 
 AUTH = {"Authorization": "Bearer mock"}
@@ -27,6 +29,20 @@ EVENTS = (
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(create_app(), raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def 판정_고정(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`X-Mock-Outcome` 없는 호출은 이제 **실제 Evaluator 로 간다** (W2 2번).
+
+    이 파일은 응답 **모양**이 `Stage0.md` 와 맞는지만 본다. 네트워크를 타면 안 되고,
+    타서도 판정이 흔들리면 계약 테스트가 아니라 모델 테스트가 된다.
+    """
+
+    async def _가짜(text: str) -> 평가결과:
+        return 평가결과(grade="G2", signals=["adj:은빛", "adv:살금살금"])
+
+    monkeypatch.setattr(attempts, "evaluate", _가짜)
 
 
 # ── 인증 ─────────────────────────────────────────────────
@@ -72,11 +88,13 @@ def _attempt(client: TestClient, **headers) -> dict:
     ).json()
 
 
-def test_기본은_result(client: TestClient):
+def test_헤더가_없으면_판정_결과가_나온다(client: TestClient):
+    """고정값이 아니라 Evaluator 판정에서 나온 티어다 (G2 → rare)."""
     body = _attempt(client)
 
+    assert body["tier"] == "rare"
+    assert [h["text"] for h in body["highlights"]] == ["은빛", "살금살금"]
     assert body["outcome"] == "result"
-    assert body["tier"] in {"basic", "rare", "legendary"}
     assert body["artwork"]["status"] == "pending"
     assert body["artwork"]["placeholder_url"]
 
@@ -97,11 +115,13 @@ def test_blocked_를_헤더로_강제한다(client: TestClient):
 
 
 def test_어떤_분기도_등급을_노출하지_않는다(client: TestClient):
-    """G0~G3 은 로그 전용이다 (용어사전 3장)."""
-    for outcome in ("result", "scaffold", "blocked"):
-        전문 = str(_attempt(client, **{"X-Mock-Outcome": outcome}))
+    """G0~G3 은 로그 전용이다 (용어사전 3장). **판정 경로도 포함해서 본다.**"""
+    본문들 = [str(_attempt(client))]  # 헤더 없음 = 실제 판정 경로
+    for o in ("result", "scaffold", "blocked"):
+        본문들.append(str(_attempt(client, **{"X-Mock-Outcome": o})))
 
-        assert "G0" not in 전문
+    for 전문 in 본문들:
+        assert not any(g in 전문 for g in ("G0", "G1", "G2", "G3"))
         assert "grade" not in 전문
 
 

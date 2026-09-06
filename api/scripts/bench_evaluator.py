@@ -8,6 +8,9 @@ W1 스모크는 입력 300토큰짜리 최소 프롬프트라 확정 근거가 �
 갈라진 쪽이 실제로 아이를 판정한다. (W1 스모크는 4.3절을 코드에 박아 뒀다.
 이 스크립트가 그 방식을 대체한다)
 
+읽는 것도 프롬프트 조립도 **`app/rubric.py` 를 그대로 쓴다** (W2 2번에 옮겼다).
+운영과 벤치가 다른 프롬프트를 쓰면 여기서 잰 수치가 근거를 잃는다.
+
 **측정 모드가 둘인 이유** — 예시셋 40개가 few-shot 으로 프롬프트에 들어가는데
 같은 40개로 일치율을 재면 답이 문제지에 적혀 있다.
 
@@ -20,23 +23,17 @@ W1 스모크는 입력 300토큰짜리 최소 프롬프트라 확정 근거가 �
 """
 
 import asyncio
-import re
 import statistics
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Literal
 
 from google.genai import types
-from pydantic import BaseModel, Field
 
 from app.cost import record_usd
+from app.evaluator import 판정
 from app.llm import get_client
-
-REPO = Path(__file__).resolve().parents[2]
-예시셋문서 = REPO / "docs" / "루브릭_예시셋.md"
-PRD = REPO / "docs" / "MVP_PRD.md"
+from app.rubric import 경계읽기, 예시, 예시셋읽기, 프롬프트
 
 # W1 스모크가 좁힌 후보 (`benchmarks/W1-llm-smoke.md`).
 # `gemini-3.7-flash` 는 평균 11초로 이미 탈락. `gemini-3.5-flash-lite` 는 context
@@ -49,117 +46,6 @@ PRD = REPO / "docs" / "MVP_PRD.md"
 후보: dict[str, dict[str, float | bool | None]] = {
     "gemini-3.1-flash-lite": {"in": 0.25, "out": 1.50, "cache": 0.025, "thinking_off": True},
 }
-
-등급 = Literal["G0", "G1", "G2", "G3"]
-
-
-class 판정(BaseModel):
-    grade: 등급
-    signals: list[str] = Field(default_factory=list)
-    descriptors: list[str] = Field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class 예시:
-    등급: str
-    카드: str
-    입력: str
-    유형: str  # 전투 / 비전투
-
-    @property
-    def 비전투(self) -> bool:
-        return self.유형 == "비전투"
-
-
-def _표행(줄: str) -> list[str]:
-    return [칸.strip() for 칸 in 줄.strip().strip("|").split("|")]
-
-
-def 예시셋읽기() -> list[예시]:
-    """`## G0 — …` 섹션마다 표를 읽는다. 열 개수가 등급마다 다르므로 앞 4열만 쓴다."""
-    묶음: list[예시] = []
-    현재: str | None = None
-    for 줄 in 예시셋문서.read_text(encoding="utf-8").splitlines():
-        머리 = re.match(r"^## (G[0-3]) ", 줄)
-        if 머리:
-            현재 = 머리.group(1)
-            continue
-        if 줄.startswith("## "):
-            현재 = None
-        if 현재 is None or not 줄.startswith("|"):
-            continue
-        칸 = _표행(줄)
-        if len(칸) < 4 or not 칸[0].isdigit():
-            continue  # 머리글·구분선
-        묶음.append(예시(등급=현재, 카드=칸[1], 입력=칸[2], 유형=칸[3]))
-    return 묶음
-
-
-def 경계읽기() -> list[str]:
-    """「판정 경계」 표를 규칙 줄로. 예시셋만으로는 안 잡히는 것들이다."""
-    규칙: list[str] = []
-    구간 = False
-    for 줄 in 예시셋문서.read_text(encoding="utf-8").splitlines():
-        if 줄.startswith("## 판정 경계"):
-            구간 = True
-            continue
-        if 구간 and 줄.startswith("## "):
-            break
-        if not 구간 or not 줄.startswith("|"):
-            continue
-        칸 = _표행(줄)
-        if len(칸) != 2 or 칸[0] in {"상황", ""} or set(칸[0]) <= {"-", ":"}:
-            continue
-        규칙.append(f"- {_민(칸[0])} → {_민(칸[1])}")
-    return 규칙
-
-
-def _민(글: str) -> str:
-    """마크다운 강조·인라인 코드를 뗀다. 프롬프트에 별표가 들어갈 이유가 없다."""
-    return re.sub(r"[*`]", "", 글).strip()
-
-
-def 루브릭읽기() -> str:
-    """PRD 4.3절의 표와 규칙을 그대로 가져온다. 요약하지 않는다 — 요약이 곧 해석이다."""
-    본문 = PRD.read_text(encoding="utf-8")
-    조각 = re.search(r"^### 4\.3 .*?$(.*?)^### 4\.4 ", 본문, re.S | re.M)
-    if not 조각:
-        raise RuntimeError("PRD 4.3절을 못 찾았다. 절 번호가 바뀌었으면 여기를 고친다")
-    줄들 = []
-    for 줄 in 조각.group(1).strip().splitlines():
-        if set(줄.strip()) <= {"-", "|", ":", " "} and 줄.strip():
-            continue  # 표 구분선
-        줄들.append(_민(줄))
-    return "\n".join(줄들).strip()
-
-
-def 번갈아(few: list[예시]) -> list[예시]:
-    """등급을 번갈아 배치한다. 문서 순서대로 넣으면 프롬프트 끝이 전부 G3 라
-    최근 예시 쪽으로 판정이 쏠린다. **무작위로 섞지 않는다** — 매 호출 순서가
-    달라지면 context caching 이 깨지고 재현도 안 된다."""
-    통: dict[str, list[예시]] = {}
-    for e in few:
-        통.setdefault(e.등급, []).append(e)
-    줄: list[예시] = []
-    for i in range(max(len(v) for v in 통.values()) if 통 else 0):
-        for 급 in sorted(통):
-            if i < len(통[급]):
-                줄.append(통[급][i])
-    return 줄
-
-
-def 프롬프트(few: list[예시]) -> str:
-    보기 = "\n".join(f"- 「{e.입력}」 → {e.등급}" for e in 번갈아(few))
-    return (
-        "너는 초등 5~6학년이 쓴 '행동 묘사 문장'을 4단계로 판정한다.\n"
-        "루브릭은 아래가 전부다. 여기 없는 기준을 스스로 만들지 않는다.\n\n"
-        f"[루브릭]\n{루브릭읽기()}\n\n"
-        f"[판정 경계]\n" + "\n".join(경계읽기()) + "\n\n"
-        f"[예시]\n{보기}\n\n"
-        "출력은 {grade, signals, descriptors}. "
-        'signals 는 "adj:은빛", "adv:재빨리", "clause:방법" 형식이고 '
-        "descriptors 는 문장에서 그대로 뽑은 묘사어다."
-    )
 
 
 def 한번(모델: str, 지시: str, 문장: str) -> tuple[판정, float, int, int, int]:
@@ -220,12 +106,12 @@ class 집계:
         return 100 * self.비전투맞음 / self.비전투전체 if self.비전투전체 else 0.0
 
 
-def 재기(모델: str, 예시들: list[예시], 모드: str) -> 집계:
+def 재기(모델: str, 예시들: tuple[예시, ...], 모드: str) -> 집계:
     묶음 = 집계(모델=모델, 모드=모드, 지연=[], 등급별={}, 혼동=[])
     전체지시 = 프롬프트(예시들)
 
     for 대상 in 예시들:
-        지시 = 전체지시 if 모드 == "all" else 프롬프트([e for e in 예시들 if e is not 대상])
+        지시 = 전체지시 if 모드 == "all" else 프롬프트(tuple(e for e in 예시들 if e is not 대상))
         try:
             결과, 지연, 입력, 출력, 캐시 = 한번(모델, 지시, 대상.입력)
         except Exception as exc:
