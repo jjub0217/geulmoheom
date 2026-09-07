@@ -74,9 +74,17 @@ class Settings(BaseSettings):
     daily_card_cap: int = 5
     daily_cost_alert_usd: float = 20.0
 
-    # 쿠키 vs Authorization 헤더는 미결 11-2. 어느 쪽이든 web:3000 은 크로스 오리진이라
-    # 지금부터 오리진을 명시해 둔다 (allow_credentials 와 "*" 는 함께 못 쓴다).
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # 미결 11-2 는 HttpOnly 쿠키로 확정됐다 (`공통규약.md` 「인증 쿠키」). web 은
+    # same-site 이되 cross-origin 이라 오리진을 **정확히** 적는다. `"*"` 를 쓰지 않는다 —
+    # Starlette 는 `allow_credentials=True` 와 함께 써도 에러를 내지 않고 요청 오리진을
+    # 그대로 반사한다. CORS 오류가 안 나서 정상으로 보이지만, 실제로는 임의의 사이트가
+    # 아이 세션으로 API 를 호출할 수 있는 상태다.
+    #
+    # 개발도 https + `.test` 다 (`make certs`). `http://localhost:3000` 을 되살리지 않는다 —
+    # `__Host-` 쿠키는 Secure 를 강제하고, Secure 쿠키가 http://localhost 에 붙는지가
+    # 브라우저마다 갈린다. 파일럿이 태블릿이라 Safari 를 건너뛸 수 없다.
+    # **포트도 오리진의 일부다** — `:3000` 을 빼면 preflight 가 통과하지 않는다.
+    cors_origins: list[str] = ["https://app.geulmoheom.test:3000"]
 
 
 def missing_pilot_keys(settings: Settings) -> list[str]:

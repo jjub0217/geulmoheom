@@ -103,3 +103,27 @@ def test_설정값에_주석이_섞이지_않는다():
     ]
 
     assert 섞인것 == []
+
+
+def test_cors_기본값에_와일드카드가_없다():
+    """`allow_credentials=True` 와 `"*"` 는 함께 쓸 수 없다.
+
+    Starlette 는 둘을 같이 줘도 **에러를 내지 않고 요청 오리진을 그대로 반사한다.**
+    CORS 오류가 안 나서 정상으로 보이지만, 실제로는 임의의 사이트가 아이 세션으로
+    API 를 호출할 수 있는 상태다 (`공통규약.md` 「CORS」).
+    """
+    오리진들 = Settings().cors_origins
+
+    assert 오리진들
+    assert "*" not in 오리진들
+
+
+def test_cors_기본값은_https_다():
+    """개발 환경도 https 다 (`공통규약.md` 「개발 환경도 https다」).
+
+    `__Host-` 쿠키는 Secure 를 강제하는데 Secure 쿠키가 `http://localhost` 에 붙는지가
+    브라우저마다 갈린다. 파일럿이 태블릿이라 Safari 를 건너뛸 수 없어서, 여기가
+    http 로 되돌아가면 인증이 **로컬에서만** 되는 상태로 조용히 돌아간다.
+    """
+    for 오리진 in Settings().cors_origins:
+        assert 오리진.startswith("https://"), 오리진

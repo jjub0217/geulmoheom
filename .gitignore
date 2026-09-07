@@ -25,6 +25,9 @@ __pycache__/
 .vscode/
 *.swp
 
+# 로컬 https 인증서 (make certs). 개인 키다 — 절대 커밋하지 않는다
+.certs/
+
 # data
 infra/pgdata/
 *.log

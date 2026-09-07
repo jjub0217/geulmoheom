@@ -33,7 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,  # 미결 11-2가 HttpOnly 쿠키로 정해질 경우를 위해
+        allow_credentials=True,  # 미결 11-2 확정 — HttpOnly 쿠키다 (공통규약.md 「인증 쿠키」)
         allow_methods=["*"],
         allow_headers=["*"],
     )

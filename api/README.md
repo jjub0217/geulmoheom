@@ -14,10 +14,13 @@
 | Python | **3.12** (`uv`가 관리한다) | `uv python list` |
 | `uv` | 최신 | `uv --version` |
 | Docker Desktop | 실행 중이어야 함 | `docker info` |
+| `mkcert` | 최신 | `mkcert -version` |
 
 ```bash
-brew install uv docker
+brew install uv docker mkcert nss
 ```
+
+> `nss` 는 Firefox 용이다. 없어도 Chrome·Safari 는 된다.
 
 > 시스템 Python 을 직접 쓰지 않는다. `uv` 가 `.python-version` 대로 받아 쓴다.
 > 이 머신의 시스템 Python 은 3.13 이라 그대로 쓰면 사람마다 다른 버전으로 돌게 된다.
@@ -72,16 +75,40 @@ cd api && claude                # ← 반드시 api 안에서. api/CLAUDE.md 가
 - `.python-version` 에 `3.12`
 - **body 마스킹 미들웨어를 처음부터 넣는다.** 나중에 얹으면 그전에 쌓인 로그에 원문이 남는다 (PRD 1.1b)
 
-### 5. 실행 · 검사
+### 5. 로컬 https (`.test`) — **한 번만**
 
 ```bash
-make dev-api                              # localhost:8000
+make certs      # mkcert 루트 CA + 인증서 + /etc/hosts. sudo 를 두 번 묻는다
+```
+
+> ⚠️ **별도 터미널에서 돌린다. Claude 세션 안에서는 sudo 프롬프트에 입력이 안 들어간다.**
+> 그러면 **인증서 발급(sudo 불필요)만 되고** 키체인 등록과 `/etc/hosts` 가 통째로
+> 건너뛰어져 **조용히 절반만 된 상태**로 끝난다 — `mkcert -install` 이 프롬프트를 못 받아도
+> 0 을 반환해서 `set -e` 가 안 잡는다. 2026-09-07 에 실제로 그렇게 멈췄다.
+> 지금은 스크립트가 **끝에서 셋을 실제로 검사하고** 안 되어 있으면 죽는다.
+
+`https://api.geulmoheom.test:8000` ↔ `https://app.geulmoheom.test:3000` 으로 옮겼다
+(`docs/api/공통규약.md` 「인증 쿠키 · 개발 환경도 https다」, 미결 11-2 확정).
+
+> ⚠️ **`localhost` 로 되돌리지 않는다.** `__Host-` 쿠키는 `Secure` 를 강제하는데,
+> `Secure` 쿠키가 `http://localhost` 에 붙는지가 **브라우저마다 갈린다**
+> (Chromium 허용, Safari 불확실 — WebKit #281149 REOPENED). **파일럿이 태블릿이라
+> Safari 를 건너뛸 수 없다.** 대안이었던 「dev 만 `__Host-` 제외」는 쿠키 이름이
+> 환경마다 달라져 **환경별로만 재현되는 버그**를 만든다 — 채택하지 않았다.
+>
+> 인증서(`.certs/`)는 개인 키다. `.gitignore` 에 있고 **커밋하지 않는다.**
+> 머신을 옮기거나 인증서가 만료되면 `make certs` 를 다시 돌린다.
+
+### 6. 실행 · 검사
+
+```bash
+make dev-api                              # https://api.geulmoheom.test:8000
 uv run ruff check . && uv run pytest      # 커밋 전. CI 기다리지 않는다
 ```
 
 **`make dev`(web+api 동시)는 백엔드 세션에서만 띄운다.** PM 세션에서 같이 띄우면 포트 8000 이 충돌한다.
 
-### 6. 프론트에게 계약을 넘긴다
+### 7. 프론트에게 계약을 넘긴다
 
 ```bash
 make dev-api
