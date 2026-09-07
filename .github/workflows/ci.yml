@@ -25,7 +25,15 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            api: ['api/**', 'infra/**']
+            # `docs/**` 를 통째로 넣는다. **api 코드가 PM 문서를 런타임에 읽기 때문이다** —
+            # 안전_어휘_기준(moderation) · 장면카드_초안(scene_cards) · 루브릭_예시셋(rubric) ·
+            # MVP_PRD(rubric·scaffold). 즉 **문서만 바꾼 커밋이 서버를 깨뜨릴 수 있다.**
+            #
+            # **읽는 문서를 나열하지 않는다.** 코드가 다음 문서를 읽기 시작하는 날 목록이
+            # 조용히 낡고, 그때 깨진 것을 잡을 장치가 다시 없어진다. 실제로 2026-09-07 에
+            # 목록을 세어 보니 셋인 줄 알았던 것이 다섯이었고 `MVP_PRD.md` 는 두 모듈이
+            # 읽고 있었다. 문서 커밋마다 api 테스트가 도는 값이 그 위험보다 싸다.
+            api: ['api/**', 'infra/**', 'docs/**']
             web: ['web/**']
             contracts: ['api/**', 'web/**', 'Makefile', '.github/workflows/ci.yml']
 
