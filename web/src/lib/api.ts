@@ -116,6 +116,19 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+/**
+ * 본문 없이 부르는 POST. **로그아웃 두 개가 이 형태다** (`/parents/logout` · `/child/logout`).
+ *
+ * `Content-Type` 을 안 붙인다 — 보낼 본문이 없고, 붙이면 **불필요한 preflight** 가 생긴다.
+ * **쿠키는 실린다**(`credentials: "include"`). 서버는 그 쿠키를 보고 무엇을 지울지 안다.
+ *
+ * **여기에 401 처리를 태우지 않는다.** 쿠키가 없어도 서버가 204 를 준다 —
+ * 만료·손상된 쿠키를 지우려는 것이 로그아웃인데 인증을 걸면 **정작 지워야 할 상태에서만 막힌다.**
+ */
+export async function apiPostNoBody(path: string): Promise<void> {
+  await request<void>(path, { method: "POST" });
+}
+
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   // **try 밖에서 만든다.** 안에서 던지면 아래 catch 가 NetworkError 로 덮어써서
   // 「설정이 없다」가 「서버에 못 닿음」으로 둔갑한다 — 원인을 삼키는 그 모양 그대로다.

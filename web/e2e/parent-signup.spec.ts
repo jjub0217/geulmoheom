@@ -14,6 +14,7 @@ type SignupResponse = components["schemas"]["SignupResponse"];
 
 const ME = "**/api/v1/parents/me";
 const SIGNUP = "**/api/v1/parents/signup";
+const LOGOUT = "**/api/v1/parents/logout";
 
 const 가입됨: SignupResponse = {
   parent_id: "11111111-0000-4000-8000-000000000001",
@@ -169,4 +170,55 @@ test("자녀 쿠키로 들어오면 다시 가입시키지 않는다 — 403 은
   // 로그인이 풀린 게 아니라 역할이 다른 것이다.
   await expect(page.getByText("여기는 지금 들어갈 수 없어요")).toBeVisible();
   await expect(page.getByRole("button", { name: "가입하기" })).toHaveCount(0);
+});
+
+test("로그아웃은 서버를 부른다 — 클라이언트가 쿠키를 지우는 시늉이 아니다", async ({
+  page,
+}) => {
+  await 로그아웃상태(page);
+  await page.route(SIGNUP, (route) => route.fulfill({ status: 201, json: 가입됨 }));
+
+  let 불렀나 = false;
+  await page.route(LOGOUT, (route) => {
+    불렀나 = true;
+    // 서버는 본문 없이 204 를 준다. 쿠키 삭제는 `Set-Cookie` 로만 일어난다 —
+    // **`__Host-` 쿠키는 JS 가 못 읽고 못 지운다.**
+    return route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/parents/signup");
+  await page.getByLabel("이메일").fill("parent@example.com");
+  await page.getByLabel("비밀번호").fill("pw12345678");
+  await page.locator('input[name="consent"]').check();
+  await page.getByRole("button", { name: "가입하기" }).click();
+  await expect(page.getByText("가입됐습니다")).toBeVisible();
+
+  await page.getByRole("button", { name: "로그아웃" }).click();
+
+  expect(불렀나).toBe(true);
+  // **3상태가 「로그아웃됨」으로 간다.** 「확인 중」에 걸려 있으면 안 된다.
+  await expect(page.getByRole("button", { name: "가입하기" })).toBeVisible();
+  await expect(page.getByText("확인하는 중…")).toHaveCount(0);
+  // 가족 태블릿이다. **다음 사람이 앞사람 이메일을 보면 안 된다.**
+  await expect(page.getByLabel("이메일")).toHaveValue("");
+  await expect(page.locator('input[name="consent"]')).not.toBeChecked();
+});
+
+test("로그아웃이 하지 않는 일을 약속하지 않는다", async ({ page }) => {
+  await 로그아웃상태(page);
+  await page.route(SIGNUP, (route) => route.fulfill({ status: 201, json: 가입됨 }));
+
+  await page.goto("/parents/signup");
+  await page.getByLabel("이메일").fill("parent@example.com");
+  await page.getByLabel("비밀번호").fill("pw12345678");
+  await page.locator('input[name="consent"]').check();
+  await page.getByRole("button", { name: "가입하기" }).click();
+  await expect(page.getByText("가입됐습니다")).toBeVisible();
+
+  const 화면 = await page.locator("main").innerText();
+  // **`token_version` 은 아직 올라가지 않는다** (E-3/E-4). 그때까지 이 말은 거짓말이다.
+  expect(화면).not.toContain("모든 기기");
+  expect(화면).not.toContain("전체 로그아웃");
+  // **자녀 쿠키는 안 건드린다.** 「전부 나간다」처럼 보이게 만들지 않는다.
+  expect(화면).not.toContain("전부");
 });

@@ -90,7 +90,9 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
   await 입력창.fill("등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
   await expect(입력창).toHaveValue("등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
   // 버튼은 「보내기」 하나뿐이어야 한다. 선택지가 몰래 생기면 여기서 걸린다.
-  await expect(page.getByRole("button")).toHaveCount(1);
+  // **`main` 안에서 센다.** 밖까지 세면 개발 빌드의 Next 오버레이 버튼(`#next-logo`)이 함께 잡혀
+  // **우리 UI 와 무관한 이유로 빨간불**이 된다 — 라우트가 둘이 되고 중간에 컴파일이 일어나자 실제로 그랬다.
+  await expect(page.locator("main").getByRole("button")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "보내기" })).toBeEnabled();
 
   await 가로스크롤없음(page);

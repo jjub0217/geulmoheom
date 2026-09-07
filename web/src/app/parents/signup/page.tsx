@@ -8,6 +8,7 @@ import {
   NetworkError,
   apiGet,
   apiPost,
+  apiPostNoBody,
   역할이다르다,
   인증이풀렸다,
 } from "@/lib/api";
@@ -131,6 +132,35 @@ export default function ParentSignup() {
     }
   };
 
+  /**
+   * **서버를 부른다.** 클라이언트에서 쿠키를 지우는 것으로 대신하지 않는다 —
+   * `__Host-` 쿠키는 **JS 가 못 읽고 못 지운다.** 로컬 상태만 비우면 쿠키는 살아 있다.
+   *
+   * 끝나면 **3상태가 「로그아웃됨」으로 간다.** 「확인 중」에 걸어두지 않는다.
+   * 폼 값도 비운다 — 가족 태블릿이라 **다음 사람이 앞사람 이메일을 보면 안 된다.**
+   */
+  const 로그아웃 = async () => {
+    try {
+      await apiPostNoBody("/parents/logout");
+    } catch (e) {
+      // 서버에 닿지 못하면 **쿠키가 그대로 살아 있다.** 나간 척하지 않는다.
+      if (e instanceof NetworkError) {
+        setScreen({ kind: "못닿음", hints: e.hints });
+        return;
+      }
+      if (e instanceof ApiError) {
+        setScreen({ kind: "거절", line: e.childMessage });
+        return;
+      }
+      throw e;
+    }
+    setEmail("");
+    setPassword("");
+    setConsent(false);
+    setLabelingConsent(false);
+    setScreen({ kind: "가입전" });
+  };
+
   // **필수 동의가 없으면 보낼 수 없다.** 서버도 `consent: false` 면 422 지만,
   // 여기서 막는 이유는 검증이 아니라 **「체크하지 않았다는 사실을 화면이 알고 있다」**를 보이기 위해서다.
   const 보낼수있다 =
@@ -250,11 +280,22 @@ export default function ParentSignup() {
       {screen.kind === "가입됨" && (
         // **여기서 멈춘다** (PM 확정 2026-09-07). 다음 단계(아이 계정 만들기)는 백엔드 6번이
         // 오면 **바로 이 자리**에 붙는다. 「곧 열립니다」 같은 문장을 지어두면 이틀 뒤에 거짓말이 된다.
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col items-start gap-2">
           <h1 className="text-3xl font-semibold">가입됐습니다</h1>
           <p className="opacity-80">
             동의 시각: <time dateTime={screen.consentAt}>{screen.consentAt}</time>
           </p>
+          {/* **「모든 기기에서 로그아웃됩니다」 같은 말을 쓰지 않는다** — 지금은 거짓말이다.
+              `token_version` 은 컬럼만 있고 올리는 코드가 없다(E-3/E-4).
+              **「전부 로그아웃」처럼 보이게 만들지도 않는다** — 이 호출은 자녀 쿠키를 안 건드리고,
+              가족 태블릿에서 **아이 세션은 살아 있어야 한다.** 그래서 주장 없이 이름만 둔다. */}
+          <button
+            type="button"
+            onClick={() => void 로그아웃()}
+            className="mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
+          >
+            로그아웃
+          </button>
         </div>
       )}
 

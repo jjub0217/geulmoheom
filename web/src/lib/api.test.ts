@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, NetworkError, apiGet, apiPost, 역할이다르다, 인증이풀렸다 } from "./api";
+import {
+  ApiError,
+  NetworkError,
+  apiGet,
+  apiPost,
+  apiPostNoBody,
+  역할이다르다,
+  인증이풀렸다,
+} from "./api";
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -178,5 +186,32 @@ describe("401 과 403 을 가른다", () => {
     expect(역할이다르다(오류(409, "DAILY_CAP_REACHED"))).toBe(false);
     expect(인증이풀렸다(new NetworkError("/cards/next"))).toBe(false);
     expect(역할이다르다(new NetworkError("/cards/next"))).toBe(false);
+  });
+});
+
+describe("apiPostNoBody", () => {
+  it("본문도 Content-Type 도 안 붙인다 — 로그아웃은 보낼 것이 없다", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 204 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiPostNoBody("/parents/logout")).resolves.toBeUndefined();
+
+    const init = fetchMock.mock.calls[0][1]!;
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    // `Content-Type: application/json` 을 붙이면 **불필요한 preflight** 가 생긴다
+    // (`미결11-2 프론트 조사` 「프론트가 할 일」). 보낼 본문이 없으니 붙일 이유도 없다.
+    expect(JSON.stringify(init.headers)).not.toContain("Content-Type");
+    // 쿠키가 유일한 인증 수단이다 — 여기서도 실려야 서버가 무엇을 지울지 안다.
+    expect(init.credentials).toBe("include");
+  });
+
+  it("쿠키가 없어도 실패로 다루지 않는다 — 서버가 204 를 준다", async () => {
+    // **로그아웃에 401 처리를 태우지 않는다.** 만료·손상된 쿠키를 지우려는 것이 로그아웃인데,
+    // 인증을 걸면 **정작 지워야 할 상태에서만 막힌다** (`공통규약.md`).
+    vi.stubGlobal("fetch", async () => new Response(null, { status: 204 }));
+    await expect(apiPostNoBody("/parents/logout")).resolves.toBeUndefined();
   });
 });
