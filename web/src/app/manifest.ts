@@ -3,6 +3,11 @@ import type { MetadataRoute } from "next";
 // Next 16 App Router 의 manifest 파일 컨벤션.
 // 이 파일이 /manifest.webmanifest 를 만들고 <link rel="manifest"> 도 Next 가 자동으로 넣는다.
 // (참고: node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/01-metadata/manifest.md)
+// 이 파일은 「특별한 라우트 핸들러」다. `output: "export"` 에서는 빌드 때 한 번 굽는다는 것을
+// 명시해야 한다 — 없으면 빌드가 `Failed to collect page data for /manifest.webmanifest` 로 죽는다.
+// 요청 시점 API 를 안 쓰므로 값이 항상 같다. (2026-09-07 실측)
+export const dynamic = "force-static";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "글모험",
