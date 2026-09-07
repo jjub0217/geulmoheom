@@ -20,6 +20,10 @@ from app.docs_md import 민, 읽기, 표행
 _표제목 = ("## 카드 목록", "## 튜토리얼 전용 카드")
 _번호 = re.compile(r"^(\d{2}|T[1-3])$")
 
+# 문서의 유형 → API 의 `type` (`Stage0.md` 3절 · `CardType`). 튜토리얼 표는 이 열이
+# 「목적」이라 여기 안 걸린다 — 그래서 `유형코드` 가 `None` 인 것이 곧 튜토리얼이다.
+_유형코드 = {"위기": "crisis", "발견": "discovery", "만남": "encounter"}
+
 
 @dataclass(frozen=True)
 class 장면카드:
@@ -27,6 +31,11 @@ class 장면카드:
     유형: str  # 위기 / 발견 / 만남 · 튜토리얼은 「목적」
     상황문: str
     명사태그: tuple[str, ...]
+
+    @property
+    def 유형코드(self) -> str | None:
+        """API 의 `type`. 튜토리얼(T1~T3)은 대응하는 값이 없어 `None` 이다."""
+        return _유형코드.get(self.유형)
 
     @property
     def 대상(self) -> str | None:
@@ -68,3 +77,11 @@ def 카드(card_id: str) -> 장면카드 | None:
     """모르는 카드면 `None`. **부르는 쪽이 없어도 돌아가게 만든다** — 카드 하나 때문에
     아이 입력이 막히면 안 된다."""
     return 카드들().get(card_id)
+
+
+def 모험카드들() -> list[장면카드]:
+    """Stage 0 의 20장. **튜토리얼 T1~T3 은 뺀다** — 노출은 Stage 1 A-6 이다.
+
+    문서 순서 그대로 돌려준다. 「오늘 안 한 카드」 선택은 여기가 아니라 W3 A0-1 이다.
+    """
+    return [카드 for 카드 in 카드들().values() if 카드.유형코드]

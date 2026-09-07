@@ -1,7 +1,8 @@
 """목 서버가 돌려주는 고정 값.
 
 한곳에 모아 둔다 — 실제 구현이 들어오면 **이 파일만 지우면 된다.**
-장면·대사는 `docs/장면카드_초안.md` 와 `docs/api/Stage0.md` 예시를 따랐다.
+**장면 카드 본문은 여기 없다** — `app/scene_cards.py` 가 문서에서 읽는다.
+대사는 `docs/api/Stage0.md` 예시를 따랐다.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -27,21 +28,25 @@ def tomorrow_midnight() -> datetime:
     return (now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-CARD = {
-    "card_id": "c01",
-    "type": "crisis",
-    "situation": (
-        "안개 낀 숲에서 나무 사이로 거대한 그림자가 천천히 다가온다. "
-        "발밑에서 나뭇가지가 툭 부러진다."
-    ),
-    "prompt_label": "탐험가는 어떻게 할까?",
-    "sketch_url": f"{R2}/cards/c01_sketch.webp",
-    "guide": {
-        "expression": "default",
-        "line": "나침반이 조용하네. 네가 뭘 할지 말해주면 움직일 거야!",
-    },
-    "today": {"cards_done": 2, "cap": 5},
+CARD_ID = "c01"  # 목 전용 경로(강제 헤더·재시도 복구)가 쓰는 기본 카드
+
+# 카드 **본문**(상황문·유형·명사 태그)은 여기 없다. `app/scene_cards.py` 가
+# `docs/장면카드_초안.md` 에서 읽는다 — 복사본을 두면 대표 검수가 반영될 때마다 갈라진다.
+# 여기 남는 것은 아직 목인 부분뿐이다.
+PROMPT_LABEL = "탐험가는 어떻게 할까?"
+CARD_GUIDE = {
+    "expression": "default",
+    "line": "나침반이 조용하네. 네가 뭘 할지 말해주면 움직일 거야!",
 }
+TODAY = {"cards_done": 2, "cap": 5}
+
+
+def sketch_url(card_id: str) -> str:
+    """스케치 에셋은 아직 없다 (W3 A0-3). **주소 모양만** 카드마다 맞춰 둔다."""
+    return f"{R2}/cards/{card_id}_sketch.webp"
+
+
+SKETCH_URL = sketch_url(CARD_ID)
 
 PAGE = {
     "page_no": 1,
