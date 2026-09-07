@@ -44,6 +44,8 @@ OUT = Path(__file__).resolve().parents[1] / "out" / "character"
 }
 
 정본 = REPO / "docs" / "캐릭터" / "캐릭터색상코드.png"
+# 아이들이 「얼굴이 제일 귀엽다」고 고른 쪽 (`비교_결과.md`). **얼굴·털만** 여기서 가져온다.
+기존 = REPO / "docs" / "캐릭터" / "캐릭터(기본_안내_서사_진행중).png"
 
 # 현행 4종은 2048x2048 이다. 비율이 다르면 W3 에서 레이아웃을 다시 잡아야 하므로
 # **`1:1` 은 고정**이고, 크기는 모델이 받는 것 중에서 고른다.
@@ -56,9 +58,33 @@ STYLE = (
     "soft warm rim light, cozy storybook palette"
 )
 
+# 아동 4명 확인 결과(`docs/캐릭터/비교_결과.md`, 12표 6:6) — **장비는 신규가 이겼고
+# 얼굴·털은 기존이 이겼다.** 근거 축이 깨끗하게 갈려서 둘을 분리해 고칠 수 있다.
+# 장비는 정본 그대로 두고 **얼굴·털만 기존 쪽으로 당긴다.**
+#
+# 신규 4종의 실제 결함은 두 가지다 — ① 몸통이 탁한 갈색이라 머리와 색이 갈린다
+# ② 눈이 작고 털이 평평해 "부드러워 보인다"가 안 나온다. 색상코드(#D45B28)는
+# `도우미캐릭터설명.md` 가 SSOT 이므로 **색을 바꾸지 않고 채도·조명만** 되돌린다.
+얼굴 = (
+    "Face and fur follow the SECOND reference image: round soft head shape with a "
+    "full fluffy cheek ruff, large round expressive eyes with bright catchlights, "
+    "small rounded muzzle, thick brushed fur with soft feathered edges. "
+    "The whole body — torso, arms and legs — is the same bright warm orange-red "
+    "(#D45B28) as the head, clearly saturated and warmly lit: never dark brown, "
+    "never muddy, never heavy shadow. Cute, soft and approachable"
+)
+
+# 두 번째 레퍼런스는 **얼굴만** 잘라 넣지만, 그 그림에는 고글·스카프·크로스백이 없다.
+# 말로 한 번 더 잘라 준다 — 안 그러면 장비가 빠진 쪽을 따라간다.
+레퍼런스구분 = (
+    "Use the FIRST reference image for the outfit, equipment and colour scheme. "
+    "Use the SECOND reference image ONLY for face shape, eye size and fur softness — "
+    "ignore its background, its lighting and the equipment it is missing"
+)
+
 # 정본이 가진 것 전부. 하나라도 빠지면 아이가 보는 가이드와 삽화 속 가이드가 갈린다.
 착용 = (
-    "Keep the red panda explorer-scholar from the reference image exactly consistent: "
+    "Keep the red panda explorer-scholar from the FIRST reference image exactly consistent: "
     "same orange-red fur (#D45B28) with cream face markings (#F6EADB), dark charcoal "
     "scholar mortarboard cap with gold tassel, brass-rimmed goggles resting on the cap, "
     "patterned blue scarf (#457B9D), brown leather explorer vest (#8F5C3E) with chest "
@@ -107,10 +133,15 @@ STYLE = (
         "no light trails"
     ),
     "compass_bright": (
+        # 아이 4명 중 둘이 **기존의 강한 금빛 폭발**을 골랐다 — "빛이 엄청 세게 나오는 게
+        # 능력을 쓰는 것 같아서". **색은 안 건드린다** (`COMPASS GLOW #33E1FF` 가 SSOT).
+        # 세기와 퍼짐만 키운다. 배경은 그대로 비운다 — 표정만 교체되는 자리라서다.
         "delighted excited expression, wide open smile, eyes lit up and sparkling, "
-        "holding the compass up high; the compass crystal blazes with bright cyan "
-        "light with radiant beams and glittering particles close around the compass "
-        "itself — the glow must not spill into the empty background"
+        "holding the compass up high; the compass crystal erupts in an intense cyan "
+        "(#33E1FF) burst — thick radiant beams and glittering sparks spraying outward "
+        "around the compass and across the raised arm and chest, bright enough to light "
+        "the face and cast a cyan rim on the fur — while the flat grey background "
+        "stays completely clean and unlit"
     ),
     "compass_dim": (
         "curious inquisitive expression, head tilted slightly to one side, one eyebrow "
@@ -162,13 +193,32 @@ def 레퍼런스() -> bytes:
     return 통.getvalue()
 
 
+@cache
+def 얼굴레퍼런스() -> bytes:
+    """기존 그림에서 **머리만** 잘라 둘째 레퍼런스로 쓴다.
+
+    통째로 넣지 않는 이유는 정본과 같다 — 그 그림은 배경이 서재라 장면이 딸려 온다
+    (첫 판에서 실제로 배경이 4장 다 달라졌다). 머리만 남기면 아이들이 고른 것
+    (둥근 얼굴선·큰 눈·부드러운 털)은 그대로 오고 배경은 안 온다.
+    """
+    with Image.open(기존) as 그림:
+        너비, 높이 = 그림.size
+        잘린 = 그림.crop((int(너비 * 0.22), int(높이 * 0.09), int(너비 * 0.78), int(높이 * 0.58)))
+        통 = io.BytesIO()
+        잘린.save(통, format="PNG")
+    return 통.getvalue()
+
+
 def 한장(모델: str, 크기: str, 코드: str, 회차: int) -> tuple[float, Path | None]:
-    프롬프트 = f"{STYLE}. {무대}. Expression: {표정[코드]}. {착용}. {시트금지}."
+    프롬프트 = (
+        f"{STYLE}. {무대}. Expression: {표정[코드]}. {착용}. {얼굴}. {레퍼런스구분}. {시트금지}."
+    )
     시작 = time.perf_counter()
     응답 = get_client().models.generate_content(
         model=모델,
         contents=[
             types.Part.from_bytes(data=레퍼런스(), mime_type="image/png"),
+            types.Part.from_bytes(data=얼굴레퍼런스(), mime_type="image/png"),
             프롬프트,
         ],
         config=types.GenerateContentConfig(
