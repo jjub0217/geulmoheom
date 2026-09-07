@@ -261,9 +261,12 @@
 1. 쿠키(`__Host-gm_child`)·역할 검증, **`token_version` DB 대조**(다르면 401), rate limit
 2. 일일 카운트 확인 (retry_of 없으면) → 소진 시 409
 3. PII 2차 검사 (NER) → 감지 시 outcome=blocked(pii), pii_masked 로그
-4. 입력 Moderation → 차단 시 outcome=blocked(moderation), moderation_blocked 로그
-5. Evaluator 호출 (Gemini, thinking budget 최소, 예시셋 context caching — 모델명 미정, `adr/0005`) → grade, signals
-   - 타임아웃 3초 → 재시도 1회 → 실패 시 grade=G1 폴백 + 로그 (아이를 막지 않음)
+4·5. **입력 Moderation 과 Evaluator 를 동시에 던진다** (`adr/0009`, 2026-09-07 대표 판정)
+   - **순차로 두면 +875ms 라 1.5초 예산을 깬다.** 동시면 +13ms 다. 검사 결과가 평가의 입력이 아니므로 순서를 강제할 이유가 없다
+   - **차단이면 평가 결과를 버리고 `eval_result` 도 남기지 않는다.** 남기면 화면에 보여주지도 않은 판정이 **등급 분포·폴백 비율을 오염**시킨다. 차단 건의 평가 비용은 수용한다
+   - **Moderation** — 별도 단계다(내장 필터 아님). 차단 시 outcome=blocked(moderation), moderation_blocked 로그
+   - **자해·자살 카테고리만 뒤 처리가 다르다** — `category: self_harm` 으로 남기고, 아이에게는 「어른에게 말해줘」 한 줄만 준다. **더 대화하지 않는다.** 원문은 안 남긴다 (`MVP_PRD.md` E-1 「자해·자살 신호 처리」)
+   - **Evaluator** — Gemini, thinking budget 최소, 예시셋 context caching (`adr/0005`) → grade, signals. 타임아웃 3초 → 재시도 1회 → 실패 시 grade=G1 폴백 + 로그 (아이를 막지 않음)
 6. grade == G0 && scaffold_count < 2 → outcome=scaffold, scaffold_triggered 로그
 7. grade → tier 매핑 (G0/G1 basic, G2 rare, G3 legendary)
 8. 캐릭터 대사 템플릿 치환 (카드 명사 태그 + signals)
