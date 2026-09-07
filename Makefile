@@ -1,4 +1,4 @@
-.PHONY: dev db-up db-down certs contracts test lint clean
+.PHONY: dev db-up db-down certs contracts contracts-check test lint clean
 
 # ── 로컬 인프라 ──────────────────────────────────────────
 # -p geulmoheom 을 반드시 붙인다. compose 는 파일의 상위 폴더 이름을 프로젝트로 쓰는데,
@@ -56,6 +56,19 @@ contracts:
 		https://$(API_HOST):8000/openapi.json -o /tmp/openapi.json
 	cd web && pnpm exec openapi-typescript /tmp/openapi.json -o src/api/types.gen.ts
 	@echo "→ web/src/api/types.gen.ts 갱신. 수동 편집 금지."
+
+# 계약 드리프트 검사. CI가 그대로 이 타깃을 부른다 — 로컬에서 먼저 돌려 볼 수 있게.
+# **서버를 띄우지 않는다.** app.openapi() 를 직접 뽑는다 (api/scripts/dump_openapi.py).
+# 커밋본을 덮어쓰지 않고 임시 파일로 뽑아 비교한다 — 검사가 워킹 트리를 건드리면
+# 실패했을 때 무엇이 원래 커밋본이었는지가 사라진다.
+contracts-check:
+	cd api && PYTHONPATH=. uv run python scripts/dump_openapi.py /tmp/openapi.check.json
+	cd web && pnpm exec openapi-typescript /tmp/openapi.check.json -o /tmp/types.check.ts
+	@diff -u web/src/api/types.gen.ts /tmp/types.check.ts && echo "계약 일치" || { \
+		echo ""; \
+		echo "명세가 바뀌었는데 재생성물이 커밋되지 않았다."; \
+		echo "→ make dev-api 를 띄운 뒤 make contracts, 그리고 web/src/api/types.gen.ts 를 커밋한다."; \
+		exit 1; }
 
 # ── 품질 ────────────────────────────────────────────────
 test:

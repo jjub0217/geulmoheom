@@ -18,6 +18,7 @@ jobs:
     outputs:
       api: ${{ steps.f.outputs.api }}
       web: ${{ steps.f.outputs.web }}
+      contracts: ${{ steps.f.outputs.contracts }}
     steps:
       - uses: actions/checkout@v4
       - id: f
@@ -26,6 +27,7 @@ jobs:
           filters: |
             api: ['api/**', 'infra/**']
             web: ['web/**']
+            contracts: ['api/**', 'web/**', 'Makefile', '.github/workflows/ci.yml']
 
   api:
     needs: changes
@@ -66,21 +68,51 @@ jobs:
         with: { version: 11 }
       - uses: actions/setup-node@v4
         if: steps.init.outputs.ready == 'true'
-        with: { node-version: 24, cache: pnpm }   # web/.nvmrc 와 같이 움직인다
+        with: { node-version-file: web/.nvmrc, cache: pnpm }
       - if: steps.init.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile && cd web && pnpm lint && pnpm test
+
+  # 계약 드리프트: api 의 OpenAPI 와 커밋된 web/src/api/types.gen.ts 가 갈라지면 빨개진다.
+  # 완료 조건은 "명세를 바꾸고 make contracts 를 안 돌리면 CI 가 빨개진다" 하나다.
+  #
+  # api·web 어느 쪽이 바뀌어도 돈다. 드리프트는 양방향이다 —
+  # 스펙을 고치고 재생성을 안 한 경우와, types.gen.ts 를 손으로 고친 경우.
+  # 검사 자체를 담은 Makefile·이 워크플로도 경로에 넣는다 — 검사를 고쳐 놓고
+  # 그 커밋에서 안 돌면 깨진 검사가 그대로 들어온다.
+  #
+  # **서버를 띄우지 않는다.** app.openapi() 를 직접 뽑는다 (api/scripts/dump_openapi.py).
+  # postgres·redis·인증서를 세우면 계약 검사가 인프라 상태를 따라 빨개진다.
+  # 서버까지 붙는 E2E 는 W4 몫이다.
+  #
+  # 다른 잡과 달리 "패키지 미초기화면 건너뛴다" 가드를 두지 않는다.
+  # 못 돌 때 조용히 통과하는 드리프트 검사는 없느니만 못하다 — 없으면 그냥 죽어야 한다.
+  contracts:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: web/.nvmrc, cache: pnpm }
+      # openapi-typescript 는 web 의 devDependency 다. 설치해야 pnpm exec 가 찾는다.
+      - run: pnpm install --frozen-lockfile
+      # 로컬에서 돌리는 것과 같은 타깃이다 (Makefile). uv sync 는 uv run 이 알아서 한다.
+      - run: make contracts-check
 
   # 브랜치 보호에서 필수로 걸 유일한 체크.
   # api·web 은 변경 경로에 따라 skip 되므로 직접 필수로 걸면 안 된다 —
   # docs 만 바꾼 PR이 보고되지 않은 체크를 기다리며 영구히 막힐 수 있다.
   all-green:
-    needs: [changes, api, web]
+    needs: [changes, api, web, contracts]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 잡 결과 집계
         run: |
-          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  web=${{ needs.web.result }}"
+          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  web=${{ needs.web.result }}  contracts=${{ needs.contracts.result }}"
           if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
             echo "::error::실패한 잡이 있습니다"; exit 1
           fi
@@ -88,6 +120,3 @@ jobs:
             echo "::error::취소된 잡이 있습니다"; exit 1
           fi
           echo "통과"
-
-  # TODO(W1): contracts 검증 job — api 기동 → make contracts → git diff --exit-code web/src/api/types.gen.ts
-  #           all-green 의 needs 에 추가할 것
