@@ -469,7 +469,7 @@ export interface paths {
         put?: never;
         /**
          * Collect
-         * @description 최대 50건. 목 서버는 받기만 하고 버린다.
+         * @description 최대 50건. `ts` 는 클라이언트가 준 시각을 그대로 쓴다 — 오프라인 뒤 몰아서 올 수 있다.
          */
         post: operations["collect_api_v1_events_post"];
         delete?: never;

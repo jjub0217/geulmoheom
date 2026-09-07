@@ -17,6 +17,7 @@
 import asyncio
 import logging
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
@@ -24,6 +25,7 @@ from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import MockOutcome, mock_daily_cap_reached, mock_outcome, require_child
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가기록
+from app.events import 남기기, 이벤트
 from app.middleware import current_request_id
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
@@ -43,6 +45,10 @@ from app.schemas.stage0 import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/attempts", tags=["attempts"])
+
+# 일일 상한. **A0-5(W4)가 진짜 값을 자녀 행에서 읽어 온다** — 지금은 응답 픽스처와
+# 같은 수를 이벤트에도 실어, 둘이 갈린 채로 지표가 잡히는 것을 막는다.
+_CAP = 5
 
 # `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
 Child = Annotated[ChildRow, Depends(require_child)]
@@ -142,6 +148,8 @@ async def create_attempt(
 ) -> AttemptResponse:
     """`text` 1~500자. 재시도(`retry_of`)와 되묻기는 일일 카운트를 쓰지 않는다."""
     if 소진 and payload.retry_of is None:
+        # **상한 도달률이 H2 지표다** (합격선 40%). 409 로 나가는 길에도 남겨야 센다.
+        await 남기기(아이.id, 이벤트("daily_cap_reached", {"cap": _CAP}))
         raise AppError(ErrorCode.DAILY_CAP_REACHED)
 
     if outcome is not None:  # 목 강제 (W3 화면 작업)
@@ -170,6 +178,35 @@ async def create_attempt(
             return 되물음
 
     하이라이트 = highlights(평가, payload.text)
+
+    # **`char_len` 은 공백 포함 길이다** (PRD 5장). 여기서 「원문」은 PII 마스킹 뒤
+    # 텍스트이고, 그것이 `card_attempts.text` 로 저장되는 문자열이라 `len` 그대로가 맞다.
+    # 화면의 30자·로그의 `char_len`·책의 문장이 **같은 문자열을 세야 한다.**
+    남길것 = [
+        이벤트(
+            "turn_input",
+            {
+                "card_id": payload.card_id,
+                "input_type": "free",
+                "char_len": len(payload.text),
+                "grade": 평가.grade,
+            },
+        ),
+        # 로그는 `평가기록()` 이 더 자세히 남긴다(`eval_fallback`·`prompt_chars`).
+        이벤트(
+            "eval_result",
+            {
+                "grade": 평가.grade,
+                "signal_count": len(평가.signals),
+                "latency_ms": round(평가.latency_ms),
+            },
+            로그=False,
+        ),
+    ]
+    if payload.retry_of is not None:
+        # H2 재시도율(합격선 20%) — **보상이 동기로 작동한다는 직접 신호**다.
+        남길것.append(이벤트("card_retry", {"card_id": payload.card_id, "prompted": False}))
+    await 남기기(아이.id, *남길것)
 
     # **등급은 여기서 끝난다.** 응답에 담기는 것은 티어뿐이다 (`Stage0.md` 4절).
     return AttemptResult(
@@ -212,6 +249,11 @@ async def _되묻기(자녀id: str, card_id: str) -> AttemptScaffold | None:
     logger.info(
         "scaffold_triggered",  # PRD 5장. 발동률·재입력률이 H2 지표다
         extra={"request_id": current_request_id(), "card_id": card_id, "attempt": 횟수},
+    )
+    # 로그 줄은 위에 이미 나갔다. 행만 더한다 — 두 번 내보내면 발동률이 두 배로 세인다.
+    await 남기기(
+        UUID(자녀id),
+        이벤트("scaffold_triggered", {"card_id": card_id, "attempt": 횟수}, 로그=False),
     )
     return AttemptScaffold(
         outcome="scaffold",

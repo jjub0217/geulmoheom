@@ -47,6 +47,21 @@ SAFE_EXTRA_KEYS = (
     "category_label",
     "text_hash",
     "moderation_unavailable",
+    # KPI 이벤트 (app/events.py) — PRD 5장 표의 나머지 필드.
+    # **여기 없는 것은 `events` 행에는 남고 로그 줄에서만 사라진다** — 둘이 갈리면
+    # 「행은 있는데 로그가 비었다」로 보여서 원인을 엉뚱한 데서 찾게 된다.
+    "locked",
+    "input_type",
+    "char_len",
+    "prev_grade",
+    "prompted",
+    "followed_by_free",
+    "next_char_len",
+    "cap",
+    "layer",
+    # 기록 자체가 실패했을 때 (`app/events.py` `남기기`). **잃은 것이 무엇인지는
+    # 이름으로만 남긴다** — 값이 실리면 그게 곧 원문이 새는 경로다.
+    "event_names",
     # 되묻기 (app/scaffold.py) — PRD 5장 `scaffold_triggered`.
     # 질문은 카드 명사 태그로 만든 것이라 원문이 아니지만, **로그에 담지 않는다.**
     # 세는 데 필요한 것은 몇 번째였는지와 어느 카드였는지뿐이다.
