@@ -37,7 +37,7 @@ export default defineConfig({
       // Playwright 의 `page.route` 는 그 preflight 를 가로채지 못해서, 가로채기가 걸리기도 전에
       // 요청이 죽고 화면이 통째로 「못 닿음」으로 떨어진다 — 실제로 그렇게 8개가 한 번에 실패했다.
       // 여기서는 서버를 안 타므로 오리진이 어디든 상관없다. 진짜 api 를 태우는 것은 W3 다.
-      NEXT_PUBLIC_API_BASE: "/api/v1",
+      NEXT_PUBLIC_API_BASE_URL: "/api/v1",
     },
   },
 });

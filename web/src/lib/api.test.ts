@@ -11,6 +11,27 @@ function respond(status: number, body: unknown): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+describe("api 주소", () => {
+  it("`NEXT_PUBLIC_API_BASE_URL` 에서 온다 — 이름이 어긋나면 조용히 localhost 로 떨어진다", async () => {
+    // 개발 환경이 https `.test` 로 옮겨간 뒤에는 이 falling back 이 **mixed content** 가 되어
+    // 브라우저가 요청을 막고, 화면에는 「서버에 못 닿음」으로만 보인다 — 원인이 안 드러난다.
+    // 이름은 `web/README.md` 42행과 저장소 루트 `.env` 가 쓰는 것이 정본이다.
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://api.geulmoheom.test:8000/api/v1");
+    vi.resetModules();
+
+    const fetchMock = vi.fn<typeof fetch>(async () => respond(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { apiGet: freshGet } = await import("./api");
+    await freshGet("/cards/next");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.geulmoheom.test:8000/api/v1/cards/next",
+    );
+  });
 });
 
 describe("apiGet", () => {

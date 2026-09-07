@@ -10,8 +10,13 @@
  *    실패해도 `console.error(res)` 같은 것을 하지 않는다.
  */
 
+/**
+ * **이름은 `web/README.md` 42행과 저장소 루트 `.env` 가 정본이다.** 여기서만 다른 이름을 읽으면
+ * 값이 안 잡히고 조용히 아래 기본값으로 떨어진다 — 개발이 https `.test` 로 옮겨간 뒤에는
+ * 그것이 **mixed content** 가 되어 브라우저가 막고, 화면에는 「서버에 못 닿음」으로만 보인다.
+ */
 const BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 /**
  * **목 서버 전용, 곧 사라진다.**
