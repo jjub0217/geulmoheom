@@ -2,11 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, status
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import mock_daily_cap_reached, require_child
-from app.auth import CHILD_COOKIE, set_auth_cookie
+from app.auth import CHILD_COOKIE, clear_auth_cookie, set_auth_cookie
 from app.schemas.stage0 import (
     ChildAuthRequest,
     ChildAuthResponse,
@@ -32,6 +32,18 @@ async def auth(payload: ChildAuthRequest, response: Response) -> ChildAuthRespon
     return ChildAuthResponse(
         child=ChildIdentity(child_id=fx.CHILD_ID, nickname=fx.NICKNAME, guide_name=None),
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    """가족 공용 태블릿에서 아이가 내려오는 경로다 (`Stage0.md` 2절).
+
+    학부모 쿠키는 그대로 둔다. 인증을 요구하지 않는 이유는 `parents.logout` 과 같다.
+
+    **접속 코드는 1회 사용이라 여기서 내려오면 재발급 없이는 못 들어온다.** 프론트가
+    이 버튼을 아이 손에 쉽게 닿는 자리에 두지 않는다 — 계약이 아니라 화면 몫이다.
+    """
+    clear_auth_cookie(response, CHILD_COOKIE)
 
 
 @router.get("/me")

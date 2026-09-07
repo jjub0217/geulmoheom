@@ -77,6 +77,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parents/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description `Set-Cookie: __Host-gm_parent=; Max-Age=0; ...` — HttpOnly 라 클라이언트가
+         *     스스로 못 지운다. 로컬 상태만 비우면 쿠키는 살아 있다 (`Stage0.md` 1절).
+         *
+         *     **인증을 요구하지 않는다.** 만료·손상된 쿠키를 지우려는 것이 로그아웃인데
+         *     `require_parent` 를 걸면 정작 지워야 할 상태에서만 401 로 막힌다. 지우는 것
+         *     말고 하는 일이 없어 열어 둬도 잃을 것이 없고, cross-site POST 는 `SameSite=Lax`
+         *     가 막는다.
+         *
+         *     **자녀 쿠키는 건드리지 않는다** — 가족 태블릿에 둘이 함께 앉아 있다.
+         */
+        post: operations["logout_api_v1_parents_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parents/me": {
         parameters: {
             query?: never;
@@ -168,6 +196,31 @@ export interface paths {
          *     **토큰은 `Set-Cookie: __Host-gm_child` 로만 나간다.** body 에 없다.
          */
         post: operations["auth_api_v1_child_auth_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/child/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description 가족 공용 태블릿에서 아이가 내려오는 경로다 (`Stage0.md` 2절).
+         *
+         *     학부모 쿠키는 그대로 둔다. 인증을 요구하지 않는 이유는 `parents.logout` 과 같다.
+         *
+         *     **접속 코드는 1회 사용이라 여기서 내려오면 재발급 없이는 못 들어온다.** 프론트가
+         *     이 버튼을 아이 손에 쉽게 닿는 자리에 두지 않는다 — 계약이 아니라 화면 몫이다.
+         */
+        post: operations["logout_api_v1_child_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -988,6 +1041,24 @@ export interface operations {
             };
         };
     };
+    logout_api_v1_parents_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     me_api_v1_parents_me_get: {
         parameters: {
             query?: never;
@@ -1166,6 +1237,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    logout_api_v1_child_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

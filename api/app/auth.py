@@ -55,5 +55,28 @@ _ATTRS: Final[dict[str, object]] = {
 def set_auth_cookie(response: Response, name: str, value: str) -> None:
     """인증 쿠키를 굽는다. 이름 말고는 학부모·자녀가 완전히 같은 속성이다."""
     response.set_cookie(name, value, max_age=MAX_AGE_SECONDS, **_ATTRS)  # type: ignore[arg-type]
-    # 앞단이 Cloudflare 다. 토큰을 실은 응답이 공용 캐시에 앉으면 다른 사람에게 나간다.
+    _캐시금지(response)
+
+
+def clear_auth_cookie(response: Response, name: str) -> None:
+    """인증 쿠키를 지운다 (`Stage0.md` 1·2절 로그아웃).
+
+    **발급 때와 `_ATTRS` 를 공유하는 것이 핵심이다.** 이름·`Path`·`Domain` 유무가
+    하나라도 다르면 브라우저는 다른 쿠키로 보고 아무것도 지우지 않는다 — 서버는
+    204 를 돌려주는데 세션은 살아 있는, 화면에서 안 보이는 실패가 된다.
+    속성을 여기 복사해 적지 않는 이유가 그것이다.
+
+    **이름을 받는다 — 한 번에 하나만 지운다.** 가족 태블릿에서 아이가 내려온다고
+    학부모까지 끊기면 안 된다.
+    """
+    response.delete_cookie(name, **_ATTRS)  # type: ignore[arg-type]
+    _캐시금지(response)
+
+
+def _캐시금지(response: Response) -> None:
+    """앞단이 Cloudflare 다.
+
+    토큰을 실은 응답이 공용 캐시에 앉으면 다른 사람에게 나가고, **삭제 `Set-Cookie`
+    가 앉으면 반대로 남의 세션을 끊는다.** 굽는 쪽과 지우는 쪽 둘 다 걸어야 한다.
+    """
     response.headers["Cache-Control"] = "no-store"

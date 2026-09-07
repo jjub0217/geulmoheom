@@ -175,6 +175,99 @@ def test_구운_쿠키로_바로_다음_요청이_통과한다(익명: TestClien
     assert 익명.get("/api/v1/child/me").status_code == 200
 
 
+# ── 로그아웃 2종 ─────────────────────────────────────────
+
+로그아웃 = [
+    ("/api/v1/parents/logout", PARENT_COOKIE, CHILD_COOKIE),
+    ("/api/v1/child/logout", CHILD_COOKIE, PARENT_COOKIE),
+]
+
+
+@pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)
+def test_로그아웃은_204_다(client: TestClient, path: str, 지울것: str, 남길것: str):
+    assert client.post(path).status_code == 204
+
+
+@pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)
+def test_삭제_쿠키의_속성이_발급_때와_같다(client: TestClient, path: str, 지울것: str, 남길것: str):
+    """**하나라도 다르면 브라우저가 다른 쿠키로 보고 아무것도 안 지운다** (`Stage0.md` 1·2절).
+
+    그래서 속성은 `app/auth.py` 한곳에서만 나온다 — 여기서 갈라지면 로그아웃이
+    204 를 돌려주면서 세션은 살아 있는 상태가 된다.
+    """
+    지우는것 = client.post(path).headers["set-cookie"]
+
+    assert 지우는것.startswith(f"{지울것}=")
+    assert "HttpOnly" in 지우는것
+    assert "Secure" in 지우는것
+    assert "Path=/" in 지우는것
+    assert "SameSite=Lax" in 지우는것
+    assert "Domain=" not in 지우는것
+    assert "Max-Age=0" in 지우는것
+
+
+def _가족태블릿(client: TestClient) -> None:
+    """학부모가 가입하고 같은 기기를 아이가 쓴다 — 쿠키 둘이 함께 앉은 실제 상태.
+
+    **`cookies.set()` 으로 심지 않고 서버에게 굽게 한다.** 손으로 심은 쿠키는
+    도메인이 비어 있어 서버가 보낸 삭제 `Set-Cookie` 와 짝이 안 맞는다 — 그러면
+    로그아웃이 제대로 지우는지를 이 테스트가 영영 못 본다.
+    """
+    client.post("/api/v1/parents/login", json={"email": "a@b.c", "password": "x"})
+    client.post("/api/v1/child/auth", json={"access_code": "482913"})
+
+
+@pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)
+def test_로그아웃은_한쪽_역할만_끊는다(익명: TestClient, path: str, 지울것: str, 남길것: str):
+    """가족 태블릿이다 — 아이가 내려온다고 학부모까지 로그아웃되면 안 된다.
+
+    204 만 보고 넘기지 않는다. 브라우저(테스트 클라이언트)의 쿠키통을 직접 본다.
+    """
+    _가족태블릿(익명)
+
+    익명.post(path)
+
+    assert 지울것 not in 익명.cookies
+    assert 남길것 in 익명.cookies
+
+
+@pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)
+def test_쿠키가_없어도_로그아웃은_204_다(익명: TestClient, path: str, 지울것: str, 남길것: str):
+    """**401 로 막지 않는다.** 만료·손상된 쿠키를 지우려는 것이 로그아웃인데,
+    인증을 요구하면 정작 지워야 할 상태에서만 안 지워진다. 지우는 것 말고 하는 일이
+    없어 인증 없이 열어도 잃을 것이 없다 (`SameSite=Lax` 가 cross-site POST 를 막는다).
+    """
+    response = 익명.post(path)
+
+    assert response.status_code == 204
+    assert response.headers["set-cookie"].startswith(f"{지울것}=")
+
+
+@pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)
+def test_로그아웃_응답도_캐시되지_않는다(client: TestClient, path: str, 지울것: str, 남길것: str):
+    """앞단이 Cloudflare 다. 삭제 `Set-Cookie` 가 캐시에 앉으면 남의 세션을 끊는다."""
+    assert client.post(path).headers["cache-control"] == "no-store"
+
+
+def test_학부모_로그아웃_뒤에는_학부모_API_가_401_이다(익명: TestClient):
+    """계약 전체가 도는지 — 구운 쿠키가 실제로 무효가 된다."""
+    익명.post("/api/v1/parents/login", json={"email": "a@b.c", "password": "x"})
+    assert 익명.get("/api/v1/parents/me").status_code == 200
+
+    익명.post("/api/v1/parents/logout")
+
+    assert 익명.get("/api/v1/parents/me").status_code == 401
+
+
+def test_자녀_로그아웃_뒤에는_자녀_API_가_401_이다(익명: TestClient):
+    익명.post("/api/v1/child/auth", json={"access_code": "482913"})
+    assert 익명.get("/api/v1/child/me").status_code == 200
+
+    익명.post("/api/v1/child/logout")
+
+    assert 익명.get("/api/v1/child/me").status_code == 401
+
+
 # ── outcome 3분기 ────────────────────────────────────────
 
 
@@ -357,6 +450,10 @@ def test_전_엔드포인트가_응답한다(client: TestClient):
             {"events": [{"event": "session_start", "ts": "2026-09-01T00:00:00Z"}]},
             204,
         ),
+        # **로그아웃 둘은 맨 뒤다.** 같은 클라이언트로 순서대로 도는 목록이라
+        # 중간에 넣으면 쿠키를 지워 놓고 그 뒤를 전부 401 로 만든다.
+        ("POST", "/api/v1/parents/logout", None, 204),
+        ("POST", "/api/v1/child/logout", None, 204),
     ]
 
     실패 = [

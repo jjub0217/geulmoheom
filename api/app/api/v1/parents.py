@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import require_parent
-from app.auth import PARENT_COOKIE, set_auth_cookie
+from app.auth import PARENT_COOKIE, clear_auth_cookie, set_auth_cookie
 from app.schemas.stage0 import (
     AccessCode,
     CreateChildRequest,
@@ -39,6 +39,21 @@ async def signup(payload: SignupRequest, response: Response) -> SignupResponse:
 async def login(payload: LoginRequest, response: Response) -> LoginResponse:
     set_auth_cookie(response, PARENT_COOKIE, fx.TOKEN)
     return LoginResponse(parent_id=fx.PARENT_ID)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    """`Set-Cookie: __Host-gm_parent=; Max-Age=0; ...` — HttpOnly 라 클라이언트가
+    스스로 못 지운다. 로컬 상태만 비우면 쿠키는 살아 있다 (`Stage0.md` 1절).
+
+    **인증을 요구하지 않는다.** 만료·손상된 쿠키를 지우려는 것이 로그아웃인데
+    `require_parent` 를 걸면 정작 지워야 할 상태에서만 401 로 막힌다. 지우는 것
+    말고 하는 일이 없어 열어 둬도 잃을 것이 없고, cross-site POST 는 `SameSite=Lax`
+    가 막는다.
+
+    **자녀 쿠키는 건드리지 않는다** — 가족 태블릿에 둘이 함께 앉아 있다.
+    """
+    clear_auth_cookie(response, PARENT_COOKIE)
 
 
 @router.get("/me")

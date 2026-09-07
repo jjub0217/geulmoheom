@@ -71,6 +71,19 @@ class Child(Base):
     # 일일 상한 리셋 기준. 헤더를 그대로 믿을지 저장값으로 고정할지는 미결 11-4 (W3)
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Seoul")
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # JWT 는 발급 후 서버가 회수할 수 없다. 이 값을 payload 에 담고 검증 때 여기와
+    # 대조해 다르면 401 — **폐기는 값을 1 올리는 것**이고, 그 한 번으로 이 자녀의
+    # 모든 기기가 끊긴다 (`공통규약.md` 「폐기」). 접속 코드 재발급·자녀 삭제가
+    # 올린다. Redis 블랙리스트를 쓰지 않기로 한 결정이 이 정수 하나에 걸려 있다.
+    token_version: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default="1",
+        comment=(
+            "자녀 토큰 폐기용 세대 번호 (공통규약.md 「폐기」). JWT payload 값과 다르면 401. "
+            "접속 코드 재발급·자녀 삭제 시 1 올린다"
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

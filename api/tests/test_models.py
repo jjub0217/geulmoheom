@@ -44,3 +44,24 @@ def test_stage1_테이블은_아직_없다():
     """chapters·sessions 는 W6. 지금 만들면 안 쓰는 스키마가 먼저 굳는다."""
     assert "chapters" not in Base.metadata.tables
     assert "sessions" not in Base.metadata.tables
+
+
+def test_자녀에게_token_version_이_있다():
+    """JWT 는 발급 후 회수할 수 없다. **폐기는 이 값을 1 올리는 것**이고, 그것으로
+    그 자녀의 모든 기기가 한 번에 끊긴다 (`공통규약.md` 「폐기」).
+
+    Redis 블랙리스트를 쓰지 않기로 한 결정이 이 컬럼 하나에 걸려 있다.
+    """
+    컬럼 = Base.metadata.tables["children"].columns["token_version"]
+
+    assert 컬럼.nullable is False
+    # 이미 있는 행에도 값이 들어가야 NOT NULL 로 붙는다. 서버 기본값이 없으면
+    # 마이그레이션이 기존 행에서 깨진다.
+    assert 컬럼.server_default is not None
+
+
+def test_폐기는_토큰을_저장하지_않고_한다():
+    """토큰 자체를 DB 에 두면 그게 곧 탈취 대상이다. 대조하는 것은 정수 하나다."""
+    children = Base.metadata.tables["children"]
+
+    assert not any(c.name.endswith("token") for c in children.columns)
