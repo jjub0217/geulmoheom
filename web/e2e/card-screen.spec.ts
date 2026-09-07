@@ -30,6 +30,7 @@ const CARD: CardResponse = {
 
 const CARDS_NEXT = "**/api/v1/cards/next";
 const ATTEMPTS = "**/api/v1/attempts";
+const EVENTS = "**/api/v1/events";
 
 /** (a) 정상 응답. 삽화·하이라이트 연출은 W4 라 여기서는 최소 형태만 쓴다. */
 function 결과(guide: { expression: string; line: string }) {
@@ -269,4 +270,130 @@ test("서버에 닿지 못하면 다시 열 수 있다", async ({ page }) => {
   await 다시열기.click();
 
   await expect(page.getByText(CARD.situation)).toBeVisible();
+});
+
+test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가린다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(EVENTS, (route) => route.fulfill({ status: 204 }));
+  await page.goto("/");
+
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  const 보내기 = page.getByRole("button", { name: "보내기" });
+
+  await 입력창.fill("등대지기한테 010-1234-5678 로 전화한다");
+
+  // 번호는 사라지고 나머지 문장은 그대로다. **전송을 막지 않는다** (대표 판정 2026-09-07).
+  await expect(입력창).toHaveValue("등대지기한테 [보안 필터] 로 전화한다");
+  await expect(보내기).toBeEnabled();
+
+  // 가린 이유를 말해주는 유일한 자리다. **혼내는 말이 아니어야 한다.**
+  const 안내 = page.getByRole("status");
+  await expect(안내).toHaveText("전화번호는 안 써도 돼서 가렸어!");
+  expect(await 안내.innerText()).not.toMatch(/안 돼요|하지 마|틀렸|나쁜/);
+
+  // **다음 글자를 쳐도 안내가 남아 있어야 한다.** 한 번의 타이핑에 사라지면
+  // 아이가 읽기도 전에 없어져, 자기 글자가 왜 바뀌었는지 알 방법이 사라진다.
+  await 입력창.fill("등대지기한테 [보안 필터] 로 전화한다 그리고 문을 연다");
+  await expect(안내).toHaveText("전화번호는 안 써도 돼서 가렸어!");
+
+  // 서버로 가는 것도 **가린 문장**이다. 서버는 이걸 책 콘텐츠로 저장한다.
+  let 보낸것: Record<string, unknown> = {};
+  await page.route(ATTEMPTS, (route) => {
+    보낸것 = route.request().postDataJSON();
+    return route.fulfill({ status: 200, json: 결과(CARD.guide) });
+  });
+  await 보내기.click();
+  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  expect(보낸것.text).toBe("등대지기한테 [보안 필터] 로 전화한다 그리고 문을 연다");
+});
+
+test("가린 자리는 아이가 지울 수 있다 — 덩어리가 아니라 평범한 글자다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(EVENTS, (route) => route.fulfill({ status: 204 }));
+  await page.goto("/");
+
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  await 입력창.fill("010-1234-5678");
+  await expect(입력창).toHaveValue("[보안 필터]");
+
+  // 지워지지 않는 덩어리면 아이가 자기 문장을 못 고친다. 한 글자씩 지워져야 한다.
+  await 입력창.press("End");
+  await 입력창.press("Backspace");
+  await expect(입력창).toHaveValue("[보안 필터");
+});
+
+test("가렸다는 사실만 남긴다 — 아이 문장도 가린 값도 싣지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+
+  const 이벤트: Record<string, unknown>[] = [];
+  await page.route(EVENTS, (route) => {
+    const body = route.request().postDataJSON() as {
+      events: Record<string, unknown>[];
+    };
+    이벤트.push(...body.events);
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("/");
+
+  await page
+    .getByLabel(CARD.prompt_label)
+    .fill("등대지기한테 010-1234-5678 로 전화한다");
+
+  await expect.poll(() => 이벤트.length).toBeGreaterThan(0);
+
+  const 하나 = 이벤트[0];
+  expect(하나.event).toBe("pii_masked");
+  expect(하나.layer).toBe("client");
+  expect(하나.kind).toBe("phone");
+  // **원문 필드 없음** (`docs/api/Stage0.md` 7절). 번호도 문장도 실려 나가지 않는다.
+  expect(JSON.stringify(이벤트)).not.toContain("010");
+  expect(JSON.stringify(이벤트)).not.toContain("등대지기");
+});
+
+test("한글 조합 중에는 손대지 않는다 — 조합이 끝난 뒤에 가린다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(EVENTS, (route) => route.fulfill({ status: 204 }));
+  await page.goto("/");
+
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  await 입력창.click();
+
+  // IME 를 흉내 낸다. Playwright 의 타이핑은 조합 이벤트를 만들지 않아 직접 쏜다.
+  // **조합 중에 값을 갈아치우면 IME 가 조합을 잃고 글자가 깨진다** — 취향이 아니라 버그다.
+  const 치기 = (v: string, 조합: "start" | "end" | null) =>
+    page.evaluate(
+      ({ v, 조합 }) => {
+        const el = document.querySelector("#attempt") as HTMLTextAreaElement;
+        if (조합 === "start") {
+          el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+        }
+        // React 가 관리하는 값이라 네이티브 setter 를 거쳐야 변경이 인식된다.
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )!.set!;
+        setter.call(el, v);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        if (조합 === "end") {
+          el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+        }
+      },
+      { v, 조합 },
+    );
+
+  await 치기("우리 학교는 한빛초등학교", "start");
+  // **조합 중에는 그대로 있어야 한다.** 여기서 가려지면 조합이 깨진 것이다.
+  await expect(입력창).toHaveValue("우리 학교는 한빛초등학교");
+
+  await 치기("우리 학교는 한빛초등학교야", "end");
+  // 조합이 끝난 지금 가린다.
+  await expect(입력창).toHaveValue("우리 학교는 [보안 필터]야");
 });

@@ -121,5 +121,8 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     );
   }
 
+  // **204 는 본문이 없다** (`POST /events`). 파싱하려 들면 던져서, 성공이 실패로 둔갑한다.
+  if (res.status === 204) return undefined as T;
+
   return (await res.json()) as T;
 }

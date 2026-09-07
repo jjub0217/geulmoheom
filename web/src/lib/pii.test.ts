@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectPii } from "./pii";
+import { PII_MASK, detectPii, maskPii } from "./pii";
 
 /**
  * **오탐 0 이 이 파일의 합격선이다.**
@@ -59,5 +59,58 @@ describe("detectPii — 잡아야 하는 것", () => {
 
   it("빈 문자열은 아무것도 안 잡는다", () => {
     expect(detectPii("")).toEqual([]);
+  });
+});
+
+/**
+ * 치환은 **대표 판정**이다 (2026-09-07). 전송을 막지 않고 그 자리에서 가린다 (PRD E-2).
+ *
+ * 계약에 없어 이번에 정한 것 넷 —
+ * ① 치환된 자리는 **평범한 글자**다. 아이가 지울 수 있어야 문장을 고친다
+ * ② **커서를 잃지 않는다.** 치환된 부분 바로 뒤에 둔다 — 맨 끝으로 튀면 쓰던 자리를 잃는다
+ * ③ **글자 수는 치환 뒤 기준**이다. 화면·로그·책이 같은 문자열을 세야 한다
+ * ④ 되돌리기로 원문이 살아나도 막지 않는다. **서버 2차가 잡는다**
+ */
+describe("maskPii", () => {
+  it("찾은 자리를 가리고 나머지는 그대로 둔다", () => {
+    const r = maskPii("전화는 010-1234-5678 이야", 0);
+    expect(r.text).toBe(`전화는 ${PII_MASK} 이야`);
+    expect(r.kinds).toEqual(["phone"]);
+  });
+
+  it("문장 맨 앞에 있어도 앞 글자를 먹지 않는다", () => {
+    expect(maskPii("010-1234-5678 로 전화해", 0).text).toBe(`${PII_MASK} 로 전화해`);
+  });
+
+  it("가릴 것이 없으면 문장을 건드리지 않는다", () => {
+    const 그대로 = "은빛 검을 휘두르며 그림자를 베었다";
+    const r = maskPii(그대로, 3);
+    expect(r.text).toBe(그대로);
+    expect(r.kinds).toEqual([]);
+    expect(r.caret).toBe(3);
+  });
+
+  it("여러 개를 한 번에 가린다", () => {
+    const r = maskPii("010-1234-5678 이고 minjun@example.com 이야", 0);
+    expect(r.text).toBe(`${PII_MASK} 이고 ${PII_MASK} 이야`);
+    expect(r.kinds).toEqual(["phone", "email"]);
+  });
+
+  it("커서를 치환된 부분 바로 뒤에 둔다 — 맨 끝으로 튀지 않는다", () => {
+    // 「전화는 010-1234-5678」까지 치고 있던 중. 커서는 방금 친 번호 끝(19)에 있다.
+    const r = maskPii("전화는 010-1234-5678 이야", 17);
+    expect(r.caret).toBe(`전화는 ${PII_MASK}`.length);
+  });
+
+  it("치환된 자리보다 뒤에 있던 커서는 줄어든 만큼 따라 움직인다", () => {
+    const 원문 = "전화는 010-1234-5678 이야";
+    const r = maskPii(원문, 원문.length);
+    expect(r.caret).toBe(r.text.length);
+  });
+
+  it("가린 자리는 평범한 글자다 — 아이가 지울 수 있어야 문장을 고친다", () => {
+    const 가린 = maskPii("전화는 010-1234-5678 이야", 0).text;
+    // 지우고 다시 검사하면 아무것도 안 걸린다. 덩어리가 남지 않는다.
+    expect(detectPii(가린.replace(PII_MASK, ""))).toEqual([]);
   });
 });

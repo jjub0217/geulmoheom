@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, NetworkError, apiGet } from "./api";
+import { ApiError, NetworkError, apiGet, apiPost } from "./api";
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -17,6 +17,18 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+});
+
+describe("apiPost", () => {
+  it("204 는 본문이 없다 — 파싱하려 들면 성공이 실패로 둔갑한다", async () => {
+    // `POST /events` 가 204 다 (`docs/api/Stage0.md` 7절). 여기서 죽으면
+    // 이벤트가 조용히 실패한 것처럼 보이고, 원인은 응답이 아니라 우리 파서에 있다.
+    vi.stubGlobal("fetch", async () => new Response(null, { status: 204 }));
+
+    await expect(
+      apiPost("/events", { events: [] }),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("api 주소", () => {

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { AttemptInput } from "@/components/attempt-input";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
+import type { PiiKind } from "@/lib/pii";
 
 type Card = components["schemas"]["Card"];
 /** 세 형태가 한 응답에 온다 (`outcome`). 이번 조각은 **보내는 것까지**고, 3분기 연출은 다음 항목이다. */
@@ -56,6 +57,31 @@ export default function Home() {
   const [text, setText] = useState("");
   // 다시 열기를 누르면 값이 바뀌어 아래 효과가 한 번 더 돈다.
   const [attempt, setAttempt] = useState(0);
+  /** 이미 올린 종류. **세션 안에서 종류마다 한 번만** 보낸다 — 한 글자마다 보내면 폭주한다. */
+  const 올린종류 = useRef(new Set<PiiKind>());
+
+  /**
+   * 입력창이 개인정보를 가렸다 (E-2 클라이언트 1차). `pii_masked` 를 남긴다 —
+   * **종류만 싣는다. 아이 문장도, 가려진 값도 싣지 않는다** (`Stage0.md` 7절 「원문 필드 없음」).
+   *
+   * 실패해도 아이 화면은 건드리지 않는다. 이건 아이가 기다리는 일이 아니다.
+   */
+  const 가림알림 = (kinds: PiiKind[]) => {
+    const 처음 = kinds.filter((k) => !올린종류.current.has(k));
+    if (처음.length === 0) return;
+    처음.forEach((k) => 올린종류.current.add(k));
+
+    void apiPost("/events", {
+      events: 처음.map((kind) => ({
+        event: "pii_masked",
+        ts: new Date().toISOString(),
+        layer: "client",
+        kind,
+      })),
+    }).catch(() => {
+      // 삼킨다. 실패 이유를 남기려면 요청 정보를 들고 있어야 하는데, 그 안에 아이 문장이 있다.
+    });
+  };
 
   useEffect(() => {
     // 화면이 사라진 뒤 도착한 응답으로 상태를 건드리지 않는다.
@@ -148,6 +174,7 @@ export default function Home() {
             label={screen.card.prompt_label}
             value={text}
             onChange={setText}
+            onMasked={가림알림}
             disabled={screen.kind === "sending"}
           />
           <button
