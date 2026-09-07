@@ -13,6 +13,11 @@ dependencies = [
     "redis>=5.2",
     "httpx>=0.28",
     "google-genai>=1.0",
+    # 인증 토큰. 직접 HMAC 을 짜지 않는다 — alg 혼동(`alg: none`·HS/RS 바꿔치기)과
+    # 상수시간 비교는 손으로 짜면 조용히 틀리는 자리다. 여기서 틀리면 아이 계정이 뚫린다.
+    "pyjwt>=2.10",
+    # 학부모 비밀번호 해시. bcrypt 의 72바이트 조용한 잘림이 없다.
+    "argon2-cffi>=23.1",
 ]
 
 # LLM 프로바이더는 Google Gemini (docs/adr/0005). 모델명은 미정이라 코드에 기본값을
@@ -71,4 +76,10 @@ testpaths = ["tests"]
 # app 을 tests 에서 import 하려면 필요하다 ([tool.uv] package = false 라 설치되지 않는다)
 pythonpath = ["."]
 asyncio_mode = "auto"
+# **루프를 세션 하나로 고정한다.** 기본값(테스트마다 새 루프)이면 `app/db.py` 의
+# 모듈 전역 엔진이 첫 루프의 커넥션을 풀에 물고 있다가 다음 테스트에서
+# "attached to a different loop" 로 죽는다. 엔진을 테스트용으로 갈아끼우는 길도
+# 있지만, 그러면 `app/api/system.py` 처럼 이름으로 import 한 쪽이 옛 엔진을 계속 쓴다.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-q"

@@ -8,11 +8,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from app.api.v1.deps import require_child
+from app.models import Child as ChildRow
 from app.schemas.stage0 import EventBatch
 
 router = APIRouter(prefix="/events", tags=["events"])
 
-Child = Annotated[str, Depends(require_child)]
+# `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
+Child = Annotated[ChildRow, Depends(require_child)]
 
 
 @router.post("", status_code=status.HTTP_204_NO_CONTENT)

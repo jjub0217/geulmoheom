@@ -128,17 +128,26 @@ def 질문(card_id: str, 횟수: int) -> str:
     return "나침반이 조용하네. 무엇을 할 건지 조금만 더 말해줄래?"
 
 
-def _아이키(token: str) -> str:
-    """토큰을 그대로 키에 쓰지 않는다 — Redis 에 자격증명을 적는 셈이 된다."""
-    return hashlib.sha256(token.encode()).hexdigest()[:16]
+def _아이키(자녀id: str) -> str:
+    """식별자를 그대로 키에 쓰지 않는다 — Redis 키는 모니터링·덤프에 그대로 보인다.
+
+    **E-3 전에는 여기 토큰이 들어왔다.** 그때 이 함수의 이유는 「자격증명을 Redis 에
+    적지 않는다」였고, 지금은 자녀 ID 라 자격증명이 아니다. 그래도 해싱을 남긴다 —
+    키 목록만 봐도 어느 계정이 오늘 무엇을 하고 있는지가 읽히기 때문이다.
+
+    **키가 토큰에서 자녀 ID 로 바뀐 것은 고침이다.** 토큰 기준이면 아이가 다른 기기로
+    들어오는 순간 되묻기 횟수가 0 으로 돌아가, 같은 카드에서 상한(2회)을 넘겨 되물을
+    수 있었다.
+    """
+    return hashlib.sha256(자녀id.encode()).hexdigest()[:16]
 
 
-async def 되묻기횟수(token: str, card_id: str, *, client: Any = None) -> int | None:
+async def 되묻기횟수(자녀id: str, card_id: str, *, client: Any = None) -> int | None:
     """이번 G0 까지 포함한 되묻기 횟수. 셀 수 없으면 `None`.
 
     Redis 가 죽어도 아이는 계속 쓸 수 있어야 한다 (`app/cost.py` 와 같은 태도).
     """
-    키 = f"scaffold:{_아이키(token)}:{card_id}"
+    키 = f"scaffold:{_아이키(자녀id)}:{card_id}"
     try:
         redis = client or redis_client
         횟수 = int(await redis.incr(키))

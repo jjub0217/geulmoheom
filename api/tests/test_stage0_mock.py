@@ -4,6 +4,7 @@
 """
 
 import logging
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +14,7 @@ from app.auth import CHILD_COOKIE, MAX_AGE_SECONDS, PARENT_COOKIE
 from app.config import REPO_ROOT
 from app.docs_md import 민, 읽기
 from app.evaluator import 평가결과
-from app.main import create_app
+from app.models import Parent
 from app.moderation import SELF_HARM, 검사결과, 슬러그
 
 SIGNUP = (
@@ -28,34 +29,6 @@ EVENTS = (
     {"events": [{"event": "session_start", "ts": "2026-09-01T00:00:00Z"}]},
     204,
 )
-
-
-def _client() -> TestClient:
-    """`base_url` 이 https 여야 한다 — `__Host-` 는 `Secure` 를 강제한다.
-
-    http 로 두면 서버가 구운 쿠키가 되돌아 나가지 않아 **실제로는 통과할 흐름이
-    테스트에서만 401** 이 된다.
-    """
-    return TestClient(create_app(), base_url="https://testserver", raise_server_exceptions=False)
-
-
-@pytest.fixture
-def 익명() -> TestClient:
-    """**아무 쿠키도 없다.** 인증 자체를 보는 테스트만 이걸 쓴다."""
-    return _client()
-
-
-@pytest.fixture
-def client() -> TestClient:
-    """학부모·자녀 쿠키가 **둘 다** 앉아 있는 클라이언트.
-
-    가족 태블릿이 그렇다 — 학부모가 가입하고 같은 기기를 아이가 쓴다. 쿠키 이름을
-    나눈 이유가 이것이라, 기본값을 이 상태로 둬야 덮어쓰기 사고가 여기서 걸린다.
-    """
-    client = _client()
-    client.cookies.set(PARENT_COOKIE, "mock")
-    client.cookies.set(CHILD_COOKIE, "mock")
-    return client
 
 
 @pytest.fixture(autouse=True)
@@ -136,30 +109,49 @@ def test_학부모_쿠키로_자녀_API_를_부르면_403(익명: TestClient):
 
 # ── 토큰은 body 에 없다 ──────────────────────────────────
 
+# **실제 계정이 있어야 도는 흐름이 됐다** (E-3). 목이던 때는 아무 값이나 통과했다.
+# 페이로드를 여기 못 박지 못하는 이유가 그것이라, 이름만 두고 `굽는요청` 이 채운다.
 토큰을_굽는_곳 = [
-    ("/api/v1/parents/signup", {"email": "a@b.c", "password": "x", "consent": True}, PARENT_COOKIE),
-    ("/api/v1/parents/login", {"email": "a@b.c", "password": "x"}, PARENT_COOKIE),
-    ("/api/v1/child/auth", {"access_code": "482913"}, CHILD_COOKIE),
+    ("/api/v1/parents/signup", "signup", PARENT_COOKIE),
+    ("/api/v1/parents/login", "login", PARENT_COOKIE),
+    ("/api/v1/child/auth", "auth", CHILD_COOKIE),
 ]
 
 
-@pytest.mark.parametrize(("path", "payload", "쿠키이름"), 토큰을_굽는_곳)
-def test_토큰이_응답_body_에_없다(익명: TestClient, path: str, payload: dict, 쿠키이름: str):
+@pytest.fixture
+def 굽는요청(학부모행: Parent, 접속코드: str, 비밀번호: str) -> dict[str, dict]:
+    """세 경로의 실제 요청 body. **가입만 매번 새 이메일**이다 — 같은 값을 두 번
+    보내면 두 번째가 중복으로 422 다."""
+    return {
+        "signup": {
+            "email": f"{uuid.uuid4().hex}@example.test",
+            "password": "test-password",
+            "consent": True,
+        },
+        "login": {"email": 학부모행.email, "password": 비밀번호},
+        "auth": {"access_code": 접속코드},
+    }
+
+
+@pytest.mark.parametrize(("path", "이름", "쿠키이름"), 토큰을_굽는_곳)
+def test_토큰이_응답_body_에_없다(
+    익명: TestClient, 굽는요청: dict, path: str, 이름: str, 쿠키이름: str
+):
     """`공통규약.md` 「인증 쿠키」 — JS 는 토큰을 읽을 수도 보관할 수도 없다."""
-    body = 익명.post(path, json=payload).json()
+    body = 익명.post(path, json=굽는요청[이름]).json()
 
     assert "token" not in str(body)
 
 
-@pytest.mark.parametrize(("path", "payload", "쿠키이름"), 토큰을_굽는_곳)
+@pytest.mark.parametrize(("path", "이름", "쿠키이름"), 토큰을_굽는_곳)
 def test_인증_쿠키_속성이_확정본_그대로다(
-    익명: TestClient, path: str, payload: dict, 쿠키이름: str
+    익명: TestClient, 굽는요청: dict, path: str, 이름: str, 쿠키이름: str
 ):
     """**속성이 하나라도 다르면 로그아웃의 삭제 쿠키가 발급분을 못 지운다.**
 
     `Domain` 은 **붙어 있으면 안 된다** — `__Host-` 가 host-only 를 요구한다.
     """
-    구운것 = 익명.post(path, json=payload).headers["set-cookie"]
+    구운것 = 익명.post(path, json=굽는요청[이름]).headers["set-cookie"]
 
     assert 구운것.startswith(f"{쿠키이름}=")
     assert "HttpOnly" in 구운것
@@ -170,19 +162,19 @@ def test_인증_쿠키_속성이_확정본_그대로다(
     assert f"Max-Age={MAX_AGE_SECONDS}" in 구운것
 
 
-@pytest.mark.parametrize(("path", "payload", "쿠키이름"), 토큰을_굽는_곳)
+@pytest.mark.parametrize(("path", "이름", "쿠키이름"), 토큰을_굽는_곳)
 def test_토큰을_실은_응답은_캐시되지_않는다(
-    익명: TestClient, path: str, payload: dict, 쿠키이름: str
+    익명: TestClient, 굽는요청: dict, path: str, 이름: str, 쿠키이름: str
 ):
     """앞단이 Cloudflare 다. 공용 캐시에 앉으면 다른 사람에게 나간다."""
-    response = 익명.post(path, json=payload)
+    response = 익명.post(path, json=굽는요청[이름])
 
     assert response.headers["cache-control"] == "no-store"
 
 
-def test_구운_쿠키로_바로_다음_요청이_통과한다(익명: TestClient):
+def test_구운_쿠키로_바로_다음_요청이_통과한다(익명: TestClient, 접속코드: str):
     """계약 전체가 실제로 도는지 — body 에 토큰이 없어도 브라우저는 붙일 수 있다."""
-    익명.post("/api/v1/child/auth", json={"access_code": "482913"})
+    익명.post("/api/v1/child/auth", json={"access_code": 접속코드})
 
     assert 익명.get("/api/v1/child/me").status_code == 200
 
@@ -218,24 +210,32 @@ def test_삭제_쿠키의_속성이_발급_때와_같다(client: TestClient, pat
     assert "Max-Age=0" in 지우는것
 
 
-def _가족태블릿(client: TestClient) -> None:
+def _가족태블릿(client: TestClient, 이메일: str, 비밀번호: str, 코드: str) -> None:
     """학부모가 가입하고 같은 기기를 아이가 쓴다 — 쿠키 둘이 함께 앉은 실제 상태.
 
     **`cookies.set()` 으로 심지 않고 서버에게 굽게 한다.** 손으로 심은 쿠키는
     도메인이 비어 있어 서버가 보낸 삭제 `Set-Cookie` 와 짝이 안 맞는다 — 그러면
     로그아웃이 제대로 지우는지를 이 테스트가 영영 못 본다.
     """
-    client.post("/api/v1/parents/login", json={"email": "a@b.c", "password": "x"})
-    client.post("/api/v1/child/auth", json={"access_code": "482913"})
+    client.post("/api/v1/parents/login", json={"email": 이메일, "password": 비밀번호})
+    client.post("/api/v1/child/auth", json={"access_code": 코드})
 
 
 @pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)
-def test_로그아웃은_한쪽_역할만_끊는다(익명: TestClient, path: str, 지울것: str, 남길것: str):
+def test_로그아웃은_한쪽_역할만_끊는다(
+    익명: TestClient,
+    학부모행: Parent,
+    접속코드: str,
+    비밀번호: str,
+    path: str,
+    지울것: str,
+    남길것: str,
+):
     """가족 태블릿이다 — 아이가 내려온다고 학부모까지 로그아웃되면 안 된다.
 
     204 만 보고 넘기지 않는다. 브라우저(테스트 클라이언트)의 쿠키통을 직접 본다.
     """
-    _가족태블릿(익명)
+    _가족태블릿(익명, 학부모행.email, 비밀번호, 접속코드)
 
     익명.post(path)
 
@@ -261,9 +261,11 @@ def test_로그아웃_응답도_캐시되지_않는다(client: TestClient, path:
     assert client.post(path).headers["cache-control"] == "no-store"
 
 
-def test_학부모_로그아웃_뒤에는_학부모_API_가_401_이다(익명: TestClient):
+def test_학부모_로그아웃_뒤에는_학부모_API_가_401_이다(
+    익명: TestClient, 학부모행: Parent, 비밀번호: str
+):
     """계약 전체가 도는지 — 구운 쿠키가 실제로 무효가 된다."""
-    익명.post("/api/v1/parents/login", json={"email": "a@b.c", "password": "x"})
+    익명.post("/api/v1/parents/login", json={"email": 학부모행.email, "password": 비밀번호})
     assert 익명.get("/api/v1/parents/me").status_code == 200
 
     익명.post("/api/v1/parents/logout")
@@ -271,8 +273,8 @@ def test_학부모_로그아웃_뒤에는_학부모_API_가_401_이다(익명: T
     assert 익명.get("/api/v1/parents/me").status_code == 401
 
 
-def test_자녀_로그아웃_뒤에는_자녀_API_가_401_이다(익명: TestClient):
-    익명.post("/api/v1/child/auth", json={"access_code": "482913"})
+def test_자녀_로그아웃_뒤에는_자녀_API_가_401_이다(익명: TestClient, 접속코드: str):
+    익명.post("/api/v1/child/auth", json={"access_code": 접속코드})
     assert 익명.get("/api/v1/child/me").status_code == 200
 
     익명.post("/api/v1/child/logout")
@@ -581,21 +583,33 @@ def test_재시도는_상한에_걸리지_않는다(client: TestClient):
 # ── 나머지 엔드포인트 ────────────────────────────────────
 
 
-def test_전_엔드포인트가_응답한다(client: TestClient):
+def test_전_엔드포인트가_응답한다(
+    client: TestClient, 학부모행: Parent, 비밀번호: str, 접속코드: str
+):
+    """계약에 적힌 경로가 전부 살아 있는지 한 번에 훑는다.
+
+    **`c1` 같은 가짜 ID 를 쓰지 않는다** (E-3). 자녀 관련 경로는 이 테스트가 방금
+    만든 아이를 쓴다 — 목이던 때는 아무 문자열이나 200 이었지만, 지금 남의 ID 는
+    404 다. 그게 맞는 동작이라 **테스트가 진짜 ID 를 들고 와야 한다.**
+    """
+    만든아이 = client.post(
+        "/api/v1/parents/children", json={"nickname": "샛별탐험가", "age_band": 12}
+    )
+    assert 만든아이.status_code == 201
+    자녀 = 만든아이.json()["child_id"]
+
     호출 = [
         (
             "POST",
             "/api/v1/parents/signup",
-            {"email": "a@b.c", "password": "x", "consent": True},
+            {"email": f"{uuid.uuid4().hex}@example.test", "password": 비밀번호, "consent": True},
             201,
         ),
-        ("POST", "/api/v1/parents/login", {"email": "a@b.c", "password": "x"}, 200),
+        ("POST", "/api/v1/parents/login", {"email": 학부모행.email, "password": 비밀번호}, 200),
         ("GET", "/api/v1/parents/me", None, 200),
-        ("POST", "/api/v1/parents/children", {"nickname": "불꽃탐험가", "age_band": 11}, 201),
-        ("POST", "/api/v1/parents/children/c1/access-code", None, 200),
-        ("PATCH", "/api/v1/parents/children/c1", {"daily_cap": 12}, 200),
-        ("DELETE", "/api/v1/parents/children/c1", None, 204),
-        ("POST", "/api/v1/child/auth", {"access_code": "482913"}, 200),
+        ("POST", f"/api/v1/parents/children/{자녀}/access-code", None, 200),
+        ("PATCH", f"/api/v1/parents/children/{자녀}", {"daily_cap": 12}, 200),
+        ("POST", "/api/v1/child/auth", {"access_code": 접속코드}, 200),
         ("GET", "/api/v1/child/me", None, 200),
         ("PATCH", "/api/v1/child/guide", {"guide_name": "나침이"}, 200),
         ("GET", "/api/v1/cards/next", None, 200),
@@ -611,6 +625,10 @@ def test_전_엔드포인트가_응답한다(client: TestClient):
             {"events": [{"event": "session_start", "ts": "2026-09-01T00:00:00Z"}]},
             204,
         ),
+        # **삭제는 로그아웃 바로 앞이다.** 지운 뒤에 그 아이로 뭘 부르면 401 이라,
+        # 중간에 두면 뒤가 전부 무너진다. 지우는 것은 방금 만든 아이이지
+        # 이 클라이언트가 로그인해 있는 아이가 아니다.
+        ("DELETE", f"/api/v1/parents/children/{자녀}", None, 204),
         # **로그아웃 둘은 맨 뒤다.** 같은 클라이언트로 순서대로 도는 목록이라
         # 중간에 넣으면 쿠키를 지워 놓고 그 뒤를 전부 401 로 만든다.
         ("POST", "/api/v1/parents/logout", None, 204),

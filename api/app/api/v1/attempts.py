@@ -25,6 +25,7 @@ from app.api.v1.deps import MockOutcome, mock_daily_cap_reached, mock_outcome, r
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가기록
 from app.middleware import current_request_id
+from app.models import Child as ChildRow
 from app.moderation import 검사하기
 from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 질문
 from app.schemas.stage0 import (
@@ -43,7 +44,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/attempts", tags=["attempts"])
 
-Child = Annotated[str, Depends(require_child)]
+# `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
+Child = Annotated[ChildRow, Depends(require_child)]
 
 
 def _result() -> AttemptResult:
@@ -163,7 +165,7 @@ async def create_attempt(
     평가기록(평가)
 
     if 평가.grade == "G0":
-        되물음 = await _되묻기(아이, payload.card_id)
+        되물음 = await _되묻기(str(아이.id), payload.card_id)
         if 되물음 is not None:
             return 되물음
 
@@ -187,12 +189,12 @@ async def create_attempt(
     )
 
 
-async def _되묻기(아이: str, card_id: str) -> AttemptScaffold | None:
+async def _되묻기(자녀id: str, card_id: str) -> AttemptScaffold | None:
     """G0 되묻기 (`Stage0.md` 9절 6번). 되묻지 않을 상황이면 `None` — 결과로 진행한다.
 
     **카드를 소모하지 않는다.** 프론트는 입력창과 쓰던 글을 그대로 둔다.
     """
-    횟수 = await 되묻기횟수(아이, card_id)
+    횟수 = await 되묻기횟수(자녀id, card_id)
 
     # 못 셌으면 되묻지 않는다. 같은 카드에서 무한히 되물어 아이를 가두는 쪽이 더 나쁘다.
     if 횟수 is None or 횟수 > MAX_SCAFFOLD:

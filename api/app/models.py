@@ -64,7 +64,17 @@ class Child(Base):
     age_band: Mapped[int] = mapped_column(SmallInteger)
     guide_name: Mapped[str | None] = mapped_column(String(40))
     # 접속 코드는 평문으로 두지 않는다. 6자리·24시간·1회용 (Stage0.md 1절)
-    access_code_hash: Mapped[str | None] = mapped_column(String(255))
+    #
+    # **인덱스가 있어야 한다.** 아이는 코드 하나만 들고 오므로(`POST /child/auth`)
+    # 이 컬럼이 조회 조건이다. 해시는 소금 없는 HMAC 이라 등호로 찾을 수 있다 —
+    # 그 선택의 이유는 `app/accounts.py` 「접속코드해시」에 적어 뒀다.
+    #
+    # **유니크다.** 코드가 6자리라 살아 있는 코드끼리 겹칠 수 있고, 겹치면 조회가
+    # 아무 쪽이나 골라 **다른 아이의 계정으로 들어가진다.** 확률은 낮지만 값이
+    # 회복 불가라 「나오면 처리한다」가 아니라 **DB 가 못 만들게** 막는다.
+    # Postgres 의 유니크는 NULL 을 여럿 허용하므로, 코드를 다 쓴 자녀들(NULL)은
+    # 서로 부딪히지 않는다.
+    access_code_hash: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     access_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     access_code_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     daily_cap: Mapped[int] = mapped_column(Integer, default=5)

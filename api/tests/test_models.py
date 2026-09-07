@@ -1,9 +1,12 @@
 """스키마가 원문 취급 원칙을 깨지 않는지 본다 (PRD 1.1b · api/CLAUDE.md).
 
-DB 연결 없이 metadata 만 본다 — CI 에는 Postgres 가 없다.
+대부분 metadata 만 본다 — 연결이 필요 없다. `echo` 검사만 **살아 있는 엔진**을
+`app.db` 에서 늦게 읽는다: 테스트가 엔진을 갈아끼우므로 import 시점의 사본을 보면
+바꿔치기된 쪽이 아니라 원본을 검사하게 되고, 정작 도는 엔진은 안 보게 된다.
 """
 
-from app.db import Base, engine
+from app import db
+from app.db import Base
 from app.models import CardAttempt
 
 # 아이 원문이 들어가도 되는 자리. 둘 다 책 콘텐츠다.
@@ -37,7 +40,7 @@ def test_원문_컬럼에_출처_주석이_붙어_있다():
 
 def test_엔진_echo_가_꺼져_있다():
     """echo 를 켜면 SQL 파라미터로 아이 원문이 로그에 찍힌다."""
-    assert engine.echo is False
+    assert db.engine.echo is False
 
 
 def test_stage1_테이블은_아직_없다():

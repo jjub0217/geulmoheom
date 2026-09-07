@@ -8,24 +8,13 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth import CHILD_COOKIE
-from app.main import create_app
 from app.scaffold import 질문
 from app.scene_cards import 모험카드들, 카드들
 
 카드목록 = 모험카드들()
 
 
-@pytest.fixture
-def client() -> TestClient:
-    """자녀 쿠키를 붙인 클라이언트. 인증은 HttpOnly 쿠키다 (미결 11-2, `공통규약.md`).
-
-    `base_url` 이 https 여야 한다 — `__Host-` 는 `Secure` 를 강제하고, http 로 두면
-    쿠키가 실려 나가지 않아 **실제로는 통과할 흐름이 테스트에서만 401** 이 된다.
-    """
-    client = TestClient(create_app(), base_url="https://testserver", raise_server_exceptions=False)
-    client.cookies.set(CHILD_COOKIE, "mock")
-    return client
+# 인증된 `client` 는 `tests/conftest.py` 에 있다 — 진짜 자녀 토큰이 들어간다 (E-3).
 
 
 def test_스무_장이다():

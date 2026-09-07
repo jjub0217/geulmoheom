@@ -3,6 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app import db
 from app.api import system
 from app.main import create_app
 
@@ -48,7 +49,9 @@ def test_readyz_실패_사유에_접속정보가_없다(client: TestClient, monk
         def connect(self):
             raise RuntimeError("connection to server at geulmoheom@localhost:5433 failed")
 
-    monkeypatch.setattr(system, "engine", _터지는엔진())
+    # **`system.engine` 이 아니라 `db.engine` 을 갈아끼운다** — system 은 모듈로
+    # 참조하므로 원본을 바꿔야 한다. 사본을 바꾸면 통과하는데 실제로는 안 바뀐다.
+    monkeypatch.setattr(db, "engine", _터지는엔진())
     monkeypatch.setattr(system, "_check_redis", lambda: _고정("up"))
 
     response = client.get("/readyz")

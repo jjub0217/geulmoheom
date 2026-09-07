@@ -5,6 +5,10 @@
 
 **실패 사유에 예외 메시지를 싣지 않는다.** asyncpg·redis 예외 문자열에는 호스트·계정이
 그대로 들어 있다. 남기는 것은 예외 타입뿐이다.
+
+**엔진을 `from app.db import engine` 으로 들여오지 않는다.** 그러면 이 모듈이 import
+시점의 객체를 붙잡아, 나중에 `app.db.engine` 을 갈아끼우는 쪽(테스트)과 여기가
+**서로 다른 엔진을 보게 된다.** 모듈로 참조해 늦게 읽는다.
 """
 
 import logging
@@ -13,7 +17,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.db import engine, redis_client
+from app import db
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +26,7 @@ router = APIRouter(tags=["system"])
 
 async def _check_postgres() -> str:
     try:
-        async with engine.connect() as connection:
+        async with db.engine.connect() as connection:
             await connection.execute(text("select 1"))
     except Exception as exc:
         logger.warning("postgres 확인 실패", extra={"exc_type": type(exc).__name__})
@@ -32,7 +36,7 @@ async def _check_postgres() -> str:
 
 async def _check_redis() -> str:
     try:
-        await redis_client.ping()
+        await db.redis_client.ping()
     except Exception as exc:
         logger.warning("redis 확인 실패", extra={"exc_type": type(exc).__name__})
         return "down"

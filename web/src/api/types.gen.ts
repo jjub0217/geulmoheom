@@ -49,9 +49,12 @@ export interface paths {
         put?: never;
         /**
          * Signup
-         * @description `consent: true` 가 아니면 422 (스키마가 아니라 서버 규칙이라 실구현에서 검사한다).
+         * @description `consent: true` 가 아니면 422 (`Stage0.md` 1절).
          *
          *     **토큰은 `Set-Cookie: __Host-gm_parent` 로만 나간다.** body 에 없다.
+         *
+         *     **라벨링 동의는 별개 컬럼이다** (PRD 1.1b). 하나로 묶어 받지 않는다 — 서비스
+         *     제공에 필수인 보호자 동의와 달리, 라벨링은 **거부해도 이용할 수 있다.**
          */
         post: operations["signup_api_v1_parents_signup_post"];
         delete?: never;
@@ -69,7 +72,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Login
+         * @description **이메일이 없는 것과 비밀번호가 틀린 것을 구분하지 않는다.**
+         *
+         *     구분하면 로그인 화면이 「이 이메일이 우리 서비스에 있는지」를 물어보는 도구가
+         *     된다. 학부모 계정이 곧 아이 계정으로 가는 문이라 더 그렇다.
+         */
         post: operations["login_api_v1_parents_login_post"];
         delete?: never;
         options?: never;
@@ -134,7 +143,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Child */
+        /**
+         * Create Child
+         * @description **닉네임과 연령대만 받는다.** 실명·이메일·학교를 묻는 필드가 없다 (PRD E-3).
+         *
+         *     `child_id` 는 UUID v4 난수다 — 순번이 아니라서 **다른 아이의 ID 를 추측할 수 없다.**
+         */
         post: operations["create_child_api_v1_parents_children_post"];
         delete?: never;
         options?: never;
@@ -151,7 +165,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reissue Access Code */
+        /**
+         * Reissue Access Code
+         * @description 재발급하면 **이전 기기의 자녀 토큰이 즉시 401 이 된다** (`공통규약.md` 「폐기」).
+         *
+         *     코드만 바꾸고 `token_version` 을 그대로 두면, 코드를 잃어버려 다시 받는
+         *     상황(= 남이 그 코드를 봤을 수 있는 상황)에서 **이미 들어와 있는 기기가 그대로
+         *     남는다.** 재발급의 목적이 그것을 끊는 것이다.
+         */
         post: operations["reissue_access_code_api_v1_parents_children__child_id__access_code_post"];
         delete?: never;
         options?: never;
@@ -171,7 +192,12 @@ export interface paths {
         post?: never;
         /**
          * Delete Child
-         * @description 자녀 데이터 즉시 파기 — attempts, books, artworks, events, Redis.
+         * @description 자녀 데이터 즉시 파기 — attempts, books, artworks, events 는 FK `CASCADE` 로 함께 간다.
+         *
+         *     **`token_version` 을 먼저 올린다.** 행이 지워지면 `require_child` 가 어차피 401 을
+         *     내지만, 지우는 순서가 바뀌거나 실패해도 토큰이 살아남지 않게 한 번 더 닫는다.
+         *
+         *     **Redis 잔여 파기는 E-4 다** — 되묻기 카운터가 남는다. 아이 원문은 없다.
          */
         delete: operations["delete_child_api_v1_parents_children__child_id__delete"];
         options?: never;
@@ -194,6 +220,13 @@ export interface paths {
          * @description 접속 코드 교환. 코드는 소진 후 재사용 불가, 토큰 30일.
          *
          *     **토큰은 `Set-Cookie: __Host-gm_child` 로만 나간다.** body 에 없다.
+         *
+         *     **없는 코드·만료된 코드·이미 쓴 코드를 구분하지 않는다.** 셋 다 401 이다 —
+         *     구분하면 코드를 찍어 보는 쪽에 「이 번호는 존재한다」가 새어 나간다.
+         *
+         *     **이 화면은 standalone(홈 화면 실행)에서만 연다** (`공통규약.md` iOS 절).
+         *     코드가 1회용이라 Safari 탭에서 써 버리면 홈 화면 앱에서는 재발급 없이 못 들어온다.
+         *     **그 판단은 프론트가 한다** — 서버는 `display-mode` 를 알 수 없다.
          */
         post: operations["auth_api_v1_child_auth_post"];
         delete?: never;
@@ -217,6 +250,10 @@ export interface paths {
          *
          *     학부모 쿠키는 그대로 둔다. 인증을 요구하지 않는 이유는 `parents.logout` 과 같다.
          *
+         *     **`token_version` 을 올리지 않는다.** 로그아웃은 이 기기에서 내려오는 것이지
+         *     다른 기기를 끊는 것이 아니다 — 그건 학부모의 재발급·삭제 몫이다 (`공통규약.md`
+         *     「폐기」 표). 여기서 올리면 태블릿에서 내려온 아이가 자기 다른 기기까지 잃는다.
+         *
          *     **접속 코드는 1회 사용이라 여기서 내려오면 재발급 없이는 못 들어온다.** 프론트가
          *     이 버튼을 아이 손에 쉽게 닿는 자리에 두지 않는다 — 계약이 아니라 화면 몫이다.
          */
@@ -234,7 +271,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Me */
+        /**
+         * Me
+         * @description **프론트가 로그인 상태를 판별하는 유일한 경로다** (`공통규약.md` 「인증 쿠키」).
+         *
+         *     `today` 는 아직 목이다 — 카드 소모 이력(A0-1 나머지)과 일일 제한(A0-5)이 W4 다.
+         *     `cap` 만 실제 값을 쓴다. 리셋 기준 타임존은 미결 11-4.
+         */
         get: operations["me_api_v1_child_me_get"];
         put?: never;
         post?: never;
@@ -260,6 +303,10 @@ export interface paths {
         /**
          * Rename Guide
          * @description 아이가 지어주는 이름. 1회. PII 검사.
+         *
+         *     **PII 검사는 아직 안 붙었다** — 여기는 아이가 직접 쓰는 자리라 닉네임(학부모가
+         *     쓴다)과 달리 **서버 2차(E-2, NER)를 그대로 태워야 한다.** 정규식만 걸어 두면
+         *     아이가 지은 이름이 걸리는 쪽(「마법약초」류)이 먼저 생긴다. E-2 에서 붙인다.
          */
         patch: operations["rename_guide_api_v1_child_guide_patch"];
         trace?: never;

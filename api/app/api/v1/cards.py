@@ -16,13 +16,15 @@ from fastapi import APIRouter, Depends
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import mock_daily_cap_reached, require_child
 from app.errors import AppError, ErrorCode
+from app.models import Child as ChildRow
 from app.scene_cards import 모험카드들, 장면카드
 from app.scene_cards import 카드 as 카드읽기
 from app.schemas.stage0 import Card
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
-Child = Annotated[str, Depends(require_child)]
+# `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
+Child = Annotated[ChildRow, Depends(require_child)]
 
 
 def _응답(카드: 장면카드) -> Card:

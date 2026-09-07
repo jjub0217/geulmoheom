@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends, Header
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import require_child
+from app.models import Child as ChildRow
 from app.schemas.stage0 import Artwork
 
 router = APIRouter(prefix="/artworks", tags=["artworks"])
 
-Child = Annotated[str, Depends(require_child)]
+# `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
+Child = Annotated[ChildRow, Depends(require_child)]
 
 
 @router.get("/{artwork_id}")

@@ -1,14 +1,36 @@
-"""1. 학부모 (`docs/api/Stage0.md` 1절). 목 응답."""
+"""1. 학부모 (`docs/api/Stage0.md` 1절).
 
-from typing import Annotated
+**목이 아니다** (2026-09-07, E-3). 계정·자녀·접속 코드가 실제로 DB 에 선다.
+
+**여기 있는 이메일·비밀번호는 학부모의 것이다.** 아이에게는 아무것도 묻지 않는다 —
+자녀 계정에 들어가는 것은 난수 ID · 닉네임 · 연령대뿐이다 (PRD E-3).
+
+**E-4 로 남는 것**: 동의 화면의 LLM 위탁 고지 · 학부모 화면(목록·오늘 플레이·삭제) ·
+계정 삭제 시 자녀 데이터 파기. 여기서는 **동의를 받아 기록하는 것까지**다.
+"""
+
+import uuid
+from datetime import UTC, datetime
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
-from app.api.v1 import _fixtures as fx
-from app.api.v1.deps import require_parent
+from app.accounts import (
+    닉네임에PII가있나,
+    닉네임길이가맞나,
+    비밀번호맞나,
+    비밀번호해시,
+    접속코드만들기,
+)
+from app.api.v1.deps import Session, require_parent
 from app.auth import PARENT_COOKIE, clear_auth_cookie, set_auth_cookie
+from app.errors import AppError, ErrorCode
+from app.models import CardAttempt, Child, Parent
 from app.schemas.stage0 import (
     AccessCode,
+    ChildSummary,
     CreateChildRequest,
     CreateChildResponse,
     LoginRequest,
@@ -19,26 +41,65 @@ from app.schemas.stage0 import (
     UpdateChildRequest,
     UpdateChildResponse,
 )
+from app.tokens import issue
 
 router = APIRouter(prefix="/parents", tags=["parents"])
 
-Parent = Annotated[str, Depends(require_parent)]
+ParentRow = Annotated[Parent, Depends(require_parent)]
+
+# 동의받은 문구가 어느 판이었는지 남긴다 — 문구가 바뀌면 **다시 받아야 하는지**를
+# 이 값으로 가른다. **문구 자체의 SSOT 는 `docs/문구.md` 4장**이고, 화면과 LLM 위탁
+# 고지는 E-4 다. 여기서는 「무엇에 동의했는지」를 되짚을 수 있게만 해 둔다.
+CONSENT_VERSION: Final = "2026-09-07"
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-async def signup(payload: SignupRequest, response: Response) -> SignupResponse:
-    """`consent: true` 가 아니면 422 (스키마가 아니라 서버 규칙이라 실구현에서 검사한다).
+async def signup(payload: SignupRequest, response: Response, session: Session) -> SignupResponse:
+    """`consent: true` 가 아니면 422 (`Stage0.md` 1절).
 
     **토큰은 `Set-Cookie: __Host-gm_parent` 로만 나간다.** body 에 없다.
+
+    **라벨링 동의는 별개 컬럼이다** (PRD 1.1b). 하나로 묶어 받지 않는다 — 서비스
+    제공에 필수인 보호자 동의와 달리, 라벨링은 **거부해도 이용할 수 있다.**
     """
-    set_auth_cookie(response, PARENT_COOKIE, fx.TOKEN)
-    return SignupResponse(parent_id=fx.PARENT_ID, consent_at=fx.now())
+    if not payload.consent:
+        raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": [{"field": "consent"}]})
+
+    학부모 = Parent(
+        email=payload.email.strip().lower(),
+        password_hash=비밀번호해시(payload.password),
+        consent_at=datetime.now(UTC),
+        consent_version=CONSENT_VERSION,
+        labeling_consent=payload.labeling_consent,
+    )
+    session.add(학부모)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        # 이미 있는 이메일. **「이미 가입된 이메일」이라고 알려주지 않는다** — 그
+        # 문장 하나가 아무나 이메일 존재 여부를 확인하는 창구가 된다.
+        raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": [{"field": "email"}]}) from exc
+
+    set_auth_cookie(response, PARENT_COOKIE, issue(학부모.id, "parent"))
+    return SignupResponse(parent_id=str(학부모.id), consent_at=학부모.consent_at)
 
 
 @router.post("/login")
-async def login(payload: LoginRequest, response: Response) -> LoginResponse:
-    set_auth_cookie(response, PARENT_COOKIE, fx.TOKEN)
-    return LoginResponse(parent_id=fx.PARENT_ID)
+async def login(payload: LoginRequest, response: Response, session: Session) -> LoginResponse:
+    """**이메일이 없는 것과 비밀번호가 틀린 것을 구분하지 않는다.**
+
+    구분하면 로그인 화면이 「이 이메일이 우리 서비스에 있는지」를 물어보는 도구가
+    된다. 학부모 계정이 곧 아이 계정으로 가는 문이라 더 그렇다.
+    """
+    학부모 = await session.scalar(
+        select(Parent).where(Parent.email == payload.email.strip().lower())
+    )
+    if 학부모 is None or not 비밀번호맞나(payload.password, 학부모.password_hash):
+        raise AppError(ErrorCode.UNAUTHORIZED)
+
+    set_auth_cookie(response, PARENT_COOKIE, issue(학부모.id, "parent"))
+    return LoginResponse(parent_id=str(학부모.id))
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -57,48 +118,187 @@ async def logout(response: Response) -> None:
 
 
 @router.get("/me")
-async def me(_: Parent) -> ParentMe:
+async def me(학부모: ParentRow, session: Session) -> ParentMe:
     """성장 데이터·등급·입력 내용은 반환하지 않는다 (P1 대시보드 범위)."""
+    아이들 = (
+        await session.scalars(
+            select(Child).where(Child.parent_id == 학부모.id).order_by(Child.created_at)
+        )
+    ).all()
+
+    오늘시작 = _오늘시작()
+    오늘한아이 = (
+        set(
+            (
+                await session.scalars(
+                    select(CardAttempt.child_id)
+                    .where(CardAttempt.child_id.in_([아이.id for 아이 in 아이들]))
+                    .where(CardAttempt.created_at >= 오늘시작)
+                    .distinct()
+                )
+            ).all()
+        )
+        if 아이들
+        else set()
+    )
+
     return ParentMe(
-        parent_id=fx.PARENT_ID,
-        email="parent@example.com",
-        consent_at=fx.now(),
+        parent_id=str(학부모.id),
+        email=학부모.email,
+        # 동의 없이는 계정이 서지 않으므로 이 값은 항상 있다. 타입만 optional 이다.
+        consent_at=학부모.consent_at or 학부모.created_at,
         children=[
-            {
-                "child_id": fx.CHILD_ID,
-                "nickname": fx.NICKNAME,
-                "age_band": 11,
-                "daily_cap": 5,
-                "played_today": True,
-                "last_active_at": fx.now(),
-            }
+            ChildSummary(
+                child_id=str(아이.id),
+                nickname=아이.nickname,
+                age_band=아이.age_band,
+                daily_cap=아이.daily_cap,
+                played_today=아이.id in 오늘한아이,
+                last_active_at=아이.last_active_at,
+            )
+            for 아이 in 아이들
         ],
     )
 
 
 @router.post("/children", status_code=status.HTTP_201_CREATED)
-async def create_child(payload: CreateChildRequest, _: Parent) -> CreateChildResponse:
+async def create_child(
+    payload: CreateChildRequest, 학부모: ParentRow, session: Session
+) -> CreateChildResponse:
+    """**닉네임과 연령대만 받는다.** 실명·이메일·학교를 묻는 필드가 없다 (PRD E-3).
+
+    `child_id` 는 UUID v4 난수다 — 순번이 아니라서 **다른 아이의 ID 를 추측할 수 없다.**
+    """
+    닉네임 = payload.nickname.strip()
+    _닉네임검사(닉네임)
+
+    코드, 해시, 만료 = await _안겹치는코드(session)
+    아이 = Child(
+        parent_id=학부모.id,
+        nickname=닉네임,
+        age_band=payload.age_band,
+        access_code_hash=해시,
+        access_code_expires_at=만료,
+    )
+    session.add(아이)
+    await session.commit()
+
+    # **평문 코드는 이 응답 한 번에만 실린다.** 저장하지 않으므로 놓치면 재발급이다.
     return CreateChildResponse(
-        child_id=fx.CHILD_ID,
-        nickname=payload.nickname,
-        access_code="482913",
-        access_code_expires_at=fx.tomorrow_midnight(),
+        child_id=str(아이.id),
+        nickname=아이.nickname,
+        access_code=코드,
+        access_code_expires_at=만료,
     )
 
 
 @router.post("/children/{child_id}/access-code")
-async def reissue_access_code(child_id: str, _: Parent) -> AccessCode:
-    return AccessCode(access_code="731046", access_code_expires_at=fx.tomorrow_midnight())
+async def reissue_access_code(child_id: str, 학부모: ParentRow, session: Session) -> AccessCode:
+    """재발급하면 **이전 기기의 자녀 토큰이 즉시 401 이 된다** (`공통규약.md` 「폐기」).
+
+    코드만 바꾸고 `token_version` 을 그대로 두면, 코드를 잃어버려 다시 받는
+    상황(= 남이 그 코드를 봤을 수 있는 상황)에서 **이미 들어와 있는 기기가 그대로
+    남는다.** 재발급의 목적이 그것을 끊는 것이다.
+    """
+    아이 = await _내자녀(child_id, 학부모, session)
+
+    코드, 해시, 만료 = await _안겹치는코드(session)
+    아이.access_code_hash = 해시
+    아이.access_code_expires_at = 만료
+    아이.access_code_used_at = None
+    아이.token_version += 1
+    await session.commit()
+
+    return AccessCode(access_code=코드, access_code_expires_at=만료)
 
 
 @router.patch("/children/{child_id}")
 async def update_child(
-    child_id: str, payload: UpdateChildRequest, _: Parent
+    child_id: str, payload: UpdateChildRequest, 학부모: ParentRow, session: Session
 ) -> UpdateChildResponse:
-    return UpdateChildResponse(daily_cap=payload.daily_cap)
+    아이 = await _내자녀(child_id, 학부모, session)
+    아이.daily_cap = payload.daily_cap
+    await session.commit()
+    return UpdateChildResponse(daily_cap=아이.daily_cap)
 
 
 @router.delete("/children/{child_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_child(child_id: str, _: Parent) -> None:
-    """자녀 데이터 즉시 파기 — attempts, books, artworks, events, Redis."""
-    return None
+async def delete_child(child_id: str, 학부모: ParentRow, session: Session) -> None:
+    """자녀 데이터 즉시 파기 — attempts, books, artworks, events 는 FK `CASCADE` 로 함께 간다.
+
+    **`token_version` 을 먼저 올린다.** 행이 지워지면 `require_child` 가 어차피 401 을
+    내지만, 지우는 순서가 바뀌거나 실패해도 토큰이 살아남지 않게 한 번 더 닫는다.
+
+    **Redis 잔여 파기는 E-4 다** — 되묻기 카운터가 남는다. 아이 원문은 없다.
+    """
+    아이 = await _내자녀(child_id, 학부모, session)
+    아이.token_version += 1
+    await session.flush()
+    await session.delete(아이)
+    await session.commit()
+
+
+async def _안겹치는코드(session: Session, 시도: int = 5) -> tuple[str, str, datetime]:
+    """살아 있는 다른 코드와 겹치지 않는 코드를 뽑는다.
+
+    **겹치면 조회가 아무 쪽이나 골라 다른 아이의 계정으로 들어가진다.** DB 에도
+    유니크를 걸어 뒀지만(`8ef582cb7716`), 그건 마지막 방어선이고 사용자에게는 500 으로
+    보인다. 여기서 먼저 피한다.
+
+    코드가 6자리(10^6)라 파일럿 규모에서는 첫 시도에 거의 붙는다. 다섯 번을 다
+    실패하면 **난수가 고장 났거나 코드 공간이 찼다는 뜻**이라, 조용히 같은 값을
+    내보내지 않고 오류로 세운다.
+    """
+    for _ in range(시도):
+        코드, 해시, 만료 = 접속코드만들기()
+        겹침 = await session.scalar(select(Child.id).where(Child.access_code_hash == 해시))
+        if 겹침 is None:
+            return 코드, 해시, 만료
+
+    raise AppError(ErrorCode.INTERNAL_ERROR)
+
+
+def _닉네임검사(닉네임: str) -> None:
+    """길이와 PII. **걸린 값 자체를 응답에 담지 않는다** (PRD 1.1b)."""
+    if not 닉네임길이가맞나(닉네임):
+        raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": [{"field": "nickname"}]})
+
+    걸린것 = 닉네임에PII가있나(닉네임)
+    if 걸린것 is not None:
+        # `Stage0.md` 1절이 `detail.reason = "PII_DETECTED"` 로 못박은 자리다.
+        # **종류(`kind`)까지는 준다** — 학부모가 무엇을 고쳐야 하는지 알아야 하고,
+        # 그것은 학부모가 방금 자기 손으로 입력한 값이다.
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            detail={"reason": "PII_DETECTED", "kind": 걸린것},
+        )
+
+
+async def _내자녀(child_id: str, 학부모: Parent, session: Session) -> Child:
+    """**남의 자녀에 손대지 못하게 하는 유일한 자리다.**
+
+    `child_id` 는 URL 에서 온 값이라 그대로 믿으면 다른 학부모의 자녀를 조회·수정할
+    수 있다. `parent_id` 를 조건에 함께 걸어 **없는 것과 남의 것을 같은 404 로** 만든다 —
+    403 으로 가르면 「그 ID 는 존재한다」가 새어 나간다.
+    """
+    try:
+        식별자 = uuid.UUID(child_id)
+    except ValueError as exc:
+        raise AppError(ErrorCode.NOT_FOUND) from exc
+
+    아이 = await session.scalar(
+        select(Child).where(Child.id == 식별자, Child.parent_id == 학부모.id)
+    )
+    if 아이 is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return 아이
+
+
+def _오늘시작() -> datetime:
+    """「오늘 플레이했나」의 기준.
+
+    **지금은 UTC 자정이다.** 자녀별 타임존으로 가르는 것은 미결 11-4(일일 상한 리셋)와
+    같은 판단이라 **거기서 한 번에 정한다** — 여기서 따로 정하면 두 곳이 갈라지고,
+    갈라지면 「오늘 했다는데 카드가 안 준다」가 된다.
+    """
+    return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
