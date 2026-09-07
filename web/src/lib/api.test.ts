@@ -84,4 +84,21 @@ describe("apiGet", () => {
     expect(e).toBeInstanceOf(NetworkError);
     expect(e).not.toBeInstanceOf(ApiError);
   });
+
+  it("헤더 값에 ASCII 만 넣는다 — 한글이 들어가면 요청이 나가지도 못한다", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => respond(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiGet("/cards/next");
+
+    const headers = (fetchMock.mock.calls[0][1]?.headers ?? {}) as Record<
+      string,
+      string
+    >;
+    for (const value of Object.values(headers)) {
+      // 브라우저는 ISO-8859-1 을 벗어난 헤더 값을 보면 fetch 단계에서 TypeError 를 던진다.
+      // 화면에는 「서버에 못 닿음」으로만 보여서 원인을 찾기 어렵다 — 실제로 한 번 당했다.
+      expect(value).toMatch(/^[\x00-\xFF]*$/);
+    }
+  });
 });

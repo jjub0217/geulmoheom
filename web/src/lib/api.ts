@@ -22,7 +22,9 @@ const BASE =
  */
 function mockAuthHeader(): Record<string, string> {
   if (process.env.NODE_ENV === "production") return {};
-  const token = process.env.NEXT_PUBLIC_MOCK_TOKEN ?? "mock-token-개발용";
+  // **ASCII 만 쓴다.** 헤더 값은 ISO-8859-1 이라 한글이 들어가면 fetch 가 요청도 보내지 못하고
+  // 그 자리에서 TypeError 를 던진다 — 화면은 「서버에 못 닿음」으로 떨어지고 원인은 안 보인다.
+  const token = process.env.NEXT_PUBLIC_MOCK_TOKEN ?? "mock-token-dev";
   return { Authorization: `Bearer ${token}` };
 }
 
