@@ -53,12 +53,28 @@ type ErrorEnvelope = {
 };
 
 export async function apiGet<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "GET" });
+}
+
+/**
+ * **본문에 아이 원문이 실린다.** 그래서 이 함수는 요청 body 를 어디에도 남기지 않는다 —
+ * 실패해도 응답만 읽고 버린다 (PRD 1.1b).
+ */
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
-      method: "GET",
+      ...init,
       credentials: "include",
-      headers: { Accept: "application/json", ...mockAuthHeader() },
+      headers: { Accept: "application/json", ...mockAuthHeader(), ...init.headers },
     });
   } catch {
     // 원인 객체를 싣지 않는다 — 요청 정보가 오류 리포터로 흘러가는 경로를 만들지 않는다.

@@ -15,10 +15,12 @@ export function AttemptInput({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -33,6 +35,8 @@ export function AttemptInput({
         id="attempt"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        // 보내는 중에는 잠근다. 값은 그대로 두어 **쓴 것이 눈앞에 남아 있게** 한다.
+        readOnly={disabled}
         rows={4}
         // 아이가 쓰는 칸이다. 맞춤법 빨간 줄로 「틀렸다」는 인상을 주지 않는다.
         spellCheck={false}

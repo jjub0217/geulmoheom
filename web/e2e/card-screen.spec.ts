@@ -66,7 +66,9 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
   await expect(입력창).toBeVisible();
   await 입력창.fill("등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
   await expect(입력창).toHaveValue("등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
-  await expect(page.getByRole("button")).toHaveCount(0);
+  // 버튼은 「보내기」 하나뿐이어야 한다. 선택지가 몰래 생기면 여기서 걸린다.
+  await expect(page.getByRole("button")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "보내기" })).toBeEnabled();
 
   await 가로스크롤없음(page);
 
@@ -107,6 +109,42 @@ test("쓸수록 나침반이 밝아진다 — 숫자도 진행바도 없이", as
   const 화면 = await page.locator("main").innerText();
   expect(화면).not.toMatch(/[0-9]|%/);
   await expect(page.locator("main progress, main [role='progressbar']")).toHaveCount(0);
+});
+
+test("쓴 것을 보내면 서버 대사가 뜬다 — 글자 수로 잠기지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.goto("/");
+
+  const 보내기 = page.getByRole("button", { name: "보내기" });
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+
+  // 아무것도 안 썼을 때만 막힌다. **30자와 무관하다.**
+  await expect(보내기).toBeDisabled();
+  await 입력창.fill("문을 연다");
+  await expect(보내기).toBeEnabled();
+
+  let 보낸것: { card_id?: string; text?: string } = {};
+  await page.route("**/api/v1/attempts", (route) => {
+    보낸것 = route.request().postDataJSON();
+    return route.fulfill({
+      status: 200,
+      json: {
+        outcome: "scaffold",
+        attempt_id: "a1",
+        guide: { expression: "compass_dim", line: "조금만 더 말해줄래?" },
+        scaffold_count: 1,
+        today: { cards_done: 1, cap: 5, locked: false },
+      },
+    });
+  });
+
+  await 보내기.click();
+
+  await expect(page.getByText("조금만 더 말해줄래?")).toBeVisible();
+  expect(보낸것.card_id).toBe(CARD.card_id);
+  expect(보낸것.text).toBe("문을 연다");
 });
 
 test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다", async ({ page }) => {

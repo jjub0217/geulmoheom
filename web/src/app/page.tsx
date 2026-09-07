@@ -6,9 +6,14 @@ import type { components } from "@/api/types.gen";
 import { AttemptInput } from "@/components/attempt-input";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
-import { ApiError, NetworkError, apiGet } from "@/lib/api";
+import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
 
 type Card = components["schemas"]["Card"];
+/** 세 형태가 한 응답에 온다 (`outcome`). 이번 조각은 **보내는 것까지**고, 3분기 연출은 다음 항목이다. */
+type AttemptOutcome =
+  | components["schemas"]["AttemptResult"]
+  | components["schemas"]["AttemptScaffold"]
+  | components["schemas"]["AttemptBlocked"];
 type Guide = components["schemas"]["Guide"];
 
 /**
@@ -23,6 +28,10 @@ type Guide = components["schemas"]["Guide"];
 type Screen =
   | { kind: "loading" }
   | { kind: "card"; card: Card }
+  /** 보내는 중. 같은 화면을 두고 버튼만 잠근다 — 쓴 것이 사라지면 아이는 날아간 줄 안다. */
+  | { kind: "sending"; card: Card }
+  /** 보냈다. **연출은 다음 항목**이고 지금은 서버 대사만 보여준다. */
+  | { kind: "sent"; line: string }
   /** 오늘 카드를 다 썼다 (409 `DAILY_CAP_REACHED`). 서버가 함께 준 대사를 그대로 보여준다. */
   | { kind: "done"; line: string }
   /** 서버가 형식을 갖춰 거절했다. `message` 가 아이가 읽을 문구다. */
@@ -75,6 +84,31 @@ export default function Home() {
     };
   }, [attempt]);
 
+  const send = async (card: Card) => {
+    setScreen({ kind: "sending", card });
+    try {
+      const outcome = await apiPost<AttemptOutcome>("/attempts", {
+        card_id: card.card_id,
+        text,
+        retry_of: null,
+        prompted: false,
+      });
+      // `outcome` 3분기(result·scaffold·blocked)를 화면으로 나누는 것은 **다음 항목**이다.
+      // 지금은 셋 다 서버 대사를 그대로 보여주는 데까지만 간다 — 빈 화면으로 두지 않기 위한 최소선이다.
+      setScreen({ kind: "sent", line: outcome.guide.line });
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setScreen({ kind: "refused", line: e.childMessage });
+        return;
+      }
+      if (e instanceof NetworkError) {
+        setScreen({ kind: "unreachable" });
+        return;
+      }
+      throw e;
+    }
+  };
+
   const retry = () => {
     setScreen({ kind: "loading" });
     setAttempt((n) => n + 1);
@@ -88,7 +122,7 @@ export default function Home() {
         <p className="text-center opacity-70">장면을 펼치는 중…</p>
       )}
 
-      {screen.kind === "card" && (
+      {(screen.kind === "card" || screen.kind === "sending") && (
         <div className="flex flex-col gap-8">
           <SceneCard card={screen.card} />
           {/* 표정은 서버가 정한 것을 그대로 넘긴다. 카드 응답은 `default` 다. */}
@@ -97,8 +131,24 @@ export default function Home() {
             label={screen.card.prompt_label}
             value={text}
             onChange={setText}
+            disabled={screen.kind === "sending"}
           />
+          <button
+            type="button"
+            // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
+            // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
+            disabled={text.trim() === "" || screen.kind === "sending"}
+            onClick={() => void send(screen.card)}
+            className="self-end rounded-full bg-scarf px-10 py-3 text-xl text-markings
+              disabled:opacity-40"
+          >
+            보내기
+          </button>
         </div>
+      )}
+
+      {screen.kind === "sent" && (
+        <p className="text-center text-2xl/relaxed">{screen.line}</p>
       )}
 
       {(screen.kind === "done" || screen.kind === "refused") && (

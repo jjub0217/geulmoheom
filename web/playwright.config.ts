@@ -15,6 +15,9 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   reporter: "list",
+  // 코드를 고친 뒤 첫 실행은 Next 가 그 화면을 처음 컴파일하는 시간과 겹친다 —
+  // 기본 5초로는 첫 한두 개가 애매하게 실패한다. 진짜 실패와 구분하기 위해 여유를 준다.
+  expect: { timeout: 10_000 },
   use: { baseURL: "http://localhost:3000" },
 
   projects: [
