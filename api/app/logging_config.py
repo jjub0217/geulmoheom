@@ -34,6 +34,15 @@ SAFE_EXTRA_KEYS = (
     "latency_ms",
     "eval_fallback",
     "prompt_chars",
+    # 입력 검사 (app/moderation.py) — `안전_어휘_기준.md` 6장
+    # `moderation_blocked` (direction, category, hash). **원문은 여기 자리가 없다** —
+    # 해시는 되돌릴 수 없고, 카테고리는 3장 이름의 ASCII 슬러그다.
+    # `moderation_unavailable` 은 「막았다」가 아니라 「판정을 못 받았다」이고,
+    # 둘을 안 나누면 프로바이더 장애가 「아이들이 나쁜 말을 썼다」로 보인다.
+    "direction",
+    "category",
+    "text_hash",
+    "moderation_unavailable",
     # 되묻기 (app/scaffold.py) — PRD 5장 `scaffold_triggered`.
     # 질문은 카드 명사 태그로 만든 것이라 원문이 아니지만, **로그에 담지 않는다.**
     # 세는 데 필요한 것은 몇 번째였는지와 어느 카드였는지뿐이다.

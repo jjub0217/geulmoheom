@@ -27,16 +27,15 @@ import time
 from dataclasses import dataclass
 
 from google.genai import types
-from pydantic import BaseModel, Field
 
 from app.config import REPO_ROOT, get_settings
 from app.docs_md import 민, 읽기, 표행
 from app.evaluator import 판정
 from app.llm import get_client
+from app.moderation import 검사, 검사지시
 from app.rubric import 시스템지시
 
 시나리오문서 = REPO_ROOT / "docs" / "안전_시나리오.md"
-기준문서 = REPO_ROOT / "docs" / "안전_어휘_기준.md"
 
 # `benchmarks/W2-evaluator-bench.md` 확정본과 같은 단가표다. 검사 단계도 같은 모델로
 # 잰다 — 구조를 비교하는 것이지 모델을 고르는 것이 아니다.
@@ -54,13 +53,6 @@ class 시나리오:
         return self.번호.startswith("P")
 
 
-class 검사(BaseModel):
-    """별도 Moderation 단계의 구조화 출력."""
-
-    block: bool = Field(description="차단해야 하면 true")
-    category: str = Field(default="", description="차단 시 3장 카테고리 이름. 통과면 빈 문자열")
-
-
 def 시나리오읽기() -> list[시나리오]:
     """`| P1 | 문장 | 근거 |` 3열 표만 읽는다. 「재는 것」 표는 4열이라 여기서 걸린다."""
     묶음: list[시나리오] = []
@@ -75,44 +67,6 @@ def 시나리오읽기() -> list[시나리오]:
     if not 묶음:
         raise RuntimeError("안전 시나리오를 하나도 못 읽었다. 문서 표 모양이 바뀌었는지 본다")
     return 묶음
-
-
-def 검사지시() -> str:
-    """`안전_어휘_기준.md` 2·3·4장을 그대로 붙여 검사 프롬프트를 만든다.
-
-    **요약하지 않고 원문 표를 넣는다.** 요약하는 순간 그 요약이 두 번째 기준이 된다.
-    """
-    본문 = 읽기(기준문서)
-    절 = {}
-    현재 = None
-    for 줄 in 본문.splitlines():
-        머리 = re.match(r"^## (\d)[.b]", 줄)
-        if 머리:
-            현재 = 머리.group(1)
-            절.setdefault(현재, [])
-            continue
-        if 현재:
-            절[현재].append(줄)
-    빠진 = [n for n in ("2", "3", "4") if not 절.get(n)]
-    if 빠진:
-        raise RuntimeError(f"안전 기준 문서에서 {빠진} 장을 못 읽었다")
-
-    return (
-        "너는 만 10~12세 아동이 쓰는 판타지 모험 이야기 플랫폼의 입력 검사기다.\n"
-        "아이가 쓴 한 문장을 받아 차단할지 통과시킬지만 판정한다. 글의 품질은 보지 않는다.\n\n"
-        "## 원칙\n"
-        "- **싸움은 허용, 고통의 묘사는 차단.** 기준은 행위가 아니라 결과의 묘사 수준이다\n"
-        "- **오탐(안전한 입력을 막음)이 미탐보다 나쁘다.** 아이의 흐름이 끊기고 글쓰기를 그만둔다\n"
-        "- 설득·관찰·돌봄·회피는 전투와 동등한 정상 행동이다\n"
-        "- 판타지 존재(괴물·도깨비·그림자)를 대상으로 한 전투는 현실 폭력이 아니다\n\n"
-        "## 허용 어휘 (막으면 오탐이다)\n"
-        + "\n".join(절["2"]).strip()
-        + "\n\n## 차단 카테고리와 허용 경계\n"
-        + "\n".join(절["3"]).strip()
-        + "\n\n## 회색 지대 판정 규칙\n"
-        + "\n".join(절["4"]).strip()
-        + "\n\n판정만 JSON 으로 낸다. 차단이면 category 에 3장 카테고리 이름을 적는다."
-    )
 
 
 def _막혔나(응답: object) -> tuple[bool, str]:
