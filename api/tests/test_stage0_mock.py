@@ -7,10 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import attempts
+from app.auth import CHILD_COOKIE, MAX_AGE_SECONDS, PARENT_COOKIE
 from app.evaluator import 평가결과
 from app.main import create_app
-
-AUTH = {"Authorization": "Bearer mock"}
 
 SIGNUP = (
     "POST",
@@ -26,9 +25,32 @@ EVENTS = (
 )
 
 
+def _client() -> TestClient:
+    """`base_url` 이 https 여야 한다 — `__Host-` 는 `Secure` 를 강제한다.
+
+    http 로 두면 서버가 구운 쿠키가 되돌아 나가지 않아 **실제로는 통과할 흐름이
+    테스트에서만 401** 이 된다.
+    """
+    return TestClient(create_app(), base_url="https://testserver", raise_server_exceptions=False)
+
+
+@pytest.fixture
+def 익명() -> TestClient:
+    """**아무 쿠키도 없다.** 인증 자체를 보는 테스트만 이걸 쓴다."""
+    return _client()
+
+
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app(), raise_server_exceptions=False)
+    """학부모·자녀 쿠키가 **둘 다** 앉아 있는 클라이언트.
+
+    가족 태블릿이 그렇다 — 학부모가 가입하고 같은 기기를 아이가 쓴다. 쿠키 이름을
+    나눈 이유가 이것이라, 기본값을 이 상태로 둬야 덮어쓰기 사고가 여기서 걸린다.
+    """
+    client = _client()
+    client.cookies.set(PARENT_COOKIE, "mock")
+    client.cookies.set(CHILD_COOKIE, "mock")
+    return client
 
 
 @pytest.fixture(autouse=True)
@@ -57,24 +79,100 @@ def 판정_고정(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize(("method", "path"), 인증_필요)
-def test_토큰이_없으면_401(client: TestClient, method: str, path: str):
-    response = client.request(method, path)
+def test_토큰이_없으면_401(익명: TestClient, method: str, path: str):
+    response = 익명.request(method, path)
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
 
-def test_401_메시지는_아이가_읽는_문장이다(client: TestClient):
-    body = client.get("/api/v1/cards/next").json()["error"]
+def test_401_메시지는_아이가_읽는_문장이다(익명: TestClient):
+    body = 익명.get("/api/v1/cards/next").json()["error"]
 
     assert body["message"] == "다시 한 번 들어와 주세요"
     assert "UNAUTHORIZED" not in body["message"]
 
 
-def test_bearer_가_아니면_401(client: TestClient):
-    response = client.get("/api/v1/cards/next", headers={"Authorization": "mock"})
+def test_authorization_헤더로는_들어가지_못한다(익명: TestClient):
+    """미결 11-2 는 HttpOnly 쿠키로 확정됐다. **`Bearer` 경로를 되살리지 않는다.**
+
+    남겨두면 프론트가 토큰을 JS 로 보관하는 길이 다시 열리고, 그 순간 XSS 한 번에
+    30일짜리 자녀 토큰이 나간다.
+    """
+    response = 익명.get("/api/v1/cards/next", headers={"Authorization": "Bearer mock"})
 
     assert response.status_code == 401
+
+
+def test_자녀_쿠키로_학부모_API_를_부르면_403(익명: TestClient):
+    """401 이 아니다 — 로그인이 풀린 게 아니라 역할이 다르다 (`FORBIDDEN_ROLE`)."""
+    익명.cookies.set(CHILD_COOKIE, "mock")
+
+    response = 익명.get("/api/v1/parents/me")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN_ROLE"
+
+
+def test_학부모_쿠키로_자녀_API_를_부르면_403(익명: TestClient):
+    익명.cookies.set(PARENT_COOKIE, "mock")
+
+    response = 익명.get("/api/v1/child/me")
+
+    assert response.status_code == 403
+
+
+# ── 토큰은 body 에 없다 ──────────────────────────────────
+
+토큰을_굽는_곳 = [
+    ("/api/v1/parents/signup", {"email": "a@b.c", "password": "x", "consent": True}, PARENT_COOKIE),
+    ("/api/v1/parents/login", {"email": "a@b.c", "password": "x"}, PARENT_COOKIE),
+    ("/api/v1/child/auth", {"access_code": "482913"}, CHILD_COOKIE),
+]
+
+
+@pytest.mark.parametrize(("path", "payload", "쿠키이름"), 토큰을_굽는_곳)
+def test_토큰이_응답_body_에_없다(익명: TestClient, path: str, payload: dict, 쿠키이름: str):
+    """`공통규약.md` 「인증 쿠키」 — JS 는 토큰을 읽을 수도 보관할 수도 없다."""
+    body = 익명.post(path, json=payload).json()
+
+    assert "token" not in str(body)
+
+
+@pytest.mark.parametrize(("path", "payload", "쿠키이름"), 토큰을_굽는_곳)
+def test_인증_쿠키_속성이_확정본_그대로다(
+    익명: TestClient, path: str, payload: dict, 쿠키이름: str
+):
+    """**속성이 하나라도 다르면 로그아웃의 삭제 쿠키가 발급분을 못 지운다.**
+
+    `Domain` 은 **붙어 있으면 안 된다** — `__Host-` 가 host-only 를 요구한다.
+    """
+    구운것 = 익명.post(path, json=payload).headers["set-cookie"]
+
+    assert 구운것.startswith(f"{쿠키이름}=")
+    assert "HttpOnly" in 구운것
+    assert "Secure" in 구운것
+    assert "Path=/" in 구운것
+    assert "SameSite=Lax" in 구운것
+    assert "Domain=" not in 구운것
+    assert f"Max-Age={MAX_AGE_SECONDS}" in 구운것
+
+
+@pytest.mark.parametrize(("path", "payload", "쿠키이름"), 토큰을_굽는_곳)
+def test_토큰을_실은_응답은_캐시되지_않는다(
+    익명: TestClient, path: str, payload: dict, 쿠키이름: str
+):
+    """앞단이 Cloudflare 다. 공용 캐시에 앉으면 다른 사람에게 나간다."""
+    response = 익명.post(path, json=payload)
+
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_구운_쿠키로_바로_다음_요청이_통과한다(익명: TestClient):
+    """계약 전체가 실제로 도는지 — body 에 토큰이 없어도 브라우저는 붙일 수 있다."""
+    익명.post("/api/v1/child/auth", json={"access_code": "482913"})
+
+    assert 익명.get("/api/v1/child/me").status_code == 200
 
 
 # ── outcome 3분기 ────────────────────────────────────────
@@ -83,7 +181,7 @@ def test_bearer_가_아니면_401(client: TestClient):
 def _attempt(client: TestClient, **headers) -> dict:
     return client.post(
         "/api/v1/attempts",
-        headers={**AUTH, **headers},
+        headers=headers,
         json={"card_id": "c01", "text": "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"},
     ).json()
 
@@ -197,9 +295,7 @@ def test_blocked_는_차단_카테고리를_말하지_않는다(client: TestClie
 
 
 def test_daily_cap_reached_409(client: TestClient):
-    response = client.get(
-        "/api/v1/cards/next", headers={**AUTH, "X-Mock-Error": "DAILY_CAP_REACHED"}
-    )
+    response = client.get("/api/v1/cards/next", headers={"X-Mock-Error": "DAILY_CAP_REACHED"})
 
     assert response.status_code == 409
     body = response.json()["error"]
@@ -211,7 +307,7 @@ def test_daily_cap_reached_409(client: TestClient):
 
 def test_validation_error_422(client: TestClient):
     """`text` 는 1~500자."""
-    response = client.post("/api/v1/attempts", headers=AUTH, json={"card_id": "c01", "text": ""})
+    response = client.post("/api/v1/attempts", json={"card_id": "c01", "text": ""})
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
@@ -221,7 +317,7 @@ def test_재시도는_상한에_걸리지_않는다(client: TestClient):
     """재시도(`retry_of`)는 일일 카운트를 쓰지 않는다."""
     response = client.post(
         "/api/v1/attempts",
-        headers={**AUTH, "X-Mock-Error": "DAILY_CAP_REACHED"},
+        headers={"X-Mock-Error": "DAILY_CAP_REACHED"},
         json={"card_id": "c01", "text": "다시 써본다", "retry_of": "a1"},
     )
 
@@ -266,8 +362,7 @@ def test_전_엔드포인트가_응답한다(client: TestClient):
     실패 = [
         (method, path, response.status_code)
         for method, path, body, expected in 호출
-        if (response := client.request(method, path, headers=AUTH, json=body)).status_code
-        != expected
+        if (response := client.request(method, path, json=body)).status_code != expected
     ]
 
     assert 실패 == []
@@ -275,15 +370,13 @@ def test_전_엔드포인트가_응답한다(client: TestClient):
 
 def test_책은_아이_원문을_그대로_돌려준다(client: TestClient):
     """마스킹은 로그 경로에만 건다. 책에는 아이 문장이 그대로 있어야 한다 (PRD 1.1b)."""
-    page = client.get("/api/v1/book", headers=AUTH).json()["pages"][0]
+    page = client.get("/api/v1/book").json()["pages"][0]
 
     assert page["text"] == "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
 
 
 def test_daily_cap_이_child_me_에_반영된다(client: TestClient):
-    body = client.get(
-        "/api/v1/child/me", headers={**AUTH, "X-Mock-Error": "DAILY_CAP_REACHED"}
-    ).json()
+    body = client.get("/api/v1/child/me", headers={"X-Mock-Error": "DAILY_CAP_REACHED"}).json()
 
     assert body["today"]["locked"] is True
     assert body["today"]["cards_done"] == body["today"]["cap"]

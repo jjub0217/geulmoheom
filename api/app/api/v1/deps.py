@@ -1,38 +1,42 @@
 """공통 의존성.
 
-**목 서버 단계다.** 토큰은 존재 여부만 본다 — 서명 검증은 E-3/E-4(가입·연동)에서 붙는다.
-토큰 저장 위치가 미결 11-2 라 지금 인증을 확정하면 다시 짠다 (W1 계획 「하지 않는 것」).
+**목 서버 단계다.** 토큰은 존재 여부만 본다 — 서명 검증과 `token_version` 대조는
+E-3/E-4(가입·연동)에서 붙는다. 다만 **어디서 읽는지는 확정본**이다: 미결 11-2 가
+HttpOnly 쿠키로 정해져(`공통규약.md` 「인증 쿠키」) `Authorization: Bearer` 를 안 쓴다.
 """
 
 from typing import Annotated, Literal
 
-from fastapi import Header
+from fastapi import Header, Request
 
+from app.auth import CHILD_COOKIE, PARENT_COOKIE
 from app.errors import AppError, ErrorCode
 
 MockOutcome = Literal["result", "scaffold", "blocked"]
 
 
-def _bearer(authorization: str | None) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise AppError(ErrorCode.UNAUTHORIZED)
+def _쿠키(request: Request, 이름: str, 다른역할: str) -> str:
+    """이 역할의 쿠키를 꺼낸다. 없으면 401, **다른 역할의 것만 있으면 403**이다.
 
-    token = authorization[len("bearer ") :].strip()
-    if not token:
-        raise AppError(ErrorCode.UNAUTHORIZED)
-    return token
+    두 이름을 나눈 이유가 여기서 값을 한다 — 가족 태블릿에는 학부모·자녀 쿠키가
+    동시에 앉아 있을 수 있다. 자녀 쿠키로 학부모 API 를 부른 것을 401 로 돌려주면
+    프론트가 「로그인이 풀렸다」로 읽고 다시 로그인시킨다. 그건 역할 문제지
+    인증 문제가 아니다 (`공통규약.md` 오류 표 `FORBIDDEN_ROLE`).
+    """
+    값 = request.cookies.get(이름)
+    if 값:
+        return 값
+    if request.cookies.get(다른역할):
+        raise AppError(ErrorCode.FORBIDDEN_ROLE)
+    raise AppError(ErrorCode.UNAUTHORIZED)
 
 
-async def require_parent(
-    authorization: Annotated[str | None, Header(description="Bearer <parent_jwt>")] = None,
-) -> str:
-    return _bearer(authorization)
+async def require_parent(request: Request) -> str:
+    return _쿠키(request, PARENT_COOKIE, CHILD_COOKIE)
 
 
-async def require_child(
-    authorization: Annotated[str | None, Header(description="Bearer <child_jwt>")] = None,
-) -> str:
-    return _bearer(authorization)
+async def require_child(request: Request) -> str:
+    return _쿠키(request, CHILD_COOKIE, PARENT_COOKIE)
 
 
 async def mock_outcome(

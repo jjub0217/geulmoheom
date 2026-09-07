@@ -57,8 +57,9 @@ class SignupRequest(BaseModel):
 
 
 class SignupResponse(BaseModel):
+    """**토큰이 없다.** `Set-Cookie: __Host-gm_parent` 로 내려간다 (`공통규약.md` 「인증 쿠키」)."""
+
     parent_id: str
-    token: str
     consent_at: datetime
 
 
@@ -67,8 +68,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    token: str
+class LoginResponse(BaseModel):
+    """토큰은 쿠키로만 간다. 프론트가 로그인 성공을 아는 것은 **이 200 응답 자체**다."""
+
+    parent_id: str
 
 
 class ChildSummary(BaseModel):
@@ -126,7 +129,8 @@ class ChildIdentity(BaseModel):
 
 
 class ChildAuthResponse(BaseModel):
-    token: str
+    """**토큰이 없다.** `Set-Cookie: __Host-gm_child` 로 내려간다."""
+
     child: ChildIdentity
 
 

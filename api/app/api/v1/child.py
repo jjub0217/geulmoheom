@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import mock_daily_cap_reached, require_child
+from app.auth import CHILD_COOKIE, set_auth_cookie
 from app.schemas.stage0 import (
     ChildAuthRequest,
     ChildAuthResponse,
@@ -22,10 +23,13 @@ Child = Annotated[str, Depends(require_child)]
 
 
 @router.post("/auth")
-async def auth(payload: ChildAuthRequest) -> ChildAuthResponse:
-    """접속 코드 교환. 코드는 소진 후 재사용 불가, 토큰 30일."""
+async def auth(payload: ChildAuthRequest, response: Response) -> ChildAuthResponse:
+    """접속 코드 교환. 코드는 소진 후 재사용 불가, 토큰 30일.
+
+    **토큰은 `Set-Cookie: __Host-gm_child` 로만 나간다.** body 에 없다.
+    """
+    set_auth_cookie(response, CHILD_COOKIE, fx.TOKEN)
     return ChildAuthResponse(
-        token=fx.TOKEN,
         child=ChildIdentity(child_id=fx.CHILD_ID, nickname=fx.NICKNAME, guide_name=None),
     )
 

@@ -2,19 +2,20 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import require_parent
+from app.auth import PARENT_COOKIE, set_auth_cookie
 from app.schemas.stage0 import (
     AccessCode,
     CreateChildRequest,
     CreateChildResponse,
     LoginRequest,
+    LoginResponse,
     ParentMe,
     SignupRequest,
     SignupResponse,
-    TokenResponse,
     UpdateChildRequest,
     UpdateChildResponse,
 )
@@ -25,14 +26,19 @@ Parent = Annotated[str, Depends(require_parent)]
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-async def signup(payload: SignupRequest) -> SignupResponse:
-    """`consent: true` 가 아니면 422 (스키마가 아니라 서버 규칙이라 실구현에서 검사한다)."""
-    return SignupResponse(parent_id=fx.PARENT_ID, token=fx.TOKEN, consent_at=fx.now())
+async def signup(payload: SignupRequest, response: Response) -> SignupResponse:
+    """`consent: true` 가 아니면 422 (스키마가 아니라 서버 규칙이라 실구현에서 검사한다).
+
+    **토큰은 `Set-Cookie: __Host-gm_parent` 로만 나간다.** body 에 없다.
+    """
+    set_auth_cookie(response, PARENT_COOKIE, fx.TOKEN)
+    return SignupResponse(parent_id=fx.PARENT_ID, consent_at=fx.now())
 
 
 @router.post("/login")
-async def login(payload: LoginRequest) -> TokenResponse:
-    return TokenResponse(token=fx.TOKEN)
+async def login(payload: LoginRequest, response: Response) -> LoginResponse:
+    set_auth_cookie(response, PARENT_COOKIE, fx.TOKEN)
+    return LoginResponse(parent_id=fx.PARENT_ID)
 
 
 @router.get("/me")

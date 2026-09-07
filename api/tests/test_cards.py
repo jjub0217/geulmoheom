@@ -8,18 +8,24 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth import CHILD_COOKIE
 from app.main import create_app
 from app.scaffold import 질문
 from app.scene_cards import 모험카드들, 카드들
-
-AUTH = {"Authorization": "Bearer mock"}
 
 카드목록 = 모험카드들()
 
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app(), raise_server_exceptions=False)
+    """자녀 쿠키를 붙인 클라이언트. 인증은 HttpOnly 쿠키다 (미결 11-2, `공통규약.md`).
+
+    `base_url` 이 https 여야 한다 — `__Host-` 는 `Secure` 를 강제하고, http 로 두면
+    쿠키가 실려 나가지 않아 **실제로는 통과할 흐름이 테스트에서만 401** 이 된다.
+    """
+    client = TestClient(create_app(), base_url="https://testserver", raise_server_exceptions=False)
+    client.cookies.set(CHILD_COOKIE, "mock")
+    return client
 
 
 def test_스무_장이다():
@@ -30,7 +36,7 @@ def test_스무_장이다():
 
 @pytest.mark.parametrize("카드", 카드목록, ids=lambda c: c.card_id)
 def test_스무_장이_전부_조회된다(client: TestClient, 카드):
-    body = client.get(f"/api/v1/cards/{카드.card_id}", headers=AUTH).json()
+    body = client.get(f"/api/v1/cards/{카드.card_id}").json()
 
     # **글자까지 같다.** 검수본이 바뀌면 코드를 고치지 말고 문서만 고치면 된다는 뜻이다
     assert body["situation"] == 카드.상황문
@@ -43,13 +49,13 @@ def test_next_는_문서의_카드를_준다(client: TestClient):
     문서 = {c.card_id: c.상황문 for c in 카드목록}
 
     for _ in range(20):
-        body = client.get("/api/v1/cards/next", headers=AUTH).json()
+        body = client.get("/api/v1/cards/next").json()
 
         assert body["situation"] == 문서[body["card_id"]]
 
 
 def test_next_는_튜토리얼을_주지_않는다(client: TestClient):
-    나온것 = {client.get("/api/v1/cards/next", headers=AUTH).json()["card_id"] for _ in range(40)}
+    나온것 = {client.get("/api/v1/cards/next").json()["card_id"] for _ in range(40)}
 
     assert not 나온것 & {"t1", "t2", "t3"}
     assert len(나온것) > 1  # 한 장에 고정돼 있지 않다
@@ -59,7 +65,7 @@ def test_되묻기와_화면이_같은_장면을_가리킨다(client: TestClient
     """이번 수리의 이유 그 자체다. 화면의 상황문과 되묻기의 대상이 어긋나면
     프론트가 **어긋난 화면을 기준으로** 되묻기 연출을 판단한다."""
     for 카드 in 카드목록:
-        상황문 = client.get(f"/api/v1/cards/{카드.card_id}", headers=AUTH).json()["situation"]
+        상황문 = client.get(f"/api/v1/cards/{카드.card_id}").json()["situation"]
 
         assert 카드.대상 in 질문(카드.card_id, 1)
         assert 카드.대상 in 상황문
@@ -67,7 +73,7 @@ def test_되묻기와_화면이_같은_장면을_가리킨다(client: TestClient
 
 @pytest.mark.parametrize("card_id", ["t1", "c99", "없는카드"])
 def test_모르는_카드와_튜토리얼은_404(client: TestClient, card_id: str):
-    response = client.get(f"/api/v1/cards/{card_id}", headers=AUTH)
+    response = client.get(f"/api/v1/cards/{card_id}")
 
     assert response.status_code == 404
     assert response.json()["error"]["message"] == "찾는 것이 여기 없어요"

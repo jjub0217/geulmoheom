@@ -15,7 +15,11 @@ ATTEMPT_ID = "8f1c2d3e-0000-4000-8000-000000000003"
 ARTWORK_ID = "8f1c2d3e-0000-4000-8000-000000000004"
 BOOK_ID = "8f1c2d3e-0000-4000-8000-000000000005"
 
-TOKEN = "mock-token-목서버-실제-서명-아님"
+# **ASCII 만 쓴다.** 이 값은 이제 `Set-Cookie` 에 실리는데 그 헤더는 latin-1 로
+# 인코딩된다 — 한글이 들어가면 응답을 만드는 순간 `UnicodeEncodeError` 로 500 이 나고,
+# 화면에는 「서버에 못 닿음」으로만 보인다. 2026-09-07 에 실제로 밟았다.
+# (실제 JWT 는 base64url 이라 늘 ASCII 다. 목만 조심하면 된다)
+TOKEN = "mock-token-not-a-real-signature"
 NICKNAME = "불꽃탐험가"
 GUIDE_NAME = "나침이"
 

@@ -50,6 +50,8 @@ export interface paths {
         /**
          * Signup
          * @description `consent: true` 가 아니면 422 (스키마가 아니라 서버 규칙이라 실구현에서 검사한다).
+         *
+         *     **토큰은 `Set-Cookie: __Host-gm_parent` 로만 나간다.** body 에 없다.
          */
         post: operations["signup_api_v1_parents_signup_post"];
         delete?: never;
@@ -162,6 +164,8 @@ export interface paths {
         /**
          * Auth
          * @description 접속 코드 교환. 코드는 소진 후 재사용 불가, 토큰 30일.
+         *
+         *     **토큰은 `Set-Cookie: __Host-gm_child` 로만 나간다.** body 에 없다.
          */
         post: operations["auth_api_v1_child_auth_post"];
         delete?: never;
@@ -596,10 +600,11 @@ export interface components {
             /** Access Code */
             access_code: string;
         };
-        /** ChildAuthResponse */
+        /**
+         * ChildAuthResponse
+         * @description **토큰이 없다.** `Set-Cookie: __Host-gm_child` 로 내려간다.
+         */
         ChildAuthResponse: {
-            /** Token */
-            token: string;
             child: components["schemas"]["ChildIdentity"];
         };
         /** ChildIdentity */
@@ -746,6 +751,14 @@ export interface components {
             password: string;
         };
         /**
+         * LoginResponse
+         * @description 토큰은 쿠키로만 간다. 프론트가 로그인 성공을 아는 것은 **이 200 응답 자체**다.
+         */
+        LoginResponse: {
+            /** Parent Id */
+            parent_id: string;
+        };
+        /**
          * ParentMe
          * @description 성장 데이터·입력 내용은 반환하지 않는다 (P1 대시보드 범위).
          */
@@ -780,12 +793,13 @@ export interface components {
              */
             labeling_consent: boolean;
         };
-        /** SignupResponse */
+        /**
+         * SignupResponse
+         * @description **토큰이 없다.** `Set-Cookie: __Host-gm_parent` 로 내려간다 (`공통규약.md` 「인증 쿠키」).
+         */
         SignupResponse: {
             /** Parent Id */
             parent_id: string;
-            /** Token */
-            token: string;
             /**
              * Consent At
              * Format: date-time
@@ -810,11 +824,6 @@ export interface components {
             cap: number;
             /** Locked */
             locked: boolean;
-        };
-        /** TokenResponse */
-        TokenResponse: {
-            /** Token */
-            token: string;
         };
         /** UpdateBookRequest */
         UpdateBookRequest: {
@@ -965,7 +974,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenResponse"];
+                    "application/json": components["schemas"]["LoginResponse"];
                 };
             };
             /** @description Validation Error */
@@ -982,10 +991,7 @@ export interface operations {
     me_api_v1_parents_me_get: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <parent_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1000,24 +1006,12 @@ export interface operations {
                     "application/json": components["schemas"]["ParentMe"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     create_child_api_v1_parents_children_post: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <parent_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1050,10 +1044,7 @@ export interface operations {
     reissue_access_code_api_v1_parents_children__child_id__access_code_post: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <parent_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 child_id: string;
             };
@@ -1084,10 +1075,7 @@ export interface operations {
     delete_child_api_v1_parents_children__child_id__delete: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <parent_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 child_id: string;
             };
@@ -1116,10 +1104,7 @@ export interface operations {
     update_child_api_v1_parents_children__child_id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <parent_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 child_id: string;
             };
@@ -1188,8 +1173,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
                 /** @description **목 서버 전용.** 일일 상한 소진 상태를 강제한다. 실서버에는 없다 */
                 "x-mock-error"?: "DAILY_CAP_REACHED" | null;
             };
@@ -1221,10 +1204,7 @@ export interface operations {
     rename_guide_api_v1_child_guide_patch: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1258,8 +1238,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
                 /** @description **목 서버 전용.** 일일 상한 소진 상태를 강제한다. 실서버에는 없다 */
                 "x-mock-error"?: "DAILY_CAP_REACHED" | null;
             };
@@ -1291,10 +1269,7 @@ export interface operations {
     get_card_api_v1_cards__card_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 card_id: string;
             };
@@ -1326,8 +1301,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
                 /** @description **목 서버 전용.** outcome 3분기를 강제한다. 실서버에는 없다 */
                 "x-mock-outcome"?: ("result" | "scaffold" | "blocked") | null;
                 /** @description **목 서버 전용.** 일일 상한 소진 상태를 강제한다. 실서버에는 없다 */
@@ -1365,10 +1338,7 @@ export interface operations {
     get_attempt_api_v1_attempts__attempt_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 attempt_id: string;
             };
@@ -1402,8 +1372,6 @@ export interface operations {
             header?: {
                 /** @description **목 서버 전용.** pending | ready | failed 를 강제한다 */
                 "x-mock-status"?: string | null;
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
             };
             path: {
                 artwork_id: string;
@@ -1435,10 +1403,7 @@ export interface operations {
     get_book_api_v1_book_get: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1453,24 +1418,12 @@ export interface operations {
                     "application/json": components["schemas"]["Book"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     update_book_api_v1_book_patch: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1503,10 +1456,7 @@ export interface operations {
     get_today_api_v1_book_today_get: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1521,24 +1471,12 @@ export interface operations {
                     "application/json": components["schemas"]["BookToday"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     collect_api_v1_events_post: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Bearer <child_jwt> */
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
