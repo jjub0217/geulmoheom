@@ -39,8 +39,12 @@ GitHub 계정이 여러 개면 `~/.ssh/config` 별칭을 쓴다. 자세한 건 `
 cp .env.example .env
 ```
 
-프론트가 쓰는 값은 `NEXT_PUBLIC_API_BASE_URL` 하나다(`http://localhost:8000/api/v1`).
+프론트가 쓰는 값은 `NEXT_PUBLIC_API_BASE_URL` 하나다(`https://api.geulmoheom.test:8000/api/v1`).
 나머지 키(LLM·이미지·R2)는 백엔드용이라 비워도 프론트 개발에 지장 없다.
+
+**`web/` 에 두 번째 `.env` 를 만들지 않는다.** Next 는 저장소 루트 `.env` 를 읽지 않지만,
+`make dev-web` 이 **그 한 줄만** 넘겨준다 — 파일을 하나 더 만들면 값이 갈린다.
+**코드에 기본값이 없다.** 값이 없으면 요청을 보내기 전에 그 자리에서 죽는다 (`src/lib/api.ts`).
 
 ### 4. 로컬 DB (필요할 때만)
 
@@ -73,7 +77,7 @@ cd web && claude
 ### 6. 실행
 
 ```bash
-make dev-web            # web 만 (localhost:3000)
+make dev-web            # web 만 (https://app.geulmoheom.test:3000)
 make dev                # web + api 동시 — 백엔드 세션에서만 띄운다
 pnpm lint && pnpm test  # 커밋 전. CI 기다리지 않는다
 ```

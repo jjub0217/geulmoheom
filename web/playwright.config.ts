@@ -32,7 +32,8 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 60_000,
     env: {
-      // **api 를 같은 오리진으로 부르게 만든다.** 기본값(`localhost:8000`)이면 cross-origin 이 되고,
+      // **api 를 같은 오리진으로 부르게 만든다.** 코드에 기본값이 없으므로 여기서 안 주면
+      // 요청 전에 죽고, 진짜 주소(`https://api.geulmoheom.test:8000`)를 주면 cross-origin 이 되어
       // 개발용 `Authorization` 헤더 때문에 브라우저가 **preflight(OPTIONS)** 를 먼저 보낸다.
       // Playwright 의 `page.route` 는 그 preflight 를 가로채지 못해서, 가로채기가 걸리기도 전에
       // 요청이 죽고 화면이 통째로 「못 닿음」으로 떨어진다 — 실제로 그렇게 8개가 한 번에 실패했다.
