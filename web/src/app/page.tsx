@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
+import { AttemptInput } from "@/components/attempt-input";
+import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
 import { ApiError, NetworkError, apiGet } from "@/lib/api";
 
@@ -37,6 +39,8 @@ function guideLineOf(detail: unknown): string | null {
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
+  // 아이가 쓰는 중인 문장. **여기서 나가는 곳은 화면뿐이다** — 로그·리포터로 흘리지 않는다 (PRD 1.1b).
+  const [text, setText] = useState("");
   // 다시 열기를 누르면 값이 바뀌어 아래 효과가 한 번 더 돈다.
   const [attempt, setAttempt] = useState(0);
 
@@ -77,14 +81,25 @@ export default function Home() {
   };
 
   return (
-    <main className="page-frame flex flex-1 flex-col justify-center py-10">
+    <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-10">
       {screen.kind === "loading" && (
         // 글자만 둔다. 여기에 가이드 캐릭터를 세우면 표정을 프론트가 고르는 것이 된다
         // (`docs/api/Stage0.md` 3절 — 표정 4종은 서버가 정한다).
         <p className="text-center opacity-70">장면을 펼치는 중…</p>
       )}
 
-      {screen.kind === "card" && <SceneCard card={screen.card} />}
+      {screen.kind === "card" && (
+        <div className="flex flex-col gap-8">
+          <SceneCard card={screen.card} />
+          {/* 표정은 서버가 정한 것을 그대로 넘긴다. 카드 응답은 `default` 다. */}
+          <GuideFigure guide={screen.card.guide} />
+          <AttemptInput
+            label={screen.card.prompt_label}
+            value={text}
+            onChange={setText}
+          />
+        </div>
+      )}
 
       {(screen.kind === "done" || screen.kind === "refused") && (
         // 서버가 준 문구를 그대로 보여준다. 프론트가 다듬거나 덧붙이지 않는다.

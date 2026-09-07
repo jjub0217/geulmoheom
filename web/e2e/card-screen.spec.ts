@@ -56,6 +56,18 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByText(CARD.situation)).toBeVisible();
+
+  // 가이드는 서버가 준 표정·대사 그대로다. 입력 중에는 `default` 이고, 프론트가 바꾸지 않는다.
+  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  await expect(page.locator('img[src="/guide/default.png"]')).toBeVisible();
+
+  // 자유 입력창 하나. **선택지 버튼이 없어야 한다** — 있으면 「직접 쓴다」가 무너진다.
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  await expect(입력창).toBeVisible();
+  await 입력창.fill("등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
+  await expect(입력창).toHaveValue("등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
+  await expect(page.getByRole("button")).toHaveCount(0);
+
   await 가로스크롤없음(page);
 
   // 아이 화면에 나오면 안 되는 말들 (`docs/용어사전.md` 8장).
