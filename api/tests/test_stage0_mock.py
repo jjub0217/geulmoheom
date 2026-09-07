@@ -14,7 +14,7 @@ from app.config import REPO_ROOT
 from app.docs_md import 민, 읽기
 from app.evaluator import 평가결과
 from app.main import create_app
-from app.moderation import 검사결과, 슬러그
+from app.moderation import SELF_HARM, 검사결과, 슬러그
 
 SIGNUP = (
     "POST",
@@ -340,7 +340,10 @@ def _차단(monkeypatch: pytest.MonkeyPatch, 카테고리: str) -> list[str]:
     불림: list[str] = []
 
     async def _검사(text: str) -> 검사결과:
-        return 검사결과(blocked=True, category=슬러그[카테고리])
+        슬 = 슬러그[카테고리]
+        # **`category` 와 `self_harm` 은 이제 갈린다** (대표 판정). 단독으로 온 경우를
+        # 흉내내므로 둘이 함께 선다 — 합쳐진 경우는 `test_moderation.py` 가 본다.
+        return 검사결과(blocked=True, category=슬, self_harm=슬 == SELF_HARM, label=슬)
 
     async def _판정(text: str, **_) -> 평가결과:
         불림.append(text)

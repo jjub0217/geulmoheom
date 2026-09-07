@@ -125,8 +125,16 @@ def main() -> None:
         print(f"  {'○' if 갈림 else '✗'} {통과쪽}↔{차단쪽:4} {이름}")
     print(f"  {갈린짝}/{len(짝)}")
 
-    자해 = [r for r in 결과["B5"] + 결과["B13"] if r.category == SELF_HARM]
-    print(f"\n자해 분기: B5·B13 {len(자해)}/{반복 * 2} 건이 `{SELF_HARM}` 으로 갈렸다")
+    # **둘을 따로 센다** (2026-09-07 대표 판정). 아이에게 가는 한 줄과 기록·보호자
+    # 리포트가 갈렸다 — 합쳐진 이름에서는 앞은 서고 뒤는 안 선다.
+    자해들 = 결과["B5"] + 결과["B13"]
+    문구 = sum(r.self_harm for r in 자해들)
+    기록 = sum(r.category == SELF_HARM for r in 자해들)
+    라벨 = {r.label for r in 자해들 if r.label}
+    print(f"\n자해 분기 (B5·B13, {반복 * 2}건)")
+    print(f"  아이에게 가는 한 줄  {문구}/{반복 * 2}")
+    print(f"  기록·보호자 리포트   {기록}/{반복 * 2}   (자해 단독일 때만 선다)")
+    print(f"  라벨                {sorted(라벨)}")
 
     합격 = not 오탐 and not 미탐 and 갈린짝 == len(짝)
     print("\n" + ("합격선 통과" if 합격 else "**합격선 미달 — PM 에게 넘긴다**"))

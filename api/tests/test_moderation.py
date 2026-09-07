@@ -15,7 +15,7 @@ import pytest
 
 from app import moderation
 from app.logging_config import SAFE_EXTRA_KEYS
-from app.moderation import 검사, 검사결과, 검사지시, 검사하기, 슬러그, 카테고리들
+from app.moderation import SELF_HARM, 검사, 검사결과, 검사지시, 검사하기, 슬러그, 카테고리들
 
 아이문장 = "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
 
@@ -367,13 +367,58 @@ def test_아는_이름이_하나도_없으면_unknown_이다(monkeypatch: pytest
     assert 결과.blocked is True
 
 
-def test_자해가_다른_이름에_묻히지_않는다(monkeypatch: pytest.MonkeyPatch):
-    """**뒤 처리가 갈리는 유일한 카테고리다.** 합쳐진 답에서 앞을 고르는 규칙이
-    자해를 지워버리면 아이가 받는 문구가 달라진다 — 여기서 잡는다.
+def test_합쳐지면_아이는_자해_문구를_받고_기록은_다른_카테고리다(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """**2026-09-07 대표 판정. 하나였던 스위치가 둘로 갈렸다.**
+
+    - **아이에게 가는 한 줄**은 자해가 이긴다. 아닌 아이가 받는 것은 가볍고
+      **맞는 아이가 못 받는 것은 무겁다**
+    - **기록·보호자 리포트**는 **자해가 단독일 때만**이다. 이쪽 오탐은 가볍지 않다 —
+      **보호자에게는 원문을 안 보여주므로 부모가 확인할 방법이 없다**
     """
     _고정(monkeypatch, 검사(block=True, category="자해·자살 및 죽음 직접 묘사"))
 
-    assert asyncio.run(검사하기(아이문장)).self_harm is True
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.self_harm is True  # 아이는 「어른한테 말해줘」를 받는다
+    assert 결과.category == "death"  # 기록은 자해로 세지 않는다
+
+
+def test_자해가_단독이면_기록도_자해다(monkeypatch: pytest.MonkeyPatch):
+    _고정(monkeypatch, 검사(block=True, category="자해·자살"))
+
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.self_harm is True
+    assert 결과.category == SELF_HARM
+
+
+def test_섞였다는_사실이_라벨에_남는다(monkeypatch: pytest.MonkeyPatch):
+    """없으면 **「자해가 섞였지만 단독이 아니라 안 센 건」이 전수 검토에서 안 보인다** —
+    우리가 카테고리 말고는 아무것도 안 남기기 때문이다 (PM 요청).
+    """
+    _고정(monkeypatch, 검사(block=True, category="죽음 직접 묘사 및 자해·자살"))
+
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.label == "death+self_harm"
+    assert SELF_HARM in 결과.label
+
+
+def test_라벨은_모델_문자열이_아니라_우리_표에서_만든다(monkeypatch: pytest.MonkeyPatch):
+    """**`category` 는 모델이 자유롭게 채우는 필드다.** 그대로 실으면 아이 원문이 섞여
+    들어오는 경로가 열린다 (PRD 1.1b). 알아본 이름만 이어 붙인다.
+    """
+    _고정(
+        monkeypatch,
+        검사(block=True, category=f"고문·잔혹 — 아이가 쓴 말: {아이문장}"),
+    )
+
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.label == "cruelty"
+    assert 아이문장 not in 결과.label
 
 
 def test_자해가_뒤에_와도_자해로_읽는다(monkeypatch: pytest.MonkeyPatch):

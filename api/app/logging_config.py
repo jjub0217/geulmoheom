@@ -41,6 +41,10 @@ SAFE_EXTRA_KEYS = (
     # 둘을 안 나누면 프로바이더 장애가 「아이들이 나쁜 말을 썼다」로 보인다.
     "direction",
     "category",
+    # 알아본 카테고리를 이어 붙인 것 (`gore+self_harm`). **모델 문자열이 아니라 우리
+    # 표에서 만든다** — 그 필드는 모델이 자유롭게 채워서 아이 원문이 섞여 들어올 수 있다.
+    # 없으면 「자해가 섞였지만 단독이 아니라 안 센 건」이 전수 검토에서 안 보인다.
+    "category_label",
     "text_hash",
     "moderation_unavailable",
     # 되묻기 (app/scaffold.py) — PRD 5장 `scaffold_triggered`.

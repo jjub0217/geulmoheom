@@ -77,18 +77,25 @@ class 검사(BaseModel):
 
 @dataclass(frozen=True)
 class 검사결과:
-    """`blocked` 는 **판정과 실패를 합친 값**이다 — 둘의 구분은 `unavailable` 에 있다."""
+    """`blocked` 는 **판정과 실패를 합친 값**이다 — 둘의 구분은 `unavailable` 에 있다.
+
+    **`category` 와 `self_harm` 이 갈린다** (2026-09-07 대표 판정). 모델이 카테고리를
+    합쳐서 돌려줄 때가 있는데, 그때 **아이에게 나가는 한 줄과 기록·보호자 리포트가
+    서로 다른 답을 필요로 한다** — 아래 `_분류()` 에 이유가 있다.
+    """
 
     blocked: bool
+    # **기록용.** 자해는 **단독일 때만** `self_harm` 이다. 보호자 주간 리포트가 이 값을 읽는다.
     category: str = ""
+    # **아이에게 나가는 한 줄을 가른다.** 이름 안에 자해가 있으면 합쳐져 와도 True.
+    self_harm: bool = False
+    # 알아본 카테고리를 이어 붙인 것 (`gore+self_harm`). **우리 표에서 만든다 —
+    # 모델 문자열을 그대로 싣지 않는다.** 이유는 `_분류()` 참고.
+    label: str = ""
     # 판정을 못 받은 사유(`timeout`·`error`·`rubric`). None 이면 모델이 판정했다.
     # `unconfigured` 만 예외다 — 그건 실패가 아니라 「검사 단계가 없다」이고 `blocked` 가 False 다.
     unavailable: str | None = None
     latency_ms: float = 0.0
-
-    @property
-    def self_harm(self) -> bool:
-        return self.category == SELF_HARM
 
 
 @lru_cache
@@ -277,10 +284,19 @@ def _판정(결과: 검사, text: str, 시작: float) -> 검사결과:
         return 검사결과(blocked=False, latency_ms=_지연(시작))
 
     이름 = 민(결과.category)
-    category = BUILTIN if 이름 == BUILTIN else _슬러그로(이름)
-    검사결과값 = 검사결과(blocked=True, category=category, latency_ms=_지연(시작))
-    _차단기록(category, text)
-    return 검사결과값
+    if 이름 == BUILTIN:
+        category, 자해, 라벨 = BUILTIN, False, BUILTIN
+    else:
+        category, 자해, 라벨 = _분류(이름)
+
+    _차단기록(category, 라벨, text)
+    return 검사결과(
+        blocked=True,
+        category=category,
+        self_harm=자해,
+        label=라벨,
+        latency_ms=_지연(시작),
+    )
 
 
 def _검사없음(시작: float) -> 검사결과:
@@ -310,36 +326,53 @@ def _검사없음(시작: float) -> 검사결과:
     return 검사결과(blocked=False, unavailable="unconfigured", latency_ms=_지연(시작))
 
 
-def _슬러그로(이름: str) -> str:
-    """3장 카테고리 이름을 로그 슬러그로 옮긴다.
+def _분류(이름: str) -> tuple[str, bool, str]:
+    """모델이 돌려준 카테고리 이름을 **(기록용 슬러그, 아이에게 자해 문구를 줄지, 라벨)** 로.
 
     **정확히 맞지 않아도 포기하지 않는다.** 모델이 **합쳐진 이름**을 돌려줄 때가 있다 —
     실측에서 같은 문장(B14)에 「죽음 직접 묘사」와 「유혈·신체 훼손 및 죽음 직접 묘사」가
-    번갈아 나왔다. 그대로 두면 **같은 차단이 실행마다 `unknown` 이 됐다 말았다 한다.**
+    번갈아 나왔다. 그대로 두면 **같은 차단이 실행마다 `unknown` 이 됐다 말았다 한다**
+    (`benchmarks/W3-safety-acceptance.md`).
 
-    `unknown` 은 전수 검토에서 거의 쓸모가 없다. **원문을 안 남기므로 나중에 열어볼 것이
-    없기 때문**이다 — 카테고리가 곧 그 차단에 대해 우리가 아는 전부다 (6장). 그래서
-    **이름이 안에 들어 있으면 그걸 쓴다.** 여럿이 들어 있으면 **앞에 오는 것**을 쓴다.
-    합쳐진 답에서는 앞이 주된 사유이고, 어느 쪽을 골라도 그 차단에 대해 참인 문장이다.
+    **프롬프트를 고쳐서 맞추지 않았다.** 건드리면 `adr/0009` 실측과 갈라진다 — 보내는
+    것은 그대로 두고 받는 쪽만 넓혔다.
 
-    **프롬프트를 고쳐서 맞추지 않았다.** 프롬프트를 건드리면 `adr/0009` 실측과 갈라진다 —
-    보내는 것은 그대로 두고 받는 쪽만 넓혔다.
+    ## 자해는 하나가 아니라 둘로 갈린다 (2026-09-07 대표 판정)
+
+    자해에는 **아이에게 나가는 한 줄**과 **기록 + 보호자 주간 리포트**가 함께 걸려 있는데,
+    합쳐진 이름에서 **둘이 서로 다른 답을 필요로 한다.**
+
+    - **아이에게 가는 한 줄** — 이름 안에 자해가 있으면 **순서와 무관하게** 자해 문구다.
+      아닌 아이가 그 한 줄을 받는 것은 가볍고, **맞는 아이가 못 받는 것은 무겁다**
+    - **기록·보호자 리포트** — **자해가 단독일 때만**이다. 이쪽 오탐은 가볍지 않다:
+      **보호자에게는 원문을 안 보여주기로 했으므로 부모가 확인할 방법이 없다**
+
+    ## 라벨은 우리 표에서 만든다 — 모델 문자열을 그대로 싣지 않는다
+
+    합쳐진 것을 「자해가 섞였지만 단독이 아니라 안 셌다」로 전수 검토에서 볼 수 있어야
+    하는데(PM 요청), **`category` 는 모델이 자유롭게 채우는 문자열이라 아이 원문이
+    섞여 들어올 수 있다.** 그러면 로그로 원문이 새는 경로가 열린다 (PRD 1.1b).
+
+    그래서 **알아본 이름만 이어 붙여 만든다** — `gore+self_harm`. 우리 표에서 나온
+    글자뿐이라 원문이 실릴 자리가 없고, 되살리려던 신호는 그대로 보인다.
     """
     if 이름 in 슬러그:
-        return 슬러그[이름]
+        슬 = 슬러그[이름]
+        return 슬, 슬 == SELF_HARM, 슬
 
-    들어있는것 = [(이름.index(후보), 후보) for 후보 in 슬러그 if 후보 in 이름]
+    들어있는것 = sorted((이름.index(후보), 후보) for 후보 in 슬러그 if 후보 in 이름)
     if not 들어있는것:
-        return UNKNOWN
+        return UNKNOWN, False, UNKNOWN
 
-    # **자해는 순서를 이긴다.** 합쳐진 답에서 자해가 뒤에 오면 앞을 고르는 규칙에 묻히는데,
-    # 이것만 뒤 처리가 갈린다 — 묻히면 아이가 「어른한테 말해줘」 대신 일반 차단 문구를 받는다.
-    # 값이 비대칭이다: 아닌 아이에게 그 한 줄이 가는 것은 가볍고, **맞는 아이에게 안 가는
-    # 것은 무겁다.** 실패 시 막는 쪽으로 닫은 것(대표 판정)과 같은 저울이다.
-    if any(후보 for _, 후보 in 들어있는것 if 슬러그[후보] == SELF_HARM):
-        return SELF_HARM
+    슬러그들 = [슬러그[후보] for _, 후보 in 들어있는것]
+    라벨 = "+".join(슬러그들)
+    자해섞임 = SELF_HARM in 슬러그들
 
-    return 슬러그[min(들어있는것)[1]]
+    # 기록은 자해 아닌 것이 하나라도 있으면 그쪽으로 간다 — 그게 「단독이 아니다」이다.
+    다른것 = [슬 for 슬 in 슬러그들 if 슬 != SELF_HARM]
+    기록 = 다른것[0] if 다른것 else SELF_HARM
+
+    return 기록, 자해섞임, 라벨
 
 
 def _못받음(사유: str, text: str, 시작: float) -> 검사결과:
@@ -356,10 +389,15 @@ def _못받음(사유: str, text: str, 시작: float) -> 검사결과:
     return 검사결과(blocked=True, unavailable=사유, latency_ms=_지연(시작))
 
 
-def _차단기록(category: str, text: str) -> None:
+def _차단기록(category: str, 라벨: str, text: str) -> None:
     """`안전_어휘_기준.md` 6장 — `moderation_blocked` (direction, category, hash).
 
     **원문 미저장.** 차단된 문장은 책 콘텐츠가 되지 않으므로 어디에도 남지 않는다.
+
+    `category_label` 은 **알아본 카테고리를 이어 붙인 것**이다 (`gore+self_harm`). 없으면
+    **「자해가 섞였지만 단독이 아니라 안 센 건」이 전수 검토에서 아예 안 보인다** — 우리가
+    카테고리 말고는 아무것도 안 남기기 때문이다. **모델 문자열이 아니라 우리 표에서
+    만든다** — 그 필드는 모델이 자유롭게 채워서 아이 원문이 섞여 들어올 수 있다.
     """
     logger.info(
         "moderation_blocked",
@@ -367,6 +405,7 @@ def _차단기록(category: str, text: str) -> None:
             "request_id": current_request_id(),
             "direction": "in",
             "category": category,
+            "category_label": 라벨,
             "text_hash": _해시(text),
         },
     )
