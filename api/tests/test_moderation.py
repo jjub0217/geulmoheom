@@ -252,3 +252,86 @@ def test_검사가_없는_것과_판정을_못_받은_것은_다르다(monkeypat
 
     assert 없음.blocked is False
     assert 못받음.blocked is True
+
+
+# ── 내장 필터가 막은 것도 차단이다 ──────────────────────
+
+
+class _되먹임:
+    def __init__(self, block_reason: str | None) -> None:
+        self.block_reason = block_reason
+
+
+class _후보:
+    def __init__(self, finish_reason: str) -> None:
+        self.finish_reason = finish_reason
+
+
+class _응답:
+    def __init__(self, block_reason: str | None = None, finish: str = "STOP") -> None:
+        self.prompt_feedback = _되먹임(block_reason)
+        self.candidates = [_후보(finish)]
+
+
+def test_정상_응답은_내장차단이_아니다():
+    assert moderation.내장차단(_응답()) is None
+
+
+def test_prompt_feedback_이_막으면_잡는다():
+    assert moderation.내장차단(_응답(block_reason="SAFETY")) == "prompt:SAFETY"
+
+
+def test_finish_reason_이_STOP_이_아니면_잡는다():
+    assert moderation.내장차단(_응답(finish="SAFETY")) == "finish:SAFETY"
+
+
+def test_후보가_없으면_잡는다():
+    응답 = _응답()
+    응답.candidates = []
+
+    assert moderation.내장차단(응답) == "no_candidate"
+
+
+def test_내장_사유에_원문이_실리지_않는다():
+    """반환하는 것은 프로바이더 열거값뿐이다. 이 값이 로그로 갈 수 있어 확인한다."""
+    사유 = moderation.내장차단(_응답(block_reason="SAFETY"))
+
+    assert 사유 is not None
+    assert 아이문장 not in 사유
+
+
+def test_검사_호출이_내장_필터에_막히면_차단이다(monkeypatch: pytest.MonkeyPatch):
+    """판정을 못 받았으니 통과시킬 수 없고, 내장 필터가 막을 정도면 통과시킬 문장도 아니다."""
+    _고정(monkeypatch, 검사(block=True, category=moderation.BUILTIN))
+
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.blocked is True
+    assert 결과.category == moderation.BUILTIN
+
+
+def test_내장_차단은_우리_카테고리와_섞이지_않는다():
+    """출처가 다르다. 섞어 세면 **우리 기준의 차단율이 프로바이더 사정에 따라 흔들린다.**"""
+    assert moderation.BUILTIN not in 슬러그.values()
+
+
+def test_pilot_에서_검사가_꺼져_있으면_막는다(monkeypatch: pytest.MonkeyPatch):
+    """**여기 오면 사고다.** `PILOT_REQUIRED` 가 기동을 막아야 하는데 뚫린 것이다.
+
+    설정 목록이 바뀌어도 아이가 안 뚫리게, 그 결합에 기대지 않고 런타임에서 한 번 더 닫는다.
+    """
+    from app.config import Settings
+
+    monkeypatch.setattr(moderation, "_설정된모델", lambda: "")
+    monkeypatch.setattr(moderation, "get_settings", lambda: Settings(app_env="pilot"))
+
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.blocked is True
+
+
+def test_pilot_필수_키에_평가_모델이_들어_있다():
+    """런타임 방어의 **앞단**이다. 이게 빠지면 pilot 이 검사 없이 뜬다."""
+    from app.config import PILOT_REQUIRED
+
+    assert "evaluator_model" in PILOT_REQUIRED

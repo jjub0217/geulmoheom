@@ -153,7 +153,10 @@ async def create_attempt(
     # (결정 3). 버린 판정이 남으면 **화면에 보여주지도 않은 평가가 등급 분포를 오염시킨다.**
     검사, 평가 = await asyncio.gather(검사하기(payload.text), evaluate(payload.text, 기록=False))
 
-    if 검사.blocked:
+    # **내장 필터가 막은 것도 차단이다.** 전에는 `evaluate()` 가 그걸 삼켜 G1 폴백으로
+    # 넘겼고, 그러면 차단이 「그냥 평범한 문장」으로 기록됐다 (2026-09-07 PM 요청).
+    # 우리 검사와 내장 필터는 축이 다르지만(`adr/0009`), **막았다는 사실은 양쪽 다 신호다.**
+    if 검사.blocked or 평가.차단됨:
         # 평가 결과를 버린다. 차단 건의 평가 비용은 수용한다 (`adr/0009` 대가).
         return _blocked(자해=검사.self_harm)
 

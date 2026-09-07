@@ -421,6 +421,34 @@ def test_자해_문구는_확정본_그대로다(client: TestClient, monkeypatch
     assert body["guide"]["line"] == "지금 마음이 많이 힘들면, 옆에 있는 어른한테 꼭 말해줘."
 
 
+def test_내장_필터가_막은_것도_blocked_다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """**우리 검사는 통과시켰는데 내장 필터가 막은 경우다.**
+
+    전에는 `evaluate()` 가 그걸 삼켜 G1 폴백으로 넘겨서 **차단이 「그냥 평범한 문장」으로
+    기록됐다.** 등급 분포에도 섞이고 F-1 로깅에서도 안 보인다.
+    """
+
+    async def _판정(text: str, **_) -> 평가결과:
+        return 평가결과(grade="G1", fallback="builtin_block")
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+
+    body = _attempt(client)
+
+    assert body["outcome"] == "blocked"
+
+
+def test_평범한_폴백은_차단이_아니다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """타임아웃 폴백까지 차단으로 읽으면 **프로바이더가 느린 날 아이가 전부 막힌다.**"""
+
+    async def _판정(text: str, **_) -> 평가결과:
+        return 평가결과(grade="G1", fallback="timeout")
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+
+    assert _attempt(client)["outcome"] == "result"
+
+
 def test_자해_문구가_문서와_어긋나면_깨진다():
     """**SSOT 는 `docs/문구.md` 1.2 다.** 코드에 문장이 박혀 있는 것은 로그·응답 경로가
     문서 읽기에 매달리지 않게 하려는 것뿐이고, **원본은 문서다.**

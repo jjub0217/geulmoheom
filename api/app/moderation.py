@@ -59,6 +59,10 @@ RETRIES: Final = 1
 # 모델이 목록에 없는 이름을 지어냈을 때. **통과로 뒤집지 않는다.**
 UNKNOWN: Final = "unknown"
 
+# 프로바이더 내장 필터가 막은 것. 우리 3장 카테고리가 아니라 **출처가 다르다는 표시**다 —
+# 섞어 세면 우리 기준의 차단율이 프로바이더 사정에 따라 흔들린다.
+BUILTIN: Final = "builtin"
+
 # 자해·자살만 뒤 처리가 다르다 — 아이에게 한 줄, 기록, 보호자 주간 리포트
 # (`MVP_PRD.md` E-1 「자해·자살 신호 처리」, 2026-09-07 대표 판정).
 SELF_HARM: Final = "self_harm"
@@ -155,6 +159,31 @@ def 검사지시() -> str:
     )
 
 
+def 내장차단(응답: object) -> str | None:
+    """프로바이더 **내장** 안전 필터가 막았는지. 막았으면 사유, 아니면 `None`.
+
+    내장 필터는 우리 기준과 축이 다르지만(`adr/0009`), **막았다는 사실 자체는 신호다.**
+    이걸 못 알아보면 `evaluate()` 가 예외로 삼켜 **G1 폴백**으로 흘려보내고, 그러면
+    **차단이 「그냥 평범한 문장」으로 기록된다** — F-1 로깅이 서기 전에 고쳐야 하는 자리다.
+
+    반환하는 사유는 프로바이더 열거값(`block_reason`·`finish_reason`)뿐이라
+    **아이 원문이 실리지 않는다.**
+    """
+    되먹임 = getattr(응답, "prompt_feedback", None)
+    if 되먹임 is not None and getattr(되먹임, "block_reason", None):
+        return f"prompt:{되먹임.block_reason}"
+
+    후보들 = getattr(응답, "candidates", None) or []
+    if not 후보들:
+        return "no_candidate"
+
+    끝 = getattr(후보들[0], "finish_reason", None)
+    이름 = getattr(끝, "name", str(끝))
+    if 이름 not in ("STOP", "None", "MAX_TOKENS"):
+        return f"finish:{이름}"
+    return None
+
+
 def _설정된모델() -> str:
     return get_settings().evaluator_model.strip()
 
@@ -179,6 +208,10 @@ async def _한번(모델: str, 문장: str) -> 검사:
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
+    # 검사 호출 자체가 내장 필터에 막혔다. **차단으로 센다** — 판정을 못 받았으니
+    # 통과시킬 수 없고, 내장 필터가 막을 정도면 통과시킬 문장도 아니다.
+    if 내장차단(응답):
+        return 검사(block=True, category=BUILTIN)
     return 검사.model_validate_json(응답.text or "")
 
 
@@ -243,7 +276,8 @@ def _판정(결과: 검사, text: str, 시작: float) -> 검사결과:
     if not 결과.block:
         return 검사결과(blocked=False, latency_ms=_지연(시작))
 
-    category = 슬러그.get(민(결과.category), UNKNOWN)
+    이름 = 민(결과.category)
+    category = BUILTIN if 이름 == BUILTIN else 슬러그.get(이름, UNKNOWN)
     검사결과값 = 검사결과(blocked=True, category=category, latency_ms=_지연(시작))
     _차단기록(category, text)
     return 검사결과값
@@ -259,6 +293,16 @@ def _검사없음(시작: float) -> 검사결과:
     **경고로 남긴다.** 조용히 통과시키면 「검사가 도는 줄 알았는데 안 돌던」 환경이
     생기고, 그건 실측 숫자를 통째로 거짓말로 만든다.
     """
+    if get_settings().app_env == "pilot":
+        # **여기 오면 사고다.** `PILOT_REQUIRED` 가 `evaluator_model` 을 요구해서 기동
+        # 자체가 막혀야 하는데 뚫린 것이다. 설정 목록이 바뀌어도 아이가 안 뚫리게,
+        # 그 결합에 기대지 않고 **런타임에서 한 번 더 닫는다.**
+        logger.error(
+            "moderation_disabled",
+            extra={"request_id": current_request_id(), "moderation_unavailable": "unconfigured"},
+        )
+        return 검사결과(blocked=True, unavailable="unconfigured", latency_ms=_지연(시작))
+
     logger.warning(
         "moderation_disabled",  # 모델 미설정. dev 전용 경로다
         extra={"request_id": current_request_id(), "moderation_unavailable": "unconfigured"},
@@ -300,4 +344,14 @@ def _지연(시작: float) -> float:
     return (time.perf_counter() - 시작) * 1000
 
 
-__all__ = ["SELF_HARM", "검사", "검사결과", "검사지시", "검사하기", "슬러그", "카테고리들"]
+__all__ = [
+    "BUILTIN",
+    "SELF_HARM",
+    "검사",
+    "검사결과",
+    "검사지시",
+    "검사하기",
+    "내장차단",
+    "슬러그",
+    "카테고리들",
+]

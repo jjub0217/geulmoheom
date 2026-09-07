@@ -20,7 +20,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Final, cast
 
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.llm import get_client
 from app.middleware import current_request_id
+from app.moderation import 내장차단
 from app.rubric import 등급, 시스템지시
 from app.schemas.stage0 import Highlight, HighlightKind, Tier
 
@@ -36,6 +37,11 @@ logger = logging.getLogger(__name__)
 TIMEOUT_SECONDS = 3.0
 RETRIES = 1  # 첫 호출 실패 후 한 번만 더. 최악 3+3초는 `Stage0.md` 9절 5번 그대로다
 FALLBACK_GRADE: 등급 = "G1"
+
+# 프로바이더 내장 필터가 이 호출을 막았다는 표시. **폴백이 아니라 차단이다.**
+# 예전에는 이것이 파싱 실패로 흘러 G1 폴백이 됐고, 그러면 **차단이 「그냥 평범한 문장」
+# 으로 기록된다** — 등급 분포에도 섞이고 F-1 로깅에서도 안 보인다 (2026-09-07 PM 요청).
+BUILTIN_BLOCK: Final = "builtin_block"
 
 # `Stage0.md` 9절 7번. 응답에는 티어만 나간다 — **등급 문자는 로그 전용이다** (용어사전 3장).
 TIER_BY_GRADE: dict[str, Tier] = {
@@ -72,9 +78,18 @@ class 평가결과:
     def tier(self) -> Tier:
         return TIER_BY_GRADE[self.grade]
 
+    @property
+    def 차단됨(self) -> bool:
+        """내장 필터가 이 호출을 막았다. **등급이 아니라 차단으로 다뤄야 한다.**"""
+        return self.fallback == BUILTIN_BLOCK
+
 
 def _설정된모델() -> str:
     return get_settings().evaluator_model.strip()
+
+
+class 내장차단됨(Exception):
+    """내장 필터가 막았다. **재시도하지 않는다** — 같은 문장이라 결과가 같고 값만 든다."""
 
 
 async def _한번(모델: str, 문장: str) -> 판정:
@@ -90,6 +105,9 @@ async def _한번(모델: str, 문장: str) -> 판정:
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
+    if 사유 := 내장차단(응답):
+        # **파싱 실패로 흘려보내지 않는다.** 흘려보내면 G1 폴백이 되어 차단이 사라진다.
+        raise 내장차단됨(사유)
     return 판정.model_validate_json(응답.text or "")
 
 
@@ -120,6 +138,10 @@ async def evaluate(text: str, *, 기록: bool = True) -> 평가결과:
     for _ in range(RETRIES + 1):
         try:
             결과 = await asyncio.wait_for(_한번(모델, text), timeout=TIMEOUT_SECONDS)
+        except 내장차단됨:
+            # 재시도하지 않고 바로 끝낸다. **사유 문자열은 로그에 싣지 않는다** —
+            # 프로바이더 열거값이라 원문은 아니지만, 아이에게도 우리 집계에도 쓸 데가 없다.
+            return _폴백(BUILTIN_BLOCK, 시작, 지시길이=지시길이, 기록=기록)
         except TimeoutError:
             사유 = "timeout"
         except Exception as exc:
