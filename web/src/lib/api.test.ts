@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, NetworkError, apiGet, apiPost } from "./api";
+import { ApiError, NetworkError, apiGet, apiPost, 역할이다르다, 인증이풀렸다 } from "./api";
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -150,5 +150,33 @@ describe("apiGet", () => {
       // 화면에는 「서버에 못 닿음」으로만 보여서 원인을 찾기 어렵다 — 실제로 한 번 당했다.
       expect(value).toMatch(/^[\x00-\xFF]*$/);
     }
+  });
+});
+
+/**
+ * **401 과 403 은 다른 일이다** (`공통규약.md` `e50d8a8`).
+ *
+ * 쿠키 이름이 학부모·자녀로 나뉘어 **「인증은 됐는데 역할이 다른」 상태가 실재한다.**
+ * 403 을 401 로 뭉뚱그리면 **로그인이 풀린 줄 알고 다시 로그인시킨다** — 역할 문제지 인증 문제가 아니다.
+ */
+describe("401 과 403 을 가른다", () => {
+  const 오류 = (status: number, code: string) =>
+    new ApiError(code, "서버가 준 문구", status);
+
+  it("401 은 인증이 풀린 것이다", () => {
+    expect(인증이풀렸다(오류(401, "UNAUTHORIZED"))).toBe(true);
+    expect(역할이다르다(오류(401, "UNAUTHORIZED"))).toBe(false);
+  });
+
+  it("403 은 역할이 다른 것이다 — 다시 로그인시키지 않는다", () => {
+    expect(역할이다르다(오류(403, "FORBIDDEN_ROLE"))).toBe(true);
+    expect(인증이풀렸다(오류(403, "FORBIDDEN_ROLE"))).toBe(false);
+  });
+
+  it("다른 실패는 둘 다 아니다", () => {
+    expect(인증이풀렸다(오류(409, "DAILY_CAP_REACHED"))).toBe(false);
+    expect(역할이다르다(오류(409, "DAILY_CAP_REACHED"))).toBe(false);
+    expect(인증이풀렸다(new NetworkError("/cards/next"))).toBe(false);
+    expect(역할이다르다(new NetworkError("/cards/next"))).toBe(false);
   });
 });

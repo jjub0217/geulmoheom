@@ -76,6 +76,26 @@ function 못닿은이유(): string[] {
   return 못닿음원인(baseUrl(), location.origin);
 }
 
+/**
+ * **인증이 풀렸다 (401).** 쿠키가 없거나 만료됐다 — 다시 들어와야 한다.
+ *
+ * 아래 `역할이다르다` 와 **반드시 갈라서 다룬다.**
+ */
+export function 인증이풀렸다(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 401;
+}
+
+/**
+ * **인증은 됐는데 역할이 다르다 (403 `FORBIDDEN_ROLE`).**
+ *
+ * 쿠키 이름이 `__Host-gm_parent` · `__Host-gm_child` 로 나뉘어 있어, **자녀 쿠키로 학부모 API 를
+ * 부르면 여기로 온다**(반대도 같다). **401 로 뭉뚱그리면 로그인이 풀린 줄 알고 다시 로그인시킨다** —
+ * 역할 문제지 인증 문제가 아니다 (`docs/api/공통규약.md`).
+ */
+export function 역할이다르다(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 403;
+}
+
 type ErrorEnvelope = {
   error?: { code?: string; message?: string; detail?: Record<string, unknown> };
 };
