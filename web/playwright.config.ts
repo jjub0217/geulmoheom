@@ -34,7 +34,8 @@ export default defineConfig({
     env: {
       // **api 를 같은 오리진으로 부르게 만든다.** 코드에 기본값이 없으므로 여기서 안 주면
       // 요청 전에 죽고, 진짜 주소(`https://api.geulmoheom.test:8000`)를 주면 cross-origin 이 되어
-      // 개발용 `Authorization` 헤더 때문에 브라우저가 **preflight(OPTIONS)** 를 먼저 보낸다.
+      // `POST /attempts` 의 `Content-Type: application/json` 때문에 브라우저가
+      // **preflight(OPTIONS)** 를 먼저 보낸다.
       // Playwright 의 `page.route` 는 그 preflight 를 가로채지 못해서, 가로채기가 걸리기도 전에
       // 요청이 죽고 화면이 통째로 「못 닿음」으로 떨어진다 — 실제로 그렇게 8개가 한 번에 실패했다.
       // 여기서는 서버를 안 타므로 오리진이 어디든 상관없다. 진짜 api 를 태우는 것은 W3 다.

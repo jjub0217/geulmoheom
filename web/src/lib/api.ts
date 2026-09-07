@@ -6,6 +6,8 @@ import { 못닿음원인 } from "@/lib/unreachable";
  * 계약은 `docs/api/공통규약.md`. 여기서 지키는 것 셋 —
  * ① **쿠키 인증**이므로 모든 요청에 `credentials: "include"` 를 붙인다.
  *    붙이지 않으면 cross-origin 요청에 쿠키가 아예 안 실린다 (web ↔ api 는 same-site 지만 오리진이 다르다).
+ *    **이제 이것이 유일한 인증 수단이다** — 서버는 `Authorization` 을 아예 안 본다
+ *    (`types.gen.ts` 의 인증 엔드포인트가 전부 `header?: never`).
  * ② 오류는 `{ error: { code, message, detail } }` 한 형식이다. `message` 는 **아이가 읽는 문구**라
  *    화면이 그대로 쓴다 — 프론트가 문구를 지어내지 않는다.
  * ③ **요청·응답 body 를 로그에 남기지 않는다.** 입력 body 에 아이 원문이 실린다 (PRD 1.1b).
@@ -34,21 +36,6 @@ function baseUrl(): string {
     );
   }
   return base;
-}
-
-/**
- * **목 서버 전용, 곧 사라진다.**
- *
- * 계약은 이미 HttpOnly 쿠키로 확정됐지만(미결 11-2), 목 서버는 아직 `Authorization: Bearer` 를 본다
- * (`api/app/api/v1/deps.py` — 존재 여부만 확인한다). W3 E-3/E-4 에서 서버가 쿠키로 바뀌면
- * **이 함수만 지운다.** `credentials: "include"` 는 그때도 그대로 남는다.
- */
-function mockAuthHeader(): Record<string, string> {
-  if (process.env.NODE_ENV === "production") return {};
-  // **ASCII 만 쓴다.** 헤더 값은 ISO-8859-1 이라 한글이 들어가면 fetch 가 요청도 보내지 못하고
-  // 그 자리에서 TypeError 를 던진다 — 화면은 「서버에 못 닿음」으로 떨어지고 원인은 안 보인다.
-  const token = process.env.NEXT_PUBLIC_MOCK_TOKEN ?? "mock-token-dev";
-  return { Authorization: `Bearer ${token}` };
 }
 
 /** 서버가 형식을 갖춰 돌려준 실패. `message` 는 아이에게 그대로 보여도 되는 문구다. */
@@ -119,7 +106,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     res = await fetch(url, {
       ...init,
       credentials: "include",
-      headers: { Accept: "application/json", ...mockAuthHeader(), ...init.headers },
+      headers: { Accept: "application/json", ...init.headers },
     });
   } catch {
     // 원인 객체를 싣지 않는다 — 요청 정보가 오류 리포터로 흘러가는 경로를 만들지 않는다.
