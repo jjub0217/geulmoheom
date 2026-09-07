@@ -335,3 +335,53 @@ def test_pilot_필수_키에_평가_모델이_들어_있다():
     from app.config import PILOT_REQUIRED
 
     assert "evaluator_model" in PILOT_REQUIRED
+
+
+# ── 카테고리 이름이 정확히 안 와도 센다 ─────────────────
+
+
+def test_합쳐진_이름도_카테고리로_읽는다(monkeypatch: pytest.MonkeyPatch):
+    """실측에서 같은 문장(B14)에 「죽음 직접 묘사」와 「유혈·신체 훼손 및 죽음 직접 묘사」가
+    번갈아 나왔다. 그대로 두면 **같은 차단이 실행마다 `unknown` 이 됐다 말았다 한다.**
+
+    앞에 오는 것을 쓴다 — 합쳐진 답에서는 앞이 주된 사유다.
+    """
+    _고정(monkeypatch, 검사(block=True, category="유혈·신체 훼손 및 죽음 직접 묘사"))
+
+    assert asyncio.run(검사하기(아이문장)).category == "gore"
+
+
+def test_뒤에_붙은_이름도_읽는다(monkeypatch: pytest.MonkeyPatch):
+    _고정(monkeypatch, 검사(block=True, category="카테고리: 고문·잔혹"))
+
+    assert asyncio.run(검사하기(아이문장)).category == "cruelty"
+
+
+def test_아는_이름이_하나도_없으면_unknown_이다(monkeypatch: pytest.MonkeyPatch):
+    """넓히되 아무거나 갖다 붙이지는 않는다. **차단은 그대로 유지된다.**"""
+    _고정(monkeypatch, 검사(block=True, category="어디에도 없는 이름"))
+
+    결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.category == "unknown"
+    assert 결과.blocked is True
+
+
+def test_자해가_다른_이름에_묻히지_않는다(monkeypatch: pytest.MonkeyPatch):
+    """**뒤 처리가 갈리는 유일한 카테고리다.** 합쳐진 답에서 앞을 고르는 규칙이
+    자해를 지워버리면 아이가 받는 문구가 달라진다 — 여기서 잡는다.
+    """
+    _고정(monkeypatch, 검사(block=True, category="자해·자살 및 죽음 직접 묘사"))
+
+    assert asyncio.run(검사하기(아이문장)).self_harm is True
+
+
+def test_자해가_뒤에_와도_자해로_읽는다(monkeypatch: pytest.MonkeyPatch):
+    """**순서 규칙보다 자해가 먼저다.** 이것만 뒤 처리가 갈린다.
+
+    값이 비대칭이다 — 아닌 아이에게 「어른한테 말해줘」가 가는 것은 가볍고,
+    **맞는 아이에게 안 가는 것은 무겁다.**
+    """
+    _고정(monkeypatch, 검사(block=True, category="죽음 직접 묘사 및 자해·자살"))
+
+    assert asyncio.run(검사하기(아이문장)).self_harm is True

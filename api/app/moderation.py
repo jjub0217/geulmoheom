@@ -277,7 +277,7 @@ def _판정(결과: 검사, text: str, 시작: float) -> 검사결과:
         return 검사결과(blocked=False, latency_ms=_지연(시작))
 
     이름 = 민(결과.category)
-    category = BUILTIN if 이름 == BUILTIN else 슬러그.get(이름, UNKNOWN)
+    category = BUILTIN if 이름 == BUILTIN else _슬러그로(이름)
     검사결과값 = 검사결과(blocked=True, category=category, latency_ms=_지연(시작))
     _차단기록(category, text)
     return 검사결과값
@@ -308,6 +308,38 @@ def _검사없음(시작: float) -> 검사결과:
         extra={"request_id": current_request_id(), "moderation_unavailable": "unconfigured"},
     )
     return 검사결과(blocked=False, unavailable="unconfigured", latency_ms=_지연(시작))
+
+
+def _슬러그로(이름: str) -> str:
+    """3장 카테고리 이름을 로그 슬러그로 옮긴다.
+
+    **정확히 맞지 않아도 포기하지 않는다.** 모델이 **합쳐진 이름**을 돌려줄 때가 있다 —
+    실측에서 같은 문장(B14)에 「죽음 직접 묘사」와 「유혈·신체 훼손 및 죽음 직접 묘사」가
+    번갈아 나왔다. 그대로 두면 **같은 차단이 실행마다 `unknown` 이 됐다 말았다 한다.**
+
+    `unknown` 은 전수 검토에서 거의 쓸모가 없다. **원문을 안 남기므로 나중에 열어볼 것이
+    없기 때문**이다 — 카테고리가 곧 그 차단에 대해 우리가 아는 전부다 (6장). 그래서
+    **이름이 안에 들어 있으면 그걸 쓴다.** 여럿이 들어 있으면 **앞에 오는 것**을 쓴다.
+    합쳐진 답에서는 앞이 주된 사유이고, 어느 쪽을 골라도 그 차단에 대해 참인 문장이다.
+
+    **프롬프트를 고쳐서 맞추지 않았다.** 프롬프트를 건드리면 `adr/0009` 실측과 갈라진다 —
+    보내는 것은 그대로 두고 받는 쪽만 넓혔다.
+    """
+    if 이름 in 슬러그:
+        return 슬러그[이름]
+
+    들어있는것 = [(이름.index(후보), 후보) for 후보 in 슬러그 if 후보 in 이름]
+    if not 들어있는것:
+        return UNKNOWN
+
+    # **자해는 순서를 이긴다.** 합쳐진 답에서 자해가 뒤에 오면 앞을 고르는 규칙에 묻히는데,
+    # 이것만 뒤 처리가 갈린다 — 묻히면 아이가 「어른한테 말해줘」 대신 일반 차단 문구를 받는다.
+    # 값이 비대칭이다: 아닌 아이에게 그 한 줄이 가는 것은 가볍고, **맞는 아이에게 안 가는
+    # 것은 무겁다.** 실패 시 막는 쪽으로 닫은 것(대표 판정)과 같은 저울이다.
+    if any(후보 for _, 후보 in 들어있는것 if 슬러그[후보] == SELF_HARM):
+        return SELF_HARM
+
+    return 슬러그[min(들어있는것)[1]]
 
 
 def _못받음(사유: str, text: str, 시작: float) -> 검사결과:
