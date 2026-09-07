@@ -64,6 +64,9 @@ class 평가결과:
     descriptors: list[str] = field(default_factory=list)
     fallback: str | None = None  # 폴백 사유. None 이면 모델이 실제로 판정했다
     latency_ms: float = 0.0
+    # 프롬프트 길이. **기록을 미룰 수 있어야 해서 결과에 담는다** — 차단된 문장은
+    # `eval_result` 를 남기지 않으므로(`adr/0009` 결정 3) 로그 시점이 호출 시점과 갈린다.
+    prompt_chars: int | None = None
 
     @property
     def tier(self) -> Tier:
@@ -90,10 +93,15 @@ async def _한번(모델: str, 문장: str) -> 판정:
     return 판정.model_validate_json(응답.text or "")
 
 
-async def evaluate(text: str) -> 평가결과:
+async def evaluate(text: str, *, 기록: bool = True) -> 평가결과:
     """문장 하나를 판정한다. **예외를 밖으로 내지 않는다.**
 
     실패 사유는 `fallback` 에 담아 돌려준다 — `timeout`·`error`·`unconfigured`·`rubric`.
+
+    **`기록=False` 는 입력 검사와 병렬로 던질 때 쓴다** (`adr/0009` 결정 2·3). 검사가
+    차단하면 이 판정은 버려지는데, 버린 판정이 `eval_result` 로 남으면 **등급 분포와
+    폴백 비율이 오염된다** — 화면에 보여주지도 않은 평가가 H2 판정 자료에 섞인다.
+    통과했을 때 부르는 쪽이 `평가기록()` 을 부른다.
     """
     시작 = time.perf_counter()
 
@@ -102,11 +110,11 @@ async def evaluate(text: str) -> 평가결과:
         지시길이 = len(시스템지시())  # 루브릭 문서를 못 읽으면 여기서 터진다
     except Exception:
         logger.error("루브릭을 읽지 못해 폴백한다", extra={"request_id": current_request_id()})
-        return _폴백("rubric", 시작)
+        return _폴백("rubric", 시작, 기록=기록)
 
     if not 모델:
         # dev 목 서버는 모델명 없이 돈다. pilot 은 기동 자체가 막힌다 (`config.PILOT_REQUIRED`).
-        return _폴백("unconfigured", 시작)
+        return _폴백("unconfigured", 시작, 기록=기록)
 
     사유 = "error"
     for _ in range(RETRIES + 1):
@@ -128,23 +136,32 @@ async def evaluate(text: str) -> 평가결과:
                 signals=결과.signals,
                 descriptors=결과.descriptors,
                 latency_ms=지연,
+                prompt_chars=지시길이,
             )
-            _기록(평가, 지시길이=지시길이)
+            if 기록:
+                평가기록(평가)
             return 평가
 
-    return _폴백(사유, 시작, 지시길이=지시길이)
+    return _폴백(사유, 시작, 지시길이=지시길이, 기록=기록)
 
 
-def _폴백(사유: str, 시작: float, *, 지시길이: int | None = None) -> 평가결과:
+def _폴백(사유: str, 시작: float, *, 지시길이: int | None = None, 기록: bool = True) -> 평가결과:
     평가 = 평가결과(
-        grade=FALLBACK_GRADE, fallback=사유, latency_ms=(time.perf_counter() - 시작) * 1000
+        grade=FALLBACK_GRADE,
+        fallback=사유,
+        latency_ms=(time.perf_counter() - 시작) * 1000,
+        prompt_chars=지시길이,
     )
-    _기록(평가, 지시길이=지시길이)
+    if 기록:
+        평가기록(평가)
     return 평가
 
 
-def _기록(평가: 평가결과, *, 지시길이: int | None) -> None:
-    """`eval_result` (PRD 5장). 등급은 남기고 **문장 조각은 남기지 않는다.**"""
+def 평가기록(평가: 평가결과) -> None:
+    """`eval_result` (PRD 5장). 등급은 남기고 **문장 조각은 남기지 않는다.**
+
+    **차단된 문장에는 부르지 않는다** (`adr/0009` 결정 3).
+    """
     logger.info(
         "eval_result",
         extra={
@@ -155,7 +172,7 @@ def _기록(평가: 평가결과, *, 지시길이: int | None) -> None:
             "latency_ms": round(평가.latency_ms),
             # 폴백 비율이 경보다. 정상 판정에도 `none` 을 남겨 비율을 셀 수 있게 한다.
             "eval_fallback": 평가.fallback or "none",
-            **({"prompt_chars": 지시길이} if 지시길이 is not None else {}),
+            **({"prompt_chars": 평가.prompt_chars} if 평가.prompt_chars is not None else {}),
         },
     )
 
@@ -212,4 +229,4 @@ def _종류(묘사어: str, signals: list[str]) -> HighlightKind:
     return "clause" if " " in 묘사어 else "adj"
 
 
-__all__ = ["TIER_BY_GRADE", "evaluate", "highlights", "판정", "평가결과"]
+__all__ = ["TIER_BY_GRADE", "evaluate", "highlights", "판정", "평가결과", "평가기록"]

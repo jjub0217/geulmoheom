@@ -7,9 +7,14 @@
 
 - `today` 카운트·`can_retry` — 일일 카운트는 DB 가 들어와야 센다
 - `artwork` — 이미지 큐(B-3)가 아직 없다. `pending` 고정
-- **`outcome=blocked`** — PII·Moderation 은 `Stage0.md` 9절 3·4번이고 아직이다
+- `today` 카운트가 목이라 **차단이 카드를 안 쓰는 것이 응답으로는 안 보인다** — DB 가
+  들어오면 드러난다
+
+**`outcome=blocked` 는 이제 실제 검사에서 나온다** (E-1 · `adr/0009`). 입력 검사와 평가를
+**동시에 던지고**, 검사가 차단하면 평가 결과를 버린다. PII 서버 2차(E-2)는 아직이다.
 """
 
+import asyncio
 import logging
 from typing import Annotated
 
@@ -18,8 +23,9 @@ from fastapi import APIRouter, Depends
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import MockOutcome, mock_daily_cap_reached, mock_outcome, require_child
 from app.errors import AppError, ErrorCode
-from app.evaluator import evaluate, highlights
+from app.evaluator import evaluate, highlights, 평가기록
 from app.middleware import current_request_id
+from app.moderation import 검사하기
 from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 질문
 from app.schemas.stage0 import (
     AttemptBlocked,
@@ -74,14 +80,30 @@ def _scaffold() -> AttemptScaffold:
     )
 
 
-def _blocked() -> AttemptBlocked:
-    """카테고리·사유는 응답에 넣지 않는다 — 아이에게 "나쁜 말" 피드백을 주지 않는다."""
+# 차단 대사 둘. **일반 차단 문구는 아직 확정본이 아니다** — 결과 연출(A0-3)과 같이
+# W4 에서 만든다 (`docs/문구.md` 1.3). 지금 것은 `안전_어휘_기준.md` 1장이 적어 둔 문장이다.
+_차단대사 = "나침반이 그 말은 못 알아듣네. 다르게 말해줄래?"
+
+# **자해·자살 신호만 문구가 확정돼 있다** (`docs/문구.md` 1.2, 2026-09-07 대표 판정).
+# 화면을 봐도 달라질 것이 없어 나머지 대사보다 먼저 닫혔다. **바꾸는 것은 「대표 몫」이다.**
+#
+# **한 줄만 말하고 이어 말하지 않는다.** 가이드는 상담자가 아니라 게임 마스터이고
+# (C-1 「퀘스트 밖 자유 대화 없음」), 캐릭터가 아이의 실제 마음에 개입하면
+# 「가상 페르소나 의존」(페르소나 4.4)이 정면으로 발생한다.
+_자해대사 = "지금 마음이 많이 힘들면, 옆에 있는 어른한테 꼭 말해줘."
+
+
+def _blocked(*, 자해: bool = False) -> AttemptBlocked:
+    """카테고리·사유는 응답에 넣지 않는다 — 아이에게 "나쁜 말" 피드백을 주지 않는다.
+
+    **자해 분기도 겉모양이 같다.** 표정은 일반 차단과 같은 것을 쓰고 `reason` 도
+    `moderation` 그대로다 (`docs/문구.md` 1.2). 이 상황 전용 표정이나 사유를 만들면
+    **아이가 자기 신호가 특별히 취급됐다는 것을 알아챈다.** 달라지는 것은 대사 한 줄뿐이다.
+    """
     return AttemptBlocked(
         outcome="blocked",
         reason="moderation",
-        guide=Guide(
-            expression="compass_dim", line="나침반이 그 말은 못 알아듣네. 다르게 말해줄래?"
-        ),
+        guide=Guide(expression="compass_dim", line=_자해대사 if 자해 else _차단대사),
         today=TodayState(cards_done=2, cap=5, locked=False),
     )
 
@@ -123,7 +145,19 @@ async def create_attempt(
     if outcome is not None:  # 목 강제 (W3 화면 작업)
         return {"result": _result, "scaffold": _scaffold, "blocked": _blocked}[outcome]()
 
-    평가 = await evaluate(payload.text)
+    # **검사와 평가를 동시에 던진다** (`adr/0009` 결정 2). 검사 결과가 평가의 입력이
+    # 아니라 순서를 강제할 이유가 없고, 순차로 두면 +875ms 라 1.5초 예산을 깬다.
+    # 병렬이면 늘어나는 것은 「검사 호출 시간」이 아니라 둘 중 느린 쪽과의 차이(+13ms)다.
+    #
+    # `기록=False` 다 — 차단이면 이 판정은 버려지고 `eval_result` 도 남기지 않는다
+    # (결정 3). 버린 판정이 남으면 **화면에 보여주지도 않은 평가가 등급 분포를 오염시킨다.**
+    검사, 평가 = await asyncio.gather(검사하기(payload.text), evaluate(payload.text, 기록=False))
+
+    if 검사.blocked:
+        # 평가 결과를 버린다. 차단 건의 평가 비용은 수용한다 (`adr/0009` 대가).
+        return _blocked(자해=검사.self_harm)
+
+    평가기록(평가)
 
     if 평가.grade == "G0":
         되물음 = await _되묻기(아이, payload.card_id)

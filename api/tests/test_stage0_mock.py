@@ -3,13 +3,18 @@
 프론트는 이 응답 모양에 화면을 맞춘다. 모양이 틀리면 프론트가 두 번 짠다.
 """
 
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import attempts
 from app.auth import CHILD_COOKIE, MAX_AGE_SECONDS, PARENT_COOKIE
+from app.config import REPO_ROOT
+from app.docs_md import 민, 읽기
 from app.evaluator import 평가결과
 from app.main import create_app
+from app.moderation import 검사결과, 슬러그
 
 SIGNUP = (
     "POST",
@@ -55,16 +60,23 @@ def client() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def 판정_고정(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`X-Mock-Outcome` 없는 호출은 이제 **실제 Evaluator 로 간다** (W2 2번).
+    """`X-Mock-Outcome` 없는 호출은 **실제 Evaluator·입력 검사로 간다** (W2 2번 · E-1).
 
     이 파일은 응답 **모양**이 `Stage0.md` 와 맞는지만 본다. 네트워크를 타면 안 되고,
     타서도 판정이 흔들리면 계약 테스트가 아니라 모델 테스트가 된다.
+
+    **둘 다 갈아끼운다.** 검사를 안 끼우면 모델 미설정 경로로 빠지는데, 그건 이 파일이
+    확인하려는 것이 아니다 — 검사 자체의 동작은 `tests/test_moderation.py` 몫이다.
     """
 
-    async def _가짜(text: str) -> 평가결과:
+    async def _판정(text: str, **_) -> 평가결과:
         return 평가결과(grade="G2", signals=["adj:은빛", "adv:살금살금"])
 
-    monkeypatch.setattr(attempts, "evaluate", _가짜)
+    async def _통과(text: str) -> 검사결과:
+        return 검사결과(blocked=False)
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    monkeypatch.setattr(attempts, "검사하기", _통과)
 
 
 # ── 인증 ─────────────────────────────────────────────────
@@ -316,11 +328,129 @@ def test_어떤_분기도_등급을_노출하지_않는다(client: TestClient):
         assert "grade" not in 전문
 
 
+# ── 입력 검사 (E-1 · adr/0009) ───────────────────────────
+
+
+def _차단(monkeypatch: pytest.MonkeyPatch, 카테고리: str) -> list[str]:
+    """검사가 차단하게 두고, **평가가 실제로 불렸는지**를 기록해 돌려준다.
+
+    카테고리는 `안전_어휘_기준.md` 3장 이름으로 받아 슬러그로 옮긴다 — `검사결과.category`
+    에 실리는 것은 로그용 슬러그다. 문서 이름을 그대로 넣으면 자해 분기가 조용히 안 탄다.
+    """
+    불림: list[str] = []
+
+    async def _검사(text: str) -> 검사결과:
+        return 검사결과(blocked=True, category=슬러그[카테고리])
+
+    async def _판정(text: str, **_) -> 평가결과:
+        불림.append(text)
+        return 평가결과(grade="G3", signals=["adj:은빛"])
+
+    monkeypatch.setattr(attempts, "검사하기", _검사)
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    return 불림
+
+
+def test_검사가_막으면_blocked_다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    _차단(monkeypatch, "고문·잔혹")
+
+    body = _attempt(client)
+
+    assert body["outcome"] == "blocked"
+    assert body["reason"] == "moderation"
+
+
+def test_차단이면_평가_결과를_버린다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """`adr/0009` 결정 3. 평가는 **동시에 던져서 이미 돌았지만** 결과는 안 쓴다 —
+    G3 로 판정됐어도 티어가 응답에 실리면 안 된다.
+    """
+    불림 = _차단(monkeypatch, "유혈·신체 훼손")
+
+    body = _attempt(client)
+
+    assert 불림, "병렬이므로 평가는 던져진다 (차단 건의 평가 비용은 수용한다)"
+    assert "tier" not in body
+    assert "legendary" not in str(body)
+
+
+def test_차단이면_eval_result_를_남기지_않는다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """버린 판정이 로그에 남으면 **화면에 보여주지도 않은 평가가 등급 분포를 오염시킨다**
+    (`adr/0009` 결정 3의 근거).
+    """
+    _차단(monkeypatch, "선정")
+
+    with caplog.at_level(logging.INFO, logger="app"):
+        _attempt(client)
+
+    assert not [r for r in caplog.records if r.message == "eval_result"]
+
+
+def test_통과하면_eval_result_가_남는다(client: TestClient, caplog: pytest.LogCaptureFixture):
+    """차단이 아닐 때는 그대로 남아야 한다 — 폴백 비율이 경보다."""
+    with caplog.at_level(logging.INFO, logger="app"):
+        _attempt(client)
+
+    assert [r for r in caplog.records if r.message == "eval_result"]
+
+
+def test_자해는_대사만_다르고_겉모양이_같다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """**아이가 자기 신호가 특별히 취급됐다는 것을 알아채면 안 된다** (`문구.md` 1.2).
+
+    표정도 `reason` 도 일반 차단과 같다. 달라지는 것은 대사 한 줄뿐이다.
+    """
+    _차단(monkeypatch, "고문·잔혹")
+    일반 = _attempt(client)
+
+    _차단(monkeypatch, "자해·자살")
+    자해 = _attempt(client)
+
+    assert 자해["guide"]["expression"] == 일반["guide"]["expression"]
+    assert 자해["reason"] == 일반["reason"]
+    assert set(자해) == set(일반)
+    assert 자해["guide"]["line"] != 일반["guide"]["line"]
+
+
+def test_자해_문구는_확정본_그대로다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """대표 판정 문장이다. **바꾸는 것은 「대표 몫」**이라 여기서 고정한다."""
+    _차단(monkeypatch, "자해·자살")
+
+    body = _attempt(client)
+
+    assert body["guide"]["line"] == "지금 마음이 많이 힘들면, 옆에 있는 어른한테 꼭 말해줘."
+
+
+def test_자해_문구가_문서와_어긋나면_깨진다():
+    """**SSOT 는 `docs/문구.md` 1.2 다.** 코드에 문장이 박혀 있는 것은 로그·응답 경로가
+    문서 읽기에 매달리지 않게 하려는 것뿐이고, **원본은 문서다.**
+
+    바꾸는 것이 「대표 몫」인 문장이라 조용히 갈라지면 안 된다 — 여기서 깨뜨려 사람이 본다.
+    """
+    본문 = 읽기(REPO_ROOT / "docs" / "문구.md")
+    절 = 본문.split("### 1.2")[1].split("###")[0]
+    인용 = [민(줄.lstrip("> ").strip()) for 줄 in 절.splitlines() if 줄.startswith(">")]
+
+    assert attempts._자해대사 in 인용
+
+
+def test_차단은_카테고리를_아이에게_말하지_않는다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    """「나쁜 말」 피드백을 주지 않는다. 슬러그도 카테고리 이름도 응답에 없다."""
+    _차단(monkeypatch, "비속어·혐오")
+
+    전문 = str(_attempt(client))
+
+    for 새면안되는것 in ("slur", "비속어", "혐오", "self_harm", "category"):
+        assert 새면안되는것 not in 전문
+
+
 # ── 되묻기 (W2 3번) ──────────────────────────────────────
 
 
 def _G0(monkeypatch: pytest.MonkeyPatch, 횟수: int | None) -> None:
-    async def _판정(text: str) -> 평가결과:
+    async def _판정(text: str, **_) -> 평가결과:
         return 평가결과(grade="G0")
 
     async def _횟수(아이: str, card_id: str) -> int | None:

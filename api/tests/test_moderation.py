@@ -8,6 +8,7 @@
 테스트로 막는다 (`api/CLAUDE.md` 「절대 하지 않는 것」).
 """
 
+import asyncio
 import logging
 
 import pytest
@@ -217,3 +218,37 @@ def test_결과는_얼려_둔다():
     """판정 결과가 뒤에서 조용히 바뀌면 「막았는데 통과」가 된다."""
     with pytest.raises(AttributeError):
         검사결과(blocked=True).blocked = False  # type: ignore[misc]
+
+
+def test_모델이_없으면_통과시킨다(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """**dev 전용 경로다.** `pilot` 은 `evaluator_model` 없이 기동 자체가 막힌다
+    (`config.PILOT_REQUIRED`) — 즉 여기 닿는 것은 목 서버뿐이다.
+
+    여기서 막으면 아이를 지키는 게 아니라 **프론트의 개발 서버가 통째로 멈춘다.**
+    안전은 하나도 안 늘고 값만 치른다. 대신 **조용히 통과시키지는 않는다** —
+    「검사가 도는 줄 알았는데 안 돌던」 환경은 실측 숫자를 통째로 거짓말로 만든다.
+    """
+    monkeypatch.setattr(moderation, "_설정된모델", lambda: "")
+
+    with caplog.at_level(logging.WARNING, logger="app"):
+        결과 = asyncio.run(검사하기(아이문장))
+
+    assert 결과.blocked is False
+    assert 결과.unavailable == "unconfigured"
+    assert [r for r in caplog.records if r.message == "moderation_disabled"]
+
+
+def test_검사가_없는_것과_판정을_못_받은_것은_다르다(monkeypatch: pytest.MonkeyPatch):
+    """둘 다 `unavailable` 이 차지만 **한쪽만 막는다.** 합치면 dev 가 멈추거나
+    운영이 뚫린다 — 어느 쪽으로 합쳐도 틀린다.
+    """
+    monkeypatch.setattr(moderation, "_설정된모델", lambda: "")
+    없음 = asyncio.run(검사하기(아이문장))
+
+    _고정(monkeypatch, TimeoutError())
+    못받음 = asyncio.run(검사하기(아이문장))
+
+    assert 없음.blocked is False
+    assert 못받음.blocked is True

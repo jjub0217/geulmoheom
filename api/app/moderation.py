@@ -77,7 +77,8 @@ class 검사결과:
 
     blocked: bool
     category: str = ""
-    # 판정을 못 받은 사유(`timeout`·`error`·`unconfigured`·`rubric`). None 이면 모델이 판정했다.
+    # 판정을 못 받은 사유(`timeout`·`error`·`rubric`). None 이면 모델이 판정했다.
+    # `unconfigured` 만 예외다 — 그건 실패가 아니라 「검사 단계가 없다」이고 `blocked` 가 False 다.
     unavailable: str | None = None
     latency_ms: float = 0.0
 
@@ -217,8 +218,7 @@ async def 검사하기(text: str) -> 검사결과:
         return _못받음("rubric", text, 시작)
 
     if not 모델:
-        # dev 목 서버는 모델명 없이 돈다. pilot 은 기동 자체가 막힌다 (`config.PILOT_REQUIRED`).
-        return _못받음("unconfigured", text, 시작)
+        return _검사없음(시작)
 
     사유 = "error"
     for _ in range(RETRIES + 1):
@@ -247,6 +247,23 @@ def _판정(결과: 검사, text: str, 시작: float) -> 검사결과:
     검사결과값 = 검사결과(blocked=True, category=category, latency_ms=_지연(시작))
     _차단기록(category, text)
     return 검사결과값
+
+
+def _검사없음(시작: float) -> 검사결과:
+    """**모델이 설정되지 않았다. 이건 실패가 아니라 「검사 단계가 없다」다 — 통과시킨다.**
+
+    `pilot` 은 `evaluator_model` 없이 **기동 자체가 막힌다** (`config.PILOT_REQUIRED`).
+    그래서 이 분기는 **dev 목 서버에서만 닿는다.** 여기서 막으면 아이를 지키는 것이
+    아니라 프론트의 개발 서버가 통째로 멈춘다 — 안전은 하나도 안 늘고 값만 치른다.
+
+    **경고로 남긴다.** 조용히 통과시키면 「검사가 도는 줄 알았는데 안 돌던」 환경이
+    생기고, 그건 실측 숫자를 통째로 거짓말로 만든다.
+    """
+    logger.warning(
+        "moderation_disabled",  # 모델 미설정. dev 전용 경로다
+        extra={"request_id": current_request_id(), "moderation_unavailable": "unconfigured"},
+    )
+    return 검사결과(blocked=False, unavailable="unconfigured", latency_ms=_지연(시작))
 
 
 def _못받음(사유: str, text: str, 시작: float) -> 검사결과:
