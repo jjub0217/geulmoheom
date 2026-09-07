@@ -37,9 +37,11 @@ export function AttemptInput({
         // 아이가 쓰는 칸이다. 맞춤법 빨간 줄로 「틀렸다」는 인상을 주지 않는다.
         spellCheck={false}
         autoComplete="off"
-        className="w-full resize-none rounded-2xl bg-markings/60 p-5 text-xl/relaxed
-          text-foreground outline-2 outline-offset-2 outline-transparent
-          focus-visible:outline-glow dark:bg-glow-deep/40"
+        // 테두리는 **비어 있을 때도 보여야 한다.** 배경색만으로 칸을 나타내면
+        // 밝은 배경에서 칸이 사라져 아이가 어디에 쓰는지 모른다 — 첫 스크린샷에서 실제로 그랬다.
+        className="w-full resize-none rounded-2xl border-2 border-brass/50 bg-markings/70
+          p-5 text-xl/relaxed text-foreground outline-2 outline-offset-2 outline-transparent
+          focus-visible:border-glow focus-visible:outline-glow dark:bg-glow-deep/40"
       />
     </div>
   );

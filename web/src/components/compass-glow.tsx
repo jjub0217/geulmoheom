@@ -22,8 +22,10 @@ export function CompassGlow({ length }: { length: number }) {
 
   return (
     <svg
-      viewBox="0 0 48 48"
-      className="size-12 shrink-0"
+      // 64 좌표계에 나침반은 반지름 12 다. 나머지가 빛이 퍼질 여백이다 —
+      // 좁게 잡으면 가득 찼을 때 빛이 네모나게 잘려 「원이 아니라 사각형」으로 보인다.
+      viewBox="0 0 64 64"
+      className="size-14 shrink-0"
       // 장식이다. 스크린리더에 읽히면 그게 곧 숫자 없는 진행 표시가 되어버린다.
       aria-hidden="true"
     >
@@ -36,9 +38,9 @@ export function CompassGlow({ length }: { length: number }) {
 
       {/* 퍼지는 빛. 밝기에 따라 커지고 진해진다 — 이것 하나가 연속 변화를 만든다. */}
       <circle
-        cx="24"
-        cy="24"
-        r={10 + 14 * 밝기}
+        cx="32"
+        cy="32"
+        r={12 + 20 * 밝기}
         fill="url(#compass-glow)"
         style={{ opacity: 밝기 }}
         className="transition-all duration-500 motion-reduce:transition-none"
@@ -46,23 +48,23 @@ export function CompassGlow({ length }: { length: number }) {
 
       {/* 나침반 자체는 항상 같은 밝기다. 꺼져 있는 것이 아니라 조용한 것이다. */}
       <circle
-        cx="24"
-        cy="24"
-        r="11"
+        cx="32"
+        cy="32"
+        r="12"
         fill="none"
         stroke="var(--color-brass)"
         strokeWidth="2.5"
       />
       <circle
-        cx="24"
-        cy="24"
-        r="4.5"
+        cx="32"
+        cy="32"
+        r="5"
         fill="var(--color-glow)"
         style={{ opacity: 0.35 + 0.65 * 밝기 }}
         className="transition-opacity duration-500 motion-reduce:transition-none"
       />
       <path
-        d="M24 15.5 L27 24 L24 32.5 L21 24 Z"
+        d="M32 23 L35.5 32 L32 41 L28.5 32 Z"
         fill="var(--color-scarf-deep)"
         style={{ opacity: 0.55 }}
       />
