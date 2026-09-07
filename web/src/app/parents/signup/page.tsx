@@ -197,7 +197,7 @@ export default function ParentSignup() {
                 className="mt-1 size-5"
               />
               <span>
-                <strong>[필수]</strong> 위 내용을 확인했고, 보호자로서 아이의 이용에
+                <strong>[필수]</strong> 저는 이 아이의 보호자이고, 위 내용에
                 동의합니다.
               </span>
             </label>
@@ -213,9 +213,12 @@ export default function ParentSignup() {
                 onChange={(e) => setLabelingConsent(e.target.checked)}
                 className="mt-1 size-5"
               />
+              {/* **「사람이 직접 읽는다」를 숨기지 않는다.** 그게 이 동의의 실체다 —
+                  나중에 알게 되면 **동의를 받은 것이 아니라 속인 것**이 된다
+                  (`페인_가이드라인정책.md` 「숨기지 않고 고지한다」). */}
               <span>
-                <strong>[선택]</strong> 아이가 쓴 문장을 평가 품질을 높이는 데
-                활용하는 것에 동의합니다.
+                <strong>[선택]</strong> 아이가 쓴 문장을 사람이 직접 읽고 평가
+                기준을 다듬는 데 쓰는 것에 동의합니다.
               </span>
             </label>
             {/* 이 한 줄이 없으면 「체크 안 하면 기능이 줄어드나」 하고 그냥 누른다 —
