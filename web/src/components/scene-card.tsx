@@ -1,25 +1,37 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { components } from "@/api/types.gen";
 
 type Card = components["schemas"]["Card"];
 
 /**
- * 장면 카드 — 스케치 + 상황문.
+ * 장면 카드 — 스케치 + 상황문. 태블릿 가로에서 두 칸으로 나뉜다.
  *
  * 상황문은 **서버가 준 것을 그대로** 쓴다 (대표 검수 반영본). 프론트에서 다듬지 않는다.
  * 카드 종류(`type`)는 **내부 용어**라 화면에 내보내지 않는다 — 위기/발견/만남은 아이가 볼 말이 아니다.
+ *
+ * `children` 은 오른쪽 칸 아래에 붙는다. 가이드가 거기 온다 —
+ * **태블릿 가로에서 오른쪽이 비던 자리**이고, 캐릭터를 크게 놓을 수 있는 유일한 자리다.
  */
-export function SceneCard({ card }: { card: Card }) {
+export function SceneCard({
+  card,
+  children,
+}: {
+  card: Card;
+  children?: ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-6 tablet:flex-row tablet:items-center tablet:gap-10">
+    <section className="grid gap-8 tablet:grid-cols-2 tablet:items-start">
       <Sketch url={card.sketch_url} />
-      <p className="flex-1 text-2xl/relaxed tablet:text-3xl/relaxed">
-        {card.situation}
-      </p>
+      <div className="flex flex-col gap-8">
+        <p className="text-2xl/relaxed tablet:text-3xl/relaxed">
+          {card.situation}
+        </p>
+        {children}
+      </div>
     </section>
   );
 }
@@ -36,7 +48,7 @@ function Sketch({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
 
   return (
-    <div className="relative aspect-4/3 w-full overflow-hidden rounded-3xl bg-vest/10 tablet:w-1/2">
+    <div className="relative aspect-4/3 w-full overflow-hidden rounded-3xl bg-vest/10">
       {!failed && (
         <Image
           src={url}

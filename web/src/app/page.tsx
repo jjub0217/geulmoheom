@@ -124,9 +124,12 @@ export default function Home() {
 
       {(screen.kind === "card" || screen.kind === "sending") && (
         <div className="flex flex-col gap-8">
-          <SceneCard card={screen.card} />
           {/* 표정은 서버가 정한 것을 그대로 넘긴다. 카드 응답은 `default` 다. */}
-          <GuideFigure guide={screen.card.guide} />
+          <SceneCard card={screen.card}>
+            <GuideFigure guide={screen.card.guide} />
+          </SceneCard>
+          {/* 입력창은 **아래 전폭**이다. 오른쪽 절반에 가두면 줄이 짧아지고,
+              짧은 칸은 짧게 쓰게 만든다 — H2 합격선이 회당 150자다. */}
           <AttemptInput
             label={screen.card.prompt_label}
             value={text}
