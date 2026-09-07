@@ -13,12 +13,14 @@ import type { paths } from "../src/api/types.gen";
 type CardResponse =
   paths["/api/v1/cards/next"]["get"]["responses"][200]["content"]["application/json"];
 
+const CARD_SKETCH = "https://r2.example/geulmoheom/cards/c99_sketch.webp";
+
 const CARD: CardResponse = {
   card_id: "c99",
   type: "discovery",
   situation: "낡은 등대 문이 반쯤 열려 있고 안쪽에서 파란 빛이 새어 나온다.",
   prompt_label: "탐험가는 어떻게 할까?",
-  sketch_url: "https://r2.example/geulmoheom/cards/c99_sketch.webp",
+  sketch_url: CARD_SKETCH,
   guide: {
     expression: "default",
     line: "나침반이 조용하네. 네가 뭘 할지 말해주면 움직일 거야!",
@@ -27,6 +29,26 @@ const CARD: CardResponse = {
 };
 
 const CARDS_NEXT = "**/api/v1/cards/next";
+const ATTEMPTS = "**/api/v1/attempts";
+
+/** (a) 정상 응답. 삽화·하이라이트 연출은 W4 라 여기서는 최소 형태만 쓴다. */
+function 결과(guide: { expression: string; line: string }) {
+  return {
+    outcome: "result",
+    attempt_id: "a1",
+    tier: "rare",
+    highlights: [],
+    guide,
+    artwork: {
+      artwork_id: "w1",
+      status: "pending",
+      url: null,
+      placeholder_url: CARD_SKETCH,
+    },
+    today: { cards_done: 2, cap: 5, locked: false },
+    can_retry: true,
+  };
+}
 
 /** 오류 봉투는 `docs/api/공통규약.md` 형식이다. */
 function errorBody(
@@ -111,7 +133,7 @@ test("쓸수록 나침반이 밝아진다 — 숫자도 진행바도 없이", as
   await expect(page.locator("main progress, main [role='progressbar']")).toHaveCount(0);
 });
 
-test("쓴 것을 보내면 서버 대사가 뜬다 — 글자 수로 잠기지 않는다", async ({ page }) => {
+test("쓴 것을 보낸다 — 글자 수로 잠기지 않고, retry_of 는 비운다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({ status: 200, json: CARD }),
   );
@@ -125,26 +147,79 @@ test("쓴 것을 보내면 서버 대사가 뜬다 — 글자 수로 잠기지 �
   await 입력창.fill("문을 연다");
   await expect(보내기).toBeEnabled();
 
-  let 보낸것: { card_id?: string; text?: string } = {};
-  await page.route("**/api/v1/attempts", (route) => {
+  let 보낸것: Record<string, unknown> = {};
+  await page.route(ATTEMPTS, (route) => {
     보낸것 = route.request().postDataJSON();
-    return route.fulfill({
+    return route.fulfill({ status: 200, json: 결과(CARD.guide) });
+  });
+  await 보내기.click();
+
+  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  expect(보낸것.card_id).toBe(CARD.card_id);
+  expect(보낸것.text).toBe("문을 연다");
+  // **항상 null.** 채우면 그 카드가 하루 5장에서 안 빠지고, H2 회당 평균도 갈린다.
+  expect(보낸것.retry_of).toBeNull();
+});
+
+test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
       status: 200,
       json: {
         outcome: "scaffold",
         attempt_id: "a1",
-        guide: { expression: "compass_dim", line: "조금만 더 말해줄래?" },
+        guide: { expression: "compass_dim", line: "그림자를 어떻게 할 건지 조금만 더 말해줄래?" },
         scaffold_count: 1,
         today: { cards_done: 1, cap: 5, locked: false },
       },
-    });
-  });
+    }),
+  );
+  await page.goto("/");
 
-  await 보내기.click();
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  await 입력창.fill("문을 연다");
+  await page.getByRole("button", { name: "보내기" }).click();
 
-  await expect(page.getByText("조금만 더 말해줄래?")).toBeVisible();
-  expect(보낸것.card_id).toBe(CARD.card_id);
-  expect(보낸것.text).toBe("문을 연다");
+  // 질문은 가이드 대사로 온다. 표정도 서버가 준 것으로 바뀐다.
+  await expect(
+    page.getByText("그림자를 어떻게 할 건지 조금만 더 말해줄래?"),
+  ).toBeVisible();
+  await expect(page.locator('img[src="/guide/compass_dim.png"]')).toBeVisible();
+
+  // **입력창이 그대로 있고 쓴 문장도 그대로다.** 다시 보낼 수 있어야 한다.
+  await expect(입력창).toHaveValue("문을 연다");
+  await expect(page.getByRole("button", { name: "보내기" })).toBeEnabled();
+});
+
+test("차단돼도 쓴 문장을 지우지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        outcome: "blocked",
+        reason: "pii",
+        guide: { expression: "compass_dim", line: "나침반이 그 말은 못 알아듣네. 다르게 말해줄래?" },
+        today: { cards_done: 1, cap: 5, locked: false },
+      },
+    }),
+  );
+  await page.goto("/");
+
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  await 입력창.fill("문을 열고 들어간다");
+  await page.getByRole("button", { name: "보내기" }).click();
+
+  await expect(page.getByText("다르게 말해줄래?")).toBeVisible();
+  await expect(입력창).toHaveValue("문을 열고 들어간다");
+
+  // 오류 화면으로 때우지 않는다 — 아이는 자기가 뭘 잘못했는지 모른 채 막히면 안 된다.
+  await expect(page.getByRole("button", { name: "다시 열기" })).toHaveCount(0);
 });
 
 test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다", async ({ page }) => {

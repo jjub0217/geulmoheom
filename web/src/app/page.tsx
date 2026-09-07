@@ -27,11 +27,15 @@ type Guide = components["schemas"]["Guide"];
  */
 type Screen =
   | { kind: "loading" }
-  | { kind: "card"; card: Card }
+  /**
+   * 쓰는 중. `guide` 는 **서버가 마지막에 준 것**이다 —
+   * 처음엔 카드의 것(`default`)이고, 되묻기·차단이 오면 그 응답의 것으로 바뀐다.
+   */
+  | { kind: "card"; card: Card; guide: Guide }
   /** 보내는 중. 같은 화면을 두고 버튼만 잠근다 — 쓴 것이 사라지면 아이는 날아간 줄 안다. */
-  | { kind: "sending"; card: Card }
-  /** 보냈다. **연출은 다음 항목**이고 지금은 서버 대사만 보여준다. */
-  | { kind: "sent"; line: string }
+  | { kind: "sending"; card: Card; guide: Guide }
+  /** 결과를 받았다. **연출(삽화·하이라이트·티어)은 W4 A0-3** 이고 여기는 최소 전이다. */
+  | { kind: "sent"; guide: Guide }
   /** 오늘 카드를 다 썼다 (409 `DAILY_CAP_REACHED`). 서버가 함께 준 대사를 그대로 보여준다. */
   | { kind: "done"; line: string }
   /** 서버가 형식을 갖춰 거절했다. `message` 가 아이가 읽을 문구다. */
@@ -59,7 +63,7 @@ export default function Home() {
 
     apiGet<Card>("/cards/next")
       .then((card) => {
-        if (alive) setScreen({ kind: "card", card });
+        if (alive) setScreen({ kind: "card", card, guide: card.guide });
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -84,18 +88,28 @@ export default function Home() {
     };
   }, [attempt]);
 
-  const send = async (card: Card) => {
-    setScreen({ kind: "sending", card });
+  const send = async (card: Card, guide: Guide) => {
+    setScreen({ kind: "sending", card, guide });
     try {
       const outcome = await apiPost<AttemptOutcome>("/attempts", {
         card_id: card.card_id,
         text,
+        // **항상 `null` 이다.** 일일 카운트가 이 값에 걸려 있어서, 되묻기를 거친 카드에
+        // 이전 `attempt_id` 를 채우면 그 카드만 하루 5장에서 안 빠진다 — 카드는 푼 것이 맞는데도.
+        // H2 도 같다: 되묻기 전 짧은 입력을 별도 회차로 세면 **되묻기가 잘 될수록 회당 평균이 내려간다**.
+        // 채우는 것은 결과를 받은 뒤 같은 카드를 다시 풀 때뿐이고 그건 W4 다 (`Stage0.md` 4절).
         retry_of: null,
         prompted: false,
       });
-      // `outcome` 3분기(result·scaffold·blocked)를 화면으로 나누는 것은 **다음 항목**이다.
-      // 지금은 셋 다 서버 대사를 그대로 보여주는 데까지만 간다 — 빈 화면으로 두지 않기 위한 최소선이다.
-      setScreen({ kind: "sent", line: outcome.guide.line });
+
+      // 되묻기·차단은 **카드를 소모하지 않는다.** 화면을 넘기지 않고 가이드만 바꿔 그 자리에 머문다 —
+      // 입력창이 그대로 있고 **쓴 문장도 그대로 있다.** 차단도 마찬가지다: 이유도 모른 채
+      // 공들여 쓴 글이 사라지면 그것 자체가 벌이 된다 (`Stage0.md` 4절).
+      if (outcome.outcome === "result") {
+        setScreen({ kind: "sent", guide: outcome.guide });
+      } else {
+        setScreen({ kind: "card", card, guide: outcome.guide });
+      }
     } catch (e) {
       if (e instanceof ApiError) {
         setScreen({ kind: "refused", line: e.childMessage });
@@ -124,9 +138,9 @@ export default function Home() {
 
       {(screen.kind === "card" || screen.kind === "sending") && (
         <div className="flex flex-col gap-8">
-          {/* 표정은 서버가 정한 것을 그대로 넘긴다. 카드 응답은 `default` 다. */}
+          {/* 표정도 대사도 **서버가 마지막에 준 것**이다. 되묻기면 여기가 그 질문 자리가 된다. */}
           <SceneCard card={screen.card}>
-            <GuideFigure guide={screen.card.guide} />
+            <GuideFigure guide={screen.guide} />
           </SceneCard>
           {/* 입력창은 **아래 전폭**이다. 오른쪽 절반에 가두면 줄이 짧아지고,
               짧은 칸은 짧게 쓰게 만든다 — H2 합격선이 회당 150자다. */}
@@ -141,7 +155,7 @@ export default function Home() {
             // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
             // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
             disabled={text.trim() === "" || screen.kind === "sending"}
-            onClick={() => void send(screen.card)}
+            onClick={() => void send(screen.card, screen.guide)}
             className="self-end rounded-full bg-scarf px-10 py-3 text-xl text-markings
               disabled:opacity-40"
           >
@@ -151,7 +165,10 @@ export default function Home() {
       )}
 
       {screen.kind === "sent" && (
-        <p className="text-center text-2xl/relaxed">{screen.line}</p>
+        // 최소 전이다. 삽화·하이라이트·티어 연출과 「다음 장면」은 W4(A0-3) 자리다.
+        <div className="flex justify-center">
+          <GuideFigure guide={screen.guide} />
+        </div>
       )}
 
       {(screen.kind === "done" || screen.kind === "refused") && (
