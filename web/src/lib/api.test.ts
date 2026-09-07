@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, NetworkError, apiGet } from "./api";
 
@@ -8,6 +8,11 @@ function respond(status: number, body: unknown): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+beforeEach(() => {
+  // **기본값이 없다.** 주소는 언제나 환경에서 온다 — 테스트도 예외가 아니다.
+  vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000/api/v1");
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -20,17 +25,29 @@ describe("api 주소", () => {
     // 브라우저가 요청을 막고, 화면에는 「서버에 못 닿음」으로만 보인다 — 원인이 안 드러난다.
     // 이름은 `web/README.md` 42행과 저장소 루트 `.env` 가 쓰는 것이 정본이다.
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://api.geulmoheom.test:8000/api/v1");
-    vi.resetModules();
 
     const fetchMock = vi.fn<typeof fetch>(async () => respond(200, {}));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiGet: freshGet } = await import("./api");
-    await freshGet("/cards/next");
+    await apiGet("/cards/next");
 
     expect(fetchMock.mock.calls[0][0]).toBe(
       "https://api.geulmoheom.test:8000/api/v1/cards/next",
     );
+  });
+
+  it("값이 없으면 조용히 넘어가지 않고 그 자리에서 죽는다", async () => {
+    // **기본값을 두지 않는 이유다.** 값이 박혀 있으면 `.env` 를 안 채워도 도는 것처럼 보이고,
+    // 그 임시값이 사실상의 결정이 된다 (`api/app/config.py` 56행과 같은 원칙).
+    // 개발 주소가 운영 번들에 실려도 `.test` 는 그럴듯해 보여 배포 뒤에나 드러난다.
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "");
+
+    const fetchMock = vi.fn<typeof fetch>(async () => respond(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiGet("/cards/next")).rejects.toThrow(/NEXT_PUBLIC_API_BASE_URL/);
+    // 요청을 **보내기 전에** 죽는다. `undefined/cards/next` 같은 곳을 부르지 않는다.
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

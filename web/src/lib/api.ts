@@ -11,12 +11,28 @@
  */
 
 /**
- * **이름은 `web/README.md` 42행과 저장소 루트 `.env` 가 정본이다.** 여기서만 다른 이름을 읽으면
- * 값이 안 잡히고 조용히 아래 기본값으로 떨어진다 — 개발이 https `.test` 로 옮겨간 뒤에는
- * 그것이 **mixed content** 가 되어 브라우저가 막고, 화면에는 「서버에 못 닿음」으로만 보인다.
+ * api 주소. **기본값을 두지 않는다.**
+ *
+ * 값이 박혀 있으면 `.env` 를 안 채워도 도는 것처럼 보이고, **그 임시값이 사실상의 결정이 된다**
+ * (`api/app/config.py` 56행과 같은 원칙). 실제로 이름이 `NEXT_PUBLIC_API_BASE` 로 어긋나 있었는데도
+ * 기본값이 받아주는 바람에 **아무도 몰랐다** — 개발이 https `.test` 로 옮겨갔다면 그 순간
+ * **mixed content** 가 되어 화면에는 「서버에 못 닿음」으로만 보였을 것이다.
+ *
+ * 개발 주소를 기본값으로 박는 것도 답이 아니다. `.test` 주소는 **그럴듯해 보여서**
+ * 운영 번들에 실려도 배포된 뒤에나 드러난다 — `localhost` 보다 나쁘다.
+ *
+ * **이름은 `web/README.md` 42행과 저장소 루트 `.env` 가 정본이다.** `web/` 에 두 번째 `.env` 를
+ * 만들지 않는다 — 값이 갈린다. 개발은 `make dev-web` 이 루트 `.env` 에서 이 한 줄만 넘겨준다.
  */
-const BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+function baseUrl(): string {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!base) {
+    throw new Error(
+      "NEXT_PUBLIC_API_BASE_URL 이 비어 있다. `make dev-web` 이 저장소 루트 .env 에서 넘겨준다.",
+    );
+  }
+  return base;
+}
 
 /**
  * **목 서버 전용, 곧 사라진다.**
@@ -74,9 +90,13 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {
+  // **try 밖에서 만든다.** 안에서 던지면 아래 catch 가 NetworkError 로 덮어써서
+  // 「설정이 없다」가 「서버에 못 닿음」으로 둔갑한다 — 원인을 삼키는 그 모양 그대로다.
+  const url = `${baseUrl()}${path}`;
+
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(url, {
       ...init,
       credentials: "include",
       headers: { Accept: "application/json", ...mockAuthHeader(), ...init.headers },
