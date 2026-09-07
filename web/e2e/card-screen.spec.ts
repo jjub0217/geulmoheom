@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { paths } from "../src/api/types.gen";
+// **가림 글자를 문자열로 박지 않는다.** 확정본이 바뀌면 상수 하나만 고치면 되고,
+// 여기 박아두면 **문구가 바뀌는 날 테스트가 제품을 붙잡는다** (`docs/문구.md` 1.1).
+import { PII_MASK } from "../src/lib/pii";
 
 /**
  * 오늘의 모험 화면(A0-2)이 응답 네 가지를 각각 그리는지 본다.
@@ -297,7 +300,7 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
   await 입력창.fill("등대지기한테 010-1234-5678 로 전화한다");
 
   // 번호는 사라지고 나머지 문장은 그대로다. **전송을 막지 않는다** (대표 판정 2026-09-07).
-  await expect(입력창).toHaveValue("등대지기한테 [보안 필터] 로 전화한다");
+  await expect(입력창).toHaveValue(`등대지기한테 ${PII_MASK} 로 전화한다`);
   await expect(보내기).toBeEnabled();
 
   // 가린 이유를 말해주는 유일한 자리다. **혼내는 말이 아니어야 한다.**
@@ -307,7 +310,7 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
 
   // **다음 글자를 쳐도 안내가 남아 있어야 한다.** 한 번의 타이핑에 사라지면
   // 아이가 읽기도 전에 없어져, 자기 글자가 왜 바뀌었는지 알 방법이 사라진다.
-  await 입력창.fill("등대지기한테 [보안 필터] 로 전화한다 그리고 문을 연다");
+  await 입력창.fill(`등대지기한테 ${PII_MASK} 로 전화한다 그리고 문을 연다`);
   await expect(안내).toHaveText("전화번호는 안 써도 돼서 가렸어!");
 
   // 서버로 가는 것도 **가린 문장**이다. 서버는 이걸 책 콘텐츠로 저장한다.
@@ -318,7 +321,7 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
   });
   await 보내기.click();
   await expect(page.getByText(CARD.guide.line)).toBeVisible();
-  expect(보낸것.text).toBe("등대지기한테 [보안 필터] 로 전화한다 그리고 문을 연다");
+  expect(보낸것.text).toBe(`등대지기한테 ${PII_MASK} 로 전화한다 그리고 문을 연다`);
 });
 
 test("가린 자리는 아이가 지울 수 있다 — 덩어리가 아니라 평범한 글자다", async ({ page }) => {
@@ -330,12 +333,12 @@ test("가린 자리는 아이가 지울 수 있다 — 덩어리가 아니라 �
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill("010-1234-5678");
-  await expect(입력창).toHaveValue("[보안 필터]");
+  await expect(입력창).toHaveValue(PII_MASK);
 
   // 지워지지 않는 덩어리면 아이가 자기 문장을 못 고친다. 한 글자씩 지워져야 한다.
   await 입력창.press("End");
   await 입력창.press("Backspace");
-  await expect(입력창).toHaveValue("[보안 필터");
+  await expect(입력창).toHaveValue(PII_MASK.slice(0, -1));
 });
 
 test("가렸다는 사실만 남긴다 — 아이 문장도 가린 값도 싣지 않는다", async ({ page }) => {
@@ -407,5 +410,5 @@ test("한글 조합 중에는 손대지 않는다 — 조합이 끝난 뒤에 �
 
   await 치기("우리 학교는 한빛초등학교야", "end");
   // 조합이 끝난 지금 가린다.
-  await expect(입력창).toHaveValue("우리 학교는 [보안 필터]야");
+  await expect(입력창).toHaveValue(`우리 학교는 ${PII_MASK}야`);
 });
