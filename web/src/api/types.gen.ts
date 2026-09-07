@@ -219,6 +219,8 @@ export interface paths {
          * @description 오늘 아직 안 한 카드 중 하나. 소진 시 409 `DAILY_CAP_REACHED`.
          *
          *     소진 응답에도 `guide.line`("내일 또 보자")을 담는다 — 아이가 빈 화면을 보지 않게.
+         *
+         *     **아이별 순서·소모 이력은 아직 없다** (W3 A0-1). 지금은 20장에서 무작위다.
          */
         get: operations["next_card_api_v1_cards_next_get"];
         put?: never;
@@ -239,6 +241,8 @@ export interface paths {
         /**
          * Get Card
          * @description 재시도 화면 복귀용.
+         *
+         *     모르는 카드와 튜토리얼(T1~T3)은 404 다. 튜토리얼은 노출 경로가 따로 있다 (Stage 1 A-6).
          */
         get: operations["get_card_api_v1_cards__card_id__get"];
         put?: never;
