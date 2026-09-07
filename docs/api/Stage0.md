@@ -88,7 +88,7 @@
 {
   "card_id": "c01",
   "type": "crisis",
-  "situation": "안개 낀 숲에서 나무 사이로 거대한 그림자가 천천히 다가온다. 발밑에서 나뭇가지가 툭 부러진다.",
+  "situation": "안개 낀 숲에서 나무 사이로 거대한 그림자가 천천히 다가온다. 그런데 그림자는 자꾸 같은 자리에서 넘어지고 있다.",
   "prompt_label": "탐험가는 어떻게 할까?",
   "sketch_url": "https://r2/.../c01_sketch.webp",
   "guide": { "expression": "default", "line": "나침반이 조용하네. 네가 뭘 할지 말해주면 움직일 거야!" },
