@@ -48,13 +48,19 @@ HTTP_STATUS: dict[ErrorCode, int] = {
     ErrorCode.INTERNAL_ERROR: 500,
 }
 
-# 아이 화면 문구. `docs/용어사전.md` 8장 금지어(부족해·다시 써·틀렸어·점수…)를 쓰지 않고,
-# 아이를 탓하지 않는다. DAILY_CAP_REACHED 는 `공통규약.md` 예시 문장 그대로다.
+# 아이 화면 문구. **SSOT 는 `docs/문구.md` 2.1 이다** (2026-09-07 확정) — 여기는 그 표를
+# 옮겨 놓은 것이고, 문구를 바꾸려면 문서를 먼저 고친다. 코드에서 새로 짓지 않는다.
+#
+# `docs/용어사전.md` 8장 금지어(부족해·다시 써·틀렸어·점수…)를 쓰지 않고, 그 이전에
+# **아이를 탓하는 구조**를 쓰지 않는다. 기계용 식별자는 `code` 에만 — `message` 에
+# 코드·필드명·기술 용어가 섞이지 않는다. 아이 입력 원문을 문구에 되담지 않는다 (PRD 1.1b).
 CHILD_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.UNAUTHORIZED: "다시 한 번 들어와 주세요",
     ErrorCode.FORBIDDEN_ROLE: "여기는 지금 들어갈 수 없어요",
     ErrorCode.NOT_FOUND: "찾는 것이 여기 없어요",
-    ErrorCode.VALIDATION_ERROR: "한 번만 더 확인해 주세요",
+    # 종전 「한 번만 더 확인해 주세요」는 **무엇을 확인하라는지 알려주지 않으면서 아이 탓으로
+    # 읽힌다.** 422 가 실제로 뜨는 경우는 프론트가 형식을 잘못 보낸 것이라 아이가 고칠 것이 없다.
+    ErrorCode.VALIDATION_ERROR: "잠깐 문제가 생겼어요. 다시 한 번 해볼까요",
     ErrorCode.DAILY_CAP_REACHED: "오늘 카드를 다 썼어요",
     ErrorCode.CARD_ALREADY_DONE_TODAY: "이 장면은 오늘 이미 다녀왔어요",
     ErrorCode.CONSENT_REQUIRED: "부모님 확인이 먼저 필요해요",
