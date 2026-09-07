@@ -78,6 +78,37 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
   }
 });
 
+test("쓸수록 나침반이 밝아진다 — 숫자도 진행바도 없이", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.goto("/");
+
+  // 빛은 그라디언트로 칠한 원 하나다. 밝기는 그 원의 `opacity` 로만 나타난다.
+  const 빛 = page.locator('main svg circle[fill^="url("]');
+  const 밝기 = async () =>
+    Number(await 빛.evaluate((el) => getComputedStyle(el).opacity));
+
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+
+  await 입력창.fill("문을 연다");
+  await expect.poll(밝기).toBeGreaterThan(0);
+  const 조금 = await 밝기();
+
+  // 30자에서 가득 찬다 (PRD A0-2). 넘겨도 1 에서 멈춘다.
+  await 입력창.fill("낡은 등대 문틈으로 손전등을 비추자 계단 위에 젖은 발자국이 이어져 있었다");
+  await expect.poll(밝기).toBe(1);
+
+  // 계단이 아니라 연속 변화다 — 적게 썼을 때가 가득 찬 것보다 어두워야 한다.
+  expect(조금).toBeLessThan(1);
+  expect(조금).toBeGreaterThan(0);
+
+  // **숫자·퍼센트·진행바가 화면에 없다.** 숫자를 지운 자리에 바를 넣으면 같은 것이 된다.
+  const 화면 = await page.locator("main").innerText();
+  expect(화면).not.toMatch(/[0-9]|%/);
+  await expect(page.locator("main progress, main [role='progressbar']")).toHaveCount(0);
+});
+
 test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({

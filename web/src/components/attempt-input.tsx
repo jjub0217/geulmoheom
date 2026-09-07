@@ -1,5 +1,7 @@
 "use client";
 
+import { CompassGlow } from "@/components/compass-glow";
+
 /**
  * 자유 입력창. **선택지는 없다** — Stage 0 이 검증하는 것이 「직접 쓴다」이기 때문이다.
  *
@@ -20,9 +22,13 @@ export function AttemptInput({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="attempt" className="text-xl">
-        {label}
-      </label>
+      <div className="flex items-center gap-3">
+        <label htmlFor="attempt" className="text-xl">
+          {label}
+        </label>
+        {/* 쓸수록 밝아진다. 라벨 옆에 두어 쓰는 눈이 닿는 자리에 있게 한다. */}
+        <CompassGlow length={value.length} />
+      </div>
       <textarea
         id="attempt"
         value={value}
