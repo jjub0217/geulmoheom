@@ -21,6 +21,7 @@
 - 라벨링 동의(아이 문장을 Evaluator 개선용 라벨링에 활용, 파일럿 종료 시 사본 파기)는 **별도 체크박스** → `labeling_consent: bool`. 거부해도 서비스 이용 가능, 책에는 원문이 그대로 남음
 
 ### POST `/parents/login` → `{ "parent_id": "..." }` + `Set-Cookie: __Host-gm_parent`
+- **없는 이메일과 틀린 비밀번호를 같은 401 로 준다** (2026-09-07 추가). 구분하면 로그인 화면이 **「이 이메일이 우리 서비스에 있는지」를 묻는 도구**가 된다 — 아동 서비스라 **가입 사실 자체가 알려지면 안 된다.** 응답 시간도 갈리지 않게 한다
 
 ### POST `/parents/logout` → 204
 - `Set-Cookie: __Host-gm_parent=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax` — **이름·`Path`·`Domain` 유무가 발급 때와 하나라도 다르면 안 지워진다**
@@ -44,6 +45,8 @@
 - `nickname`은 PII 검사(E-2 서버 2차) 통과 필수. 실패 시 422 `detail.reason = "PII_DETECTED"`
 - `age_band` ∈ {10, 11, 12}
 - `access_code` 6자리, 24시간 유효, 1회 사용. 서버는 해시만 저장
+
+> **`{child_id}` 가 붙는 모든 경로 공통 — 남의 자녀 ID 는 404 다** (2026-09-07 추가). 403 으로 가르면 **「그 ID 는 존재한다」가 샌다.** 자녀 ID 는 난수라 찍기 어렵지만, **존재 여부를 알려주는 순간 난수의 값이 절반으로 준다.** 없는 ID 와 남의 ID 를 구분하지 않는다
 
 ### POST `/parents/children/{child_id}/access-code` → 재발급 `{ access_code, access_code_expires_at }`
 - **`children.token_version`을 1 올린다 → 이전 기기의 자녀 토큰이 즉시 401이 된다** (`공통규약.md` 「폐기」)
