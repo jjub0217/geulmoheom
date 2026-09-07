@@ -98,6 +98,10 @@ test("어디로 가고 얼마나 남는지를 화면에 적는다 — 링크 뒤
   await 로그아웃상태(page);
   await page.goto("/parents/signup");
 
+  // **폼이 뜬 뒤에 읽는다.** 3상태라 첫 프레임은 「확인하는 중…」이고,
+  // 기다리지 않으면 그 화면을 읽고 「고지가 없다」고 잘못 말한다.
+  await expect(page.getByRole("button", { name: "가입하기" })).toBeVisible();
+
   const 화면 = await page.locator("main").innerText();
 
   // PRD E-4 MUST 셋. 문구가 바뀌어도 **이 사실들은 화면에 남아야 한다.**

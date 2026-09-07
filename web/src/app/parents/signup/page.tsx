@@ -204,6 +204,10 @@ export default function ParentSignup() {
           </section>
 
           <section className="flex flex-col gap-2 rounded-2xl border-2 border-brass/40 p-5">
+            {/* 위 상자가 「무슨 일이 일어나는지」이고 여기가 「당신이 정하는 것」이다.
+                **제목이 그 경계를 선언한다** — 「선택」이라는 사실을 라벨 앞의 `[선택]` 글자
+                하나에만 기대지 않게 된다. 빠르게 훑는 사람도 읽는 모드가 바뀐 것을 여기서 안다. */}
+            <h2 className="font-semibold">여기서부터는 선택입니다</h2>
             {/* **별개 항목이다.** 위와 한 덩어리로 만들지 않는다 (PRD 1.1b). */}
             <label className="flex items-start gap-3">
               <input
