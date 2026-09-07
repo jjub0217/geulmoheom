@@ -1,3 +1,5 @@
+import { 못닿음원인 } from "@/lib/unreachable";
+
 /**
  * api 호출의 유일한 입구.
  *
@@ -67,6 +69,24 @@ export class ApiError extends Error {
 /** 서버에 닿지도 못한 경우. 아이에게 보여줄 문구가 **서버에서 오지 않으므로** 화면이 정한다. */
 export class NetworkError extends Error {
   readonly name = "NetworkError";
+
+  /**
+   * **의심 순서. 개발 빌드에서만 채워진다** — 운영 번들에서는 빈 배열이라 아이 화면에 아무것도 안 나온다.
+   * 실패한 `fetch` 의 예외는 어느 원인이든 사실상 같은 문자열이라 **예외로는 구분할 수 없다.**
+   */
+  constructor(
+    path: string,
+    readonly hints: string[] = [],
+  ) {
+    super(path);
+  }
+}
+
+/** 개발 빌드에서만 원인을 좁힌다. 운영에서는 이 함수가 통째로 빈 배열이다. */
+function 못닿은이유(): string[] {
+  if (process.env.NODE_ENV === "production") return [];
+  if (typeof location === "undefined") return [];
+  return 못닿음원인(baseUrl(), location.origin);
 }
 
 type ErrorEnvelope = {
@@ -103,7 +123,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     });
   } catch {
     // 원인 객체를 싣지 않는다 — 요청 정보가 오류 리포터로 흘러가는 경로를 만들지 않는다.
-    throw new NetworkError(path);
+    throw new NetworkError(path, 못닿은이유());
   }
 
   if (!res.ok) {

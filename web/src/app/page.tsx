@@ -42,7 +42,7 @@ type Screen =
   /** 서버가 형식을 갖춰 거절했다. `message` 가 아이가 읽을 문구다. */
   | { kind: "refused"; line: string }
   /** 서버에 닿지 못했다. 아이에게 줄 문구가 서버에서 오지 않는다 — 아래 문구는 화면 것이다. */
-  | { kind: "unreachable" };
+  | { kind: "unreachable"; hints: string[] };
 
 /** 409 의 `detail.guide` 에서 대사만 꺼낸다. 형태가 다르면 아무것도 꺼내지 않는다. */
 function guideLineOf(detail: unknown): string | null {
@@ -103,7 +103,7 @@ export default function Home() {
           return;
         }
         if (e instanceof NetworkError) {
-          setScreen({ kind: "unreachable" });
+          setScreen({ kind: "unreachable", hints: e.hints });
           return;
         }
         throw e;
@@ -142,7 +142,7 @@ export default function Home() {
         return;
       }
       if (e instanceof NetworkError) {
-        setScreen({ kind: "unreachable" });
+        setScreen({ kind: "unreachable", hints: e.hints });
         return;
       }
       throw e;
@@ -218,6 +218,20 @@ export default function Home() {
           >
             다시 열기
           </button>
+          {screen.hints.length > 0 && (
+            // **개발 빌드 전용이다.** 운영에서는 `hints` 가 비어 있어 이 블록이 아예 안 그려진다.
+            // 아이에게 보이는 말이 아니라 **개발자에게 보이는 단서**다 — 위 두 줄과 톤이 다른 것이 맞다.
+            // 2026-09-07 하루에 이 화면이 세 번 나왔고 셋 다 원인이 달랐다.
+            <ul
+              data-dev-hints
+              className="max-w-xl list-disc space-y-1 rounded-xl border border-dashed
+                border-brass/50 p-4 text-left text-sm opacity-70"
+            >
+              {screen.hints.map((원인) => (
+                <li key={원인}>{원인}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </main>

@@ -263,6 +263,16 @@ test("서버에 닿지 못하면 다시 열 수 있다", async ({ page }) => {
   const 다시열기 = page.getByRole("button", { name: "다시 열기" });
   await expect(다시열기).toBeVisible();
 
+  // **개발 빌드에서만** 원인 후보가 함께 뜬다 (운영 번들에서는 `hints` 가 비어 이 블록이 없다).
+  // E2E 는 `next dev` 로 돌아 개발 빌드다. 아이가 읽는 문구는 그대로 있고, 이건 그 아래 따로 붙는다.
+  await expect(page.getByText("길이 잠깐 흐려졌어. 조금 뒤에 다시 열어볼까?")).toBeVisible();
+  const 단서 = page.locator("[data-dev-hints]");
+  await expect(단서).toBeVisible();
+  // 같은 오리진이라(`NEXT_PUBLIC_API_BASE_URL=/api/v1`) CORS·mixed content 는 후보가 아니다.
+  // **없는 원인을 지어내면 엉뚱한 데를 뜯게 된다.**
+  await expect(단서).toContainText("make dev-api");
+  await expect(단서).not.toContainText("CORS");
+
   // 두 번째부터는 정상 응답. 다시 열기가 실제로 다시 부르는지까지 본다.
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({ status: 200, json: CARD }),
