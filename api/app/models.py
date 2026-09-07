@@ -113,7 +113,13 @@ class CardAttempt(Base):
     tier: Mapped[str | None] = mapped_column(String(16))
     signals: Mapped[dict] = mapped_column(JSONB, default=dict)
     scaffold_count: Mapped[int] = mapped_column(Integer, default=0)
-    char_len: Mapped[int] = mapped_column(Integer)
+    char_len: Mapped[int] = mapped_column(
+        Integer,
+        comment=(
+            "공백 포함 원문 길이 (PRD 5장, 2026-09-07 확정). 공백·줄바꿈을 걷어내지 않는다 — "
+            "H2 합격선(150자)과 입력 화면의 「30자」가 같은 정의 위에 선다"
+        ),
+    )
     text: Mapped[str] = mapped_column(
         Text, comment="아이 원문. 책 콘텐츠로 보관한다 (PRD 1.1b). 로그·APM 으로 복사 금지"
     )
