@@ -105,10 +105,12 @@ test("어디로 가고 얼마나 남는지를 화면에 적는다 — 링크 뒤
   const 화면 = await page.locator("main").innerText();
 
   // PRD E-4 MUST 셋. 문구가 바뀌어도 **이 사실들은 화면에 남아야 한다.**
-  expect(화면).toContain("Google Gemini API");
-  expect(화면).toContain("학습에는 쓰이지 않습니다");
-  expect(화면).toContain("제한된 기간 보관");
-  expect(화면).toContain("전송 전에 걸러집니다");
+  // **표현이 아니라 사실을 검사한다.** 다만 이 다섯 조각은 문자열로 잡는다 —
+  // 문구를 고칠 때 여기가 함께 깨져서 **고지가 조용히 빠지는 것**을 막는다.
+  expect(화면).toContain("구글의 AI");
+  expect(화면).toContain("학습시키지는 않습니다");
+  expect(화면).toContain("일정 기간 보관");
+  expect(화면).toContain("보내기 전에 걸러냅니다");
   // 없으면 「체크 안 하면 기능이 줄어드나」 하고 그냥 누른다.
   expect(화면).toContain("거부해도 모든 기능을 그대로 쓸 수 있습니다");
 
