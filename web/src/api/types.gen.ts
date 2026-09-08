@@ -410,7 +410,14 @@ export interface paths {
         };
         /**
          * Get Artwork
-         * @description 프론트: 2초 간격 폴링, 15초 초과 시 중단하고 `placeholder_url` 유지 (B-3).
+         * @description 프론트: 3초 뒤 첫 폴링, 이후 2초 간격, 15초 초과 시 중단 (`Stage0.md` 5절).
+         *
+         *     **남의 삽화는 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
+         *
+         *     **`X-Mock-Status` 는 응답의 `status` 만 덮는다.** 행은 안 건드린다 —
+         *     화면 작업이 「굽는 중」 연출을 붙잡아 두려고 쓰는 값이고, 그것 때문에 DB 가
+         *     바뀌면 그 뒤 폴링이 뭘 보는지 알 수 없어진다.
+         *     **`placeholder_url` 폐기와 함께 B-3 ③ 에서 걷어낸다** — 프론트가 안 쓴다.
          */
         get: operations["get_artwork_api_v1_artworks__artwork_id__get"];
         put?: never;

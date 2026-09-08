@@ -609,6 +609,12 @@ def test_전_엔드포인트가_응답한다(
     assert 만든아이.status_code == 201
     자녀 = 만든아이.json()["child_id"]
 
+    # **삽화도 진짜 ID 여야 한다** (2026-09-08, B-3 ②). 폴링이 DB 를 읽게 되면서
+    # `w1` 같은 가짜는 404 다 — 자녀 ID 때 겪은 것과 같은 자리다.
+    시도 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": "은빛 검을 들었다"})
+    assert 시도.status_code == 200
+    삽화 = 시도.json()["artwork"]["artwork_id"]
+
     호출 = [
         (
             "POST",
@@ -626,7 +632,7 @@ def test_전_엔드포인트가_응답한다(
         ("GET", "/api/v1/cards/next", None, 200),
         ("GET", "/api/v1/cards/c01", None, 200),
         ("GET", "/api/v1/attempts/a1", None, 200),
-        ("GET", "/api/v1/artworks/w1", None, 200),
+        ("GET", f"/api/v1/artworks/{삽화}", None, 200),
         ("GET", "/api/v1/book", None, 200),
         ("GET", "/api/v1/book/today", None, 200),
         ("PATCH", "/api/v1/book", {"title": "나의 모험"}, 200),

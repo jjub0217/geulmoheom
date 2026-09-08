@@ -17,14 +17,15 @@
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import db
-from app.artwork import 생성
+from app.artwork import TIMEOUT_SECONDS, 생성
 from app.middleware import current_request_id
-from app.models import Artwork
+from app.models import Artwork, CardAttempt
 from app.schemas.stage0 import Tier
 from app.storage import 올리기
 
@@ -97,3 +98,51 @@ async def _끝냈다(artwork_id: uuid.UUID, r2_key: str | None) -> None:
             "삽화 상태를 못 굳혔다",
             extra={"request_id": current_request_id(), "exc_type": type(exc).__name__},
         )
+
+
+# 프론트가 폴링을 끊는 시각과 **같은 값이어야 한다** (`Stage0.md` 5절 폴링 표).
+# 생성 호출 자체의 상한과도 같은 값이라 `app/artwork.py` 것을 그대로 쓴다 — 여기에
+# 숫자를 따로 적으면 한쪽만 바뀐다.
+기다리는시간 = timedelta(seconds=TIMEOUT_SECONDS)
+
+
+async def 내것읽기(session: AsyncSession, artwork_id: str, child_id: uuid.UUID) -> Artwork | None:
+    """**이 아이의** 삽화만 돌려준다. 아니면 `None` — 부르는 쪽이 404 로 만든다.
+
+    **403 으로 가르지 않는다.** 가르는 순간 「그 삽화는 존재한다」가 새고, 그건
+    `{child_id}` 규칙과 같은 자리다 (`Stage0.md` 5절).
+
+    **모양이 UUID 가 아니면 없는 것이다.** 「ID 는 전부 UUID」가 규약이고
+    (`공통규약.md`), 안 거르면 SQL 층까지 내려가 500 이 된다.
+    """
+    try:
+        아이디 = uuid.UUID(artwork_id)
+    except ValueError:
+        return None
+
+    문 = (
+        select(Artwork)
+        .join(CardAttempt, CardAttempt.id == Artwork.card_attempt_id)
+        .where(Artwork.id == 아이디, CardAttempt.child_id == child_id)
+    )
+    return await session.scalar(문)
+
+
+async def 오래_기다렸으면_확정(session: AsyncSession, 삽화: Artwork) -> Artwork:
+    """15초를 넘긴 `pending` 을 **`ready` + `fallback` 으로 굳힌다** (`Stage0.md` 5절).
+
+    **프론트도 같은 15초에 폴링을 끊는다.** 그런데 서버가 안 굳히면 그 행은 **영영
+    `pending`** 이다 — 굽기가 죽었거나 프로세스가 내려간 경우가 그렇고, 그러면
+    그 카드는 **「내 책」에도 안 선다.** 아이 화면만 넘어가고 기록이 뒤에 남는다.
+
+    **일찍 굳히지 않는다.** 실측 평균이 6.2초라(`benchmarks/W1-image-bench.md`)
+    성급하게 확정하면 **다 구워진 그림을 버리고 기본 에셋을 준다.**
+    """
+    if 삽화.status != "pending" or datetime.now(UTC) - 삽화.created_at < 기다리는시간:
+        return 삽화
+
+    삽화.status = "ready"
+    삽화.fallback = True
+    삽화.ready_at = datetime.now(UTC)
+    await session.commit()
+    return 삽화
