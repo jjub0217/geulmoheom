@@ -9,6 +9,7 @@ import { GuideFigure } from "@/components/guide";
 import { LeaveButton } from "@/components/leave";
 import { SceneCard } from "@/components/scene-card";
 import { TierBadge } from "@/components/tier-badge";
+import { WrittenLine } from "@/components/written-line";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
 import { useArtwork } from "@/lib/artwork";
 import type { PiiKind } from "@/lib/pii";
@@ -159,7 +160,17 @@ export default function Home() {
       }
     } catch (e) {
       if (e instanceof ApiError) {
-        setScreen({ kind: "refused", line: e.서버문구 });
+        // **목소리 규칙** (`문구.md` 0장) — 같은 화면에 `error.message`(앱·존댓말)와
+        // `guide.line`(가이드·반말)이 같이 오면 **`guide.line` 만** 보여준다.
+        // 여기가 빠져 있었다: 카드 부르는 쪽에만 있었고 **보내는 쪽은 앱 목소리로 떨어졌다.**
+        // 하루 상한은 **여섯 번째 문장을 보낼 때도** 온다 (A0-5) — 그때 아이는
+        // 가이드가 하던 말이 갑자기 존댓말로 바뀌는 것을 본다.
+        const line = guideLineOf(e.detail) ?? e.서버문구;
+        setScreen(
+          e.code === "DAILY_CAP_REACHED"
+            ? { kind: "done", line }
+            : { kind: "refused", line },
+        );
         return;
       }
       if (e instanceof NetworkError) {
@@ -249,6 +260,10 @@ export default function Home() {
                     절차가 된다 — 「등급을 미리 흘리지 않는다」가 낱말이 아니라 순서로 깨진다. */}
                 <TierBadge tier={screen.result.tier} />
                 <GuideFigure guide={screen.result.guide} />
+                {/* **아이가 쓴 그 문장이다** (`text` 는 보낸 것 그대로 남아 있다).
+                    하이라이트도 **그림과 같이** 열린다 — 표시가 많고 적은 것 자체가
+                    등급을 짐작하게 하는 신호라, 굽는 동안 미리 보이면 안 된다. */}
+                <WrittenLine text={text} highlights={screen.result.highlights} />
               </div>
             )}
           </div>

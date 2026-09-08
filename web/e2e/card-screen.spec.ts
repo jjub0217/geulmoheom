@@ -12,6 +12,8 @@ import { 폴링상한 } from "../src/lib/artwork";
 import { 삽화대기대사 } from "../src/components/artwork-copy";
 // 배지 낱말도 박지 않는다 — `docs/문구.md` **1.8** · `용어사전.md` 36행이 SSOT 다.
 import { 티어이름 } from "../src/components/tier-badge";
+// 가림 안내도 같은 이유로 박지 않는다 — `docs/문구.md` **1.1** 이 SSOT 다.
+import { 가림안내 } from "../src/components/attempt-input";
 import { 상태표시 } from "../src/app/status-copy";
 
 /**
@@ -54,12 +56,15 @@ const EVENTS = "**/api/v1/events";
  */
 type AttemptResult = components["schemas"]["AttemptResult"];
 
-function 결과(guide: components["schemas"]["Guide"]): AttemptResult {
+function 결과(
+  guide: components["schemas"]["Guide"],
+  highlights: AttemptResult["highlights"] = [],
+): AttemptResult {
   return {
     outcome: "result",
     attempt_id: "a1",
     tier: "rare",
-    highlights: [],
+    highlights,
     guide,
     // `placeholder_url` 은 빠졌다 — **성공이든 폴백이든 `/artworks/{id}/image` 한 주소**다.
     artwork: { artwork_id: "w1", status: "pending", url: null },
@@ -289,8 +294,9 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   // 여기까지 오지 않는다 — 그래서 이 검사가 **유일하게 「못받음」을 밟는 자리**다.
   await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) => route.abort());
 
+  const 쓴것 = "등대 계단을 한 칸씩 올라간다";
   await page.goto("/");
-  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByLabel(CARD.prompt_label).fill(쓴것);
   await page.getByRole("button", { name: 버튼.보내기 }).click();
 
   // 굽는 동안에는 자리가 잡혀 있고 그 안에서 대기 대사가 기다린다.
@@ -309,9 +315,100 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
   // **아무 말도 안 한다** (`문구.md` 1.7). 금지어 목록으로 막지 않고 **화면에 남은 것을 통째로
   // 센다** — 목록은 **적어 둔 낱말만** 막지만, 여기서 막아야 하는 것은 **새 문장이 생기는 것**이다.
-  const 화면 = (await page.locator("main").innerText()).trim();
-  expect(화면).toBe(`${티어이름.rare}\n${CARD.guide.line}`);
+  const 화면 = await page.locator("main").innerText();
+  // 줄 사이 빈 줄은 **블록이 나뉜 자국일 뿐**이라 센 것에서 뺀다. 세는 것은 **문장의 목록**이다.
+  const 줄들 = 화면
+    .split("\n")
+    .map((줄) => 줄.trim())
+    .filter((줄) => 줄 !== "");
+  expect(줄들).toEqual([티어이름.rare, CARD.guide.line, 쓴것]);
   expect(화면).not.toContain(못닿음.보내기);
+});
+
+test("쓴 문장이 그대로 나오고 묘사어 자리에 표시가 붙는다", async ({ page }) => {
+  const 쓴것 = "낡은 등대 문틈으로 살금살금 손전등을 비췄다";
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
+      status: 200,
+      json: 결과(CARD.guide, [
+        { text: "낡은", kind: "adj" },
+        { text: "살금살금", kind: "adv" },
+        // **원문에 없는 것**이다. 서버가 걸러 주기로 돼 있지만(`Stage0.md` 4절)
+        // **프론트는 그 보장 위에 서되 못 찾으면 조용히 건너뛴다.**
+        { text: "캄캄한", kind: "adj" },
+      ]),
+    }),
+  );
+  // 그림이 바로 뜨게 둔다 — 이 검사가 보는 것은 문장이다.
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill(쓴것);
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // **한 글자도 안 잃는다.** 아이 문장은 창작물이라 표시하려다 깎으면 안 된다.
+  const 문장 = page.locator("main [data-쓴문장]");
+  await expect(문장).toHaveText(쓴것);
+
+  // 찾은 둘만 표시된다. **못 찾은 「캄캄한」은 조용히 건너뛴다** — 화면이 죽지 않는다.
+  await expect(문장.locator("[data-강조]")).toHaveText(["낡은", "살금살금"]);
+
+  // **가려진 자리에 설명을 붙이지 않는다**(미결 11-5 대표 판정)는 것과 같은 규칙으로,
+  // 표시 옆에 해설을 두지 않는다 — 어느 말이 통했는지는 **가이드가 이미 말한다.**
+  const 화면 = await page.locator("main").innerText();
+  expect(화면).not.toContain("묘사");
+  expect(화면).not.toContain("단어");
+});
+
+test("굽는 동안에는 쓴 문장도 표시도 안 보인다 — 표시가 많고 적은 것이 곧 신호다", async ({
+  page,
+}) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
+      status: 200,
+      json: 결과(CARD.guide, [{ text: "낡은", kind: "adj" }]),
+    }),
+  );
+  // 계속 굽는 중으로 둔다.
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "pending",
+        url: null,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("낡은 문을 연다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  await expect(page.locator("main [data-대기대사]")).toBeVisible();
+  await expect(page.locator("main [data-쓴문장]")).toHaveCount(0);
 });
 
 test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", async ({ page }) => {
@@ -396,6 +493,36 @@ test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다
   await 가로스크롤없음(page);
 });
 
+test("여섯 번째를 보내도 가이드가 말한다 — 두 목소리가 나란히 서지 않는다", async ({
+  page,
+}) => {
+  const 가이드대사 = "오늘 모험은 여기까지! 내일 또 보자";
+  const 앱문구 = "오늘 카드를 다 썼어요";
+
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  // **하루 상한은 보내는 쪽에서도 온다** (A0-5). 카드를 부를 때만 오는 것이 아니다.
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: errorBody("DAILY_CAP_REACHED", 앱문구, {
+        guide: { expression: "session_end", line: 가이드대사 },
+      }),
+    }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("문을 연다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // **목소리 규칙** (`문구.md` 0장) — 한 화면에 둘이 오면 `guide.line` 만 나온다.
+  // 여기가 빠져 있어 **보내는 쪽만 앱 목소리로 떨어졌다**: 가이드가 하던 말이 갑자기 존댓말이 된다.
+  await expect(page.getByText(가이드대사)).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toContain(앱문구);
+});
+
 test("서버가 거절하면 빈 화면이 아니라 서버 문구가 뜬다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({
@@ -456,13 +583,13 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
 
   // 가린 이유를 말해주는 유일한 자리다. **혼내는 말이 아니어야 한다.**
   const 안내 = page.getByRole("status");
-  await expect(안내).toHaveText("전화번호는 안 써도 돼서 가렸어!");
+  await expect(안내).toHaveText(가림안내.phone);
   expect(await 안내.innerText()).not.toMatch(/안 돼요|하지 마|틀렸|나쁜/);
 
   // **다음 글자를 쳐도 안내가 남아 있어야 한다.** 한 번의 타이핑에 사라지면
   // 아이가 읽기도 전에 없어져, 자기 글자가 왜 바뀌었는지 알 방법이 사라진다.
   await 입력창.fill(`등대지기한테 ${PII_MASK} 로 전화한다 그리고 문을 연다`);
-  await expect(안내).toHaveText("전화번호는 안 써도 돼서 가렸어!");
+  await expect(안내).toHaveText(가림안내.phone);
 
   // 서버로 가는 것도 **가린 문장**이다. 서버는 이걸 책 콘텐츠로 저장한다.
   let 보낸것: Record<string, unknown> = {};

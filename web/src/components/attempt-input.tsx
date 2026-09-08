@@ -23,7 +23,7 @@ import { PII_MASK, maskPii, type PiiKind } from "@/lib/pii";
  * **확정본은 `docs/문구.md` 1.1** 이다 (2026-09-07). 클라이언트가 가리는 자리라 서버 값이 없어
  * 여기 있지만, **SSOT 는 문서고 코드가 따라온다.** 여기서 새로 지어내지 않는다.
  */
-const 가림안내: Record<PiiKind, string> = {
+export const 가림안내: Record<PiiKind, string> = {
   phone: "전화번호는 안 써도 돼서 가렸어!",
   email: "메일 주소는 안 써도 돼서 가렸어!",
   address: "사는 곳은 안 써도 돼서 가렸어!",
