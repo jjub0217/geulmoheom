@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import type { components } from "@/api/types.gen";
 import { AttemptInput } from "@/components/attempt-input";
 import { GuideFigure } from "@/components/guide";
+import { LeaveButton } from "@/components/leave";
 import { SceneCard } from "@/components/scene-card";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
 import type { PiiKind } from "@/lib/pii";
+
+import { 버튼, 못닿음, 상태표시 } from "./copy";
 
 type Card = components["schemas"]["Card"];
 /** 세 형태가 한 응답에 온다 (`outcome`). 이번 조각은 **보내는 것까지**고, 3분기 연출은 다음 항목이다. */
@@ -41,7 +44,12 @@ type Screen =
   | { kind: "done"; line: string }
   /** 서버가 형식을 갖춰 거절했다. `message` 가 아이가 읽을 문구다. */
   | { kind: "refused"; line: string }
-  /** 서버에 닿지 못했다. 아이에게 줄 문구가 서버에서 오지 않는다 — 아래 문구는 화면 것이다. */
+  /**
+   * **장면을 못 불러왔다.** 서버가 아무 말도 못 했으므로 화면이 고르지만 짓지는 않는다 —
+   * 문장은 `문구.md` 2.4 에 등록돼 있다 (`./copy.ts`).
+   *
+   * **보내기 실패는 여기 안 온다.** 그건 카드 자리에 머문다 — 화면을 넘기면 쓴 문장을 잃는다.
+   */
   | { kind: "unreachable"; hints: string[] };
 
 /** 409 의 `detail.guide` 에서 대사만 꺼낸다. 형태가 다르면 아무것도 꺼내지 않는다. */
@@ -57,6 +65,8 @@ export default function Home() {
   const [text, setText] = useState("");
   // 다시 열기를 누르면 값이 바뀌어 아래 효과가 한 번 더 돈다.
   const [attempt, setAttempt] = useState(0);
+  /** 보내기가 서버에 못 닿았다. **카드 자리에 머문 채** 입력칸 곁에 알린다 (`문구.md` 2.4). */
+  const [보내기못닿음, set보내기못닿음] = useState(false);
   /** 이미 올린 종류. **세션 안에서 종류마다 한 번만** 보낸다 — 한 글자마다 보내면 폭주한다. */
   const 올린종류 = useRef(new Set<PiiKind>());
 
@@ -115,6 +125,7 @@ export default function Home() {
   }, [attempt]);
 
   const send = async (card: Card, guide: Guide) => {
+    set보내기못닿음(false);
     setScreen({ kind: "sending", card, guide });
     try {
       const outcome = await apiPost<AttemptOutcome>("/attempts", {
@@ -142,7 +153,11 @@ export default function Home() {
         return;
       }
       if (e instanceof NetworkError) {
-        setScreen({ kind: "unreachable", hints: e.hints });
+        // **화면을 넘기지 않는다.** 넘기면 「다시 열기」가 **다른 카드**를 불러오고,
+        // 입력칸에 남은 문장이 **앞 장면에 쓴 글인 채로 새 장면에 붙는다.**
+        // 되묻기·차단이 그 자리에 머무는 것과 같은 이유다 — **공들여 쓴 글이 사라지면 그것 자체가 벌**이다.
+        set보내기못닿음(true);
+        setScreen({ kind: "card", card, guide });
         return;
       }
       throw e;
@@ -155,85 +170,103 @@ export default function Home() {
   };
 
   return (
-    <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-10">
-      {screen.kind === "loading" && (
-        // 글자만 둔다. 여기에 가이드 캐릭터를 세우면 표정을 프론트가 고르는 것이 된다
-        // (`docs/api/Stage0.md` 3절 — 표정 4종은 서버가 정한다).
-        <p className="text-center opacity-70">장면을 펼치는 중…</p>
-      )}
+    <>
+      <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-10">
+        {screen.kind === "loading" && (
+          // 글자만 둔다. 여기에 가이드 캐릭터를 세우면 표정을 프론트가 고르는 것이 된다
+          // (`docs/api/Stage0.md` 3절 — 표정 4종은 서버가 정한다).
+          <p className="text-center opacity-70">{상태표시.장면부르는중}</p>
+        )}
 
-      {(screen.kind === "card" || screen.kind === "sending") && (
-        <div className="flex flex-col gap-8">
-          {/* 표정도 대사도 **서버가 마지막에 준 것**이다. 되묻기면 여기가 그 질문 자리가 된다. */}
-          <SceneCard card={screen.card}>
-            <GuideFigure guide={screen.guide} />
-          </SceneCard>
-          {/* 입력창은 **아래 전폭**이다. 오른쪽 절반에 가두면 줄이 짧아지고,
-              짧은 칸은 짧게 쓰게 만든다 — H2 합격선이 회당 150자다. */}
-          <AttemptInput
-            label={screen.card.prompt_label}
-            value={text}
-            onChange={setText}
-            onMasked={가림알림}
-            disabled={screen.kind === "sending"}
-          />
-          <button
-            type="button"
-            // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
-            // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
-            disabled={text.trim() === "" || screen.kind === "sending"}
-            onClick={() => void send(screen.card, screen.guide)}
-            className="self-end rounded-full bg-scarf px-10 py-3 text-xl text-markings
-              disabled:opacity-40"
-          >
-            보내기
-          </button>
-        </div>
-      )}
-
-      {screen.kind === "sent" && (
-        // 최소 전이다. 삽화·하이라이트·티어 연출과 「다음 장면」은 W4(A0-3) 자리다.
-        <div className="flex justify-center">
-          <GuideFigure guide={screen.guide} />
-        </div>
-      )}
-
-      {(screen.kind === "done" || screen.kind === "refused") && (
-        // 서버가 준 문구를 그대로 보여준다. 프론트가 다듬거나 덧붙이지 않는다.
-        <p className="text-center text-2xl/relaxed">{screen.line}</p>
-      )}
-
-      {screen.kind === "unreachable" && (
-        <div className="flex flex-col items-center gap-6 text-center">
-          {/* 서버에 닿지 못했으니 서버 문구가 없다. 이 두 줄은 화면이 정한 것이고,
-              가이드 대사가 아니다 — 그래서 캐릭터를 옆에 세우지 않는다.
-              확정 문안은 W3 대사 세트(C-1)에서 온다. */}
-          <p className="text-2xl/relaxed">
-            길이 잠깐 흐려졌어. 조금 뒤에 다시 열어볼까?
-          </p>
-          <button
-            type="button"
-            onClick={retry}
-            className="rounded-full bg-scarf px-8 py-3 text-markings"
-          >
-            다시 열기
-          </button>
-          {screen.hints.length > 0 && (
-            // **개발 빌드 전용이다.** 운영에서는 `hints` 가 비어 있어 이 블록이 아예 안 그려진다.
-            // 아이에게 보이는 말이 아니라 **개발자에게 보이는 단서**다 — 위 두 줄과 톤이 다른 것이 맞다.
-            // 2026-09-07 하루에 이 화면이 세 번 나왔고 셋 다 원인이 달랐다.
-            <ul
-              data-dev-hints
-              className="max-w-xl list-disc space-y-1 rounded-xl border border-dashed
-                border-brass/50 p-4 text-left text-sm opacity-70"
+        {(screen.kind === "card" || screen.kind === "sending") && (
+          <div className="flex flex-col gap-8">
+            {/* 표정도 대사도 **서버가 마지막에 준 것**이다. 되묻기면 여기가 그 질문 자리가 된다. */}
+            <SceneCard card={screen.card}>
+              <GuideFigure guide={screen.guide} />
+            </SceneCard>
+            {/* 입력창은 **아래 전폭**이다. 오른쪽 절반에 가두면 줄이 짧아지고,
+                짧은 칸은 짧게 쓰게 만든다 — H2 합격선이 회당 150자다. */}
+            <AttemptInput
+              label={screen.card.prompt_label}
+              value={text}
+              onChange={setText}
+              onMasked={가림알림}
+              disabled={screen.kind === "sending"}
+            />
+            {/* **입력칸 곁이다.** 무엇에 대한 말인지 아이가 찾지 않아도 되게 —
+                자녀 인증 화면이 오류를 입력칸 곁에 두는 것과 같다. */}
+            {보내기못닿음 && screen.kind === "card" && (
+              <p data-보내기못닿음 className="text-xl/relaxed">
+                {못닿음.보내기}
+              </p>
+            )}
+            <button
+              type="button"
+              // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
+              // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
+              disabled={text.trim() === "" || screen.kind === "sending"}
+              onClick={() => void send(screen.card, screen.guide)}
+              className="self-end rounded-full bg-scarf px-10 py-3 text-xl text-markings
+                disabled:opacity-40"
             >
-              {screen.hints.map((원인) => (
-                <li key={원인}>{원인}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </main>
+              {버튼.보내기}
+            </button>
+          </div>
+        )}
+
+        {screen.kind === "sent" && (
+          // 최소 전이다. 삽화·하이라이트·티어 연출과 「다음 장면」은 W4(A0-3) 자리다.
+          <div className="flex justify-center">
+            <GuideFigure guide={screen.guide} />
+          </div>
+        )}
+
+        {(screen.kind === "done" || screen.kind === "refused") && (
+          // 서버가 준 문구를 그대로 보여준다. 프론트가 다듬거나 덧붙이지 않는다.
+          <p className="text-center text-2xl/relaxed">{screen.line}</p>
+        )}
+
+        {screen.kind === "unreachable" && (
+          <div className="flex flex-col items-center gap-6 text-center">
+            {/* **`문구.md` 2.4 다.** 서버가 아무 말도 못 했으므로 화면이 고르지만 짓지는 않는다.
+                **앱 목소리라 캐릭터를 옆에 세우지 않는다** — 가이드가 앱 사정을 말하면
+                PRD C-1 「역할 경계」를 넘고, 그쪽이 말투가 갈리는 것보다 세계관을 크게 깬다 (0장). */}
+            <p className="text-2xl/relaxed">{못닿음.장면}</p>
+            <button
+              type="button"
+              onClick={retry}
+              className="rounded-full bg-scarf px-8 py-3 text-markings"
+            >
+              {버튼.다시열기}
+            </button>
+            {screen.hints.length > 0 && (
+              // **개발 빌드 전용이다.** 운영에서는 `hints` 가 비어 있어 이 블록이 아예 안 그려진다.
+              // 아이에게 보이는 말이 아니라 **개발자에게 보이는 단서**다 — 위 두 줄과 톤이 다른 것이 맞다.
+              // 2026-09-07 하루에 이 화면이 세 번 나왔고 셋 다 원인이 달랐다.
+              <ul
+                data-dev-hints
+                className="max-w-xl list-disc space-y-1 rounded-xl border border-dashed
+                  border-brass/50 p-4 text-left text-sm opacity-70"
+              >
+                {screen.hints.map((원인) => (
+                  <li key={원인}>{원인}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* **나가기는 `<main>` 밖 맨 아래다.** 본문이 `flex-1` 이라 여기가 화면 바닥에 붙는다
+          (`layout.tsx` 의 `flex min-h-dvh flex-col`). 「아이 눈에 띄는 자리에 두지 않는다」를
+          **자리로 지킨 것**이고, 글자를 못 읽게 줄인 것이 아니다.
+
+          **화면 상태를 안 가린다 — 어느 상태에서든 그 자리에 있다.** 「보내는 중」에만 숨기는
+          규칙을 두려다 접었다: **오락가락하는 컨트롤이 오히려 눌러보게 만든다.**
+          실수로 누르는 것은 확인 창이 막는다 — 그것이 되묻기를 둔 이유 전부다. */}
+      <footer className="page-frame flex justify-center pb-6">
+        <LeaveButton />
+      </footer>
+    </>
   );
 }

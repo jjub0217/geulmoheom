@@ -13,6 +13,8 @@ import {
   인증이풀렸다,
 } from "@/lib/api";
 
+import { 고지, 못닿음, 폼 } from "./copy";
+
 type SignupRequest = components["schemas"]["SignupRequest"];
 type SignupResponse = components["schemas"]["SignupResponse"];
 type ParentMe = components["schemas"]["ParentMe"];
@@ -30,24 +32,6 @@ type ParentMe = components["schemas"]["ParentMe"];
  * ③ **고지를 링크 뒤에 숨기지 않는다.** 「어디로 가고 얼마나 남는가」는 화면에 문장으로 있다
  */
 
-/**
- * 화면에 그대로 나가는 고지. **근거는 `MVP_PRD.md` E-4 MUST 와 `페인_가이드라인정책.md` 2.3** 이고
- * 여기서 지어낸 문장이 아니다. **확정본이다** (2026-09-07 대표 지적 → PM 확정).
- *
- * **전문 용어를 쓰지 않는다.** 정책 문서는 「숨기지 않고 고지한다」고 했지 「전문 용어로 고지한다」고
- * 하지 않았다 — **읽어도 모르면 고지가 아니라 알리바이다.** 「API」는 학부모에게 아무 정보도 주지 않아
- * 뺐고, 대신 **「구글」을 앞에 뒀다.** 학부모가 알아야 할 사실은 **「우리 밖으로, 구글이라는 회사로 간다」**다.
- * 정확한 이름(Gemini)은 괄호로 남긴다 — **제3자 위탁 고지라 수탁자명이 있어야 한다.**
- *
- * **「AI 학습」이라는 명사구를 쓰지 않는다.** 학부모의 핵심 불안이 「AI 가 대신 써준다」라서,
- * **부정문 안에 넣어도 그 단어만 기억에 남는다.** 그래서 「학습시키지는 않습니다」로 동사형을 쓴다.
- * 「남용 탐지」도 업계 말이라 **누가 무엇을 왜 하는지**로 풀었다.
- */
-const 고지 = [
-  "아이가 쓴 문장은 구글의 AI(Gemini)로 보내져 평가됩니다.",
-  "구글이 이 문장으로 AI를 학습시키지는 않습니다. 다만 나쁘게 쓰이는지 확인하려고 일정 기간 보관합니다.",
-  "실명·학교 이름·연락처는 보내기 전에 걸러냅니다.",
-];
 
 /** **3상태다.** 2상태로 만들면 첫 페인트에 가입 화면이 깜빡인다 (미결 11-2 조사 노트). */
 type Screen =
@@ -59,7 +43,11 @@ type Screen =
   | { kind: "가입됨"; consentAt: string }
   /** 서버가 형식을 갖춰 거절했다. 문구는 서버가 준 것을 그대로 쓴다 */
   | { kind: "거절"; line: string }
-  | { kind: "못닿음"; hints: string[] };
+  /**
+   * 서버에 닿지 못했다. **`동작` 을 함께 싣는다** — `문구.md` 3.5 가 **무엇이 안 됐는지**를
+   * 말하라고 해서, 화면이 「어느 동작이 실패했나」를 알아야 문장을 고를 수 있다.
+   */
+  | { kind: "못닿음"; hints: string[]; 동작: keyof typeof 못닿음 };
 
 export default function ParentSignup() {
   const [screen, setScreen] = useState<Screen>({ kind: "확인중" });
@@ -94,7 +82,7 @@ export default function ParentSignup() {
           return;
         }
         if (e instanceof NetworkError) {
-          setScreen({ kind: "못닿음", hints: e.hints });
+          setScreen({ kind: "못닿음", hints: e.hints, 동작: "가입" });
           return;
         }
         throw e;
@@ -123,7 +111,7 @@ export default function ParentSignup() {
         return;
       }
       if (e instanceof NetworkError) {
-        setScreen({ kind: "못닿음", hints: e.hints });
+        setScreen({ kind: "못닿음", hints: e.hints, 동작: "가입" });
         return;
       }
       throw e;
@@ -145,7 +133,7 @@ export default function ParentSignup() {
     } catch (e) {
       // 서버에 닿지 못하면 **쿠키가 그대로 살아 있다.** 나간 척하지 않는다.
       if (e instanceof NetworkError) {
-        setScreen({ kind: "못닿음", hints: e.hints });
+        setScreen({ kind: "못닿음", hints: e.hints, 동작: "로그아웃" });
         return;
       }
       if (e instanceof ApiError) {
@@ -179,15 +167,13 @@ export default function ParentSignup() {
           }}
         >
           <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold">보호자 가입</h1>
-            <p className="opacity-80">
-              아이 계정은 보호자 동의를 받은 뒤에 만들 수 있습니다.
-            </p>
+            <h1 className="text-3xl font-semibold">{폼.제목}</h1>
+<p className="opacity-80">{폼.안내}</p>
           </div>
 
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1">
-              <span>이메일</span>
+              <span>{폼.이메일}</span>
               <input
                 type="email"
                 value={email}
@@ -199,7 +185,7 @@ export default function ParentSignup() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span>비밀번호</span>
+              <span>{폼.비밀번호}</span>
               <input
                 type="password"
                 value={password}
@@ -213,7 +199,7 @@ export default function ParentSignup() {
           </div>
 
           <section className="flex flex-col gap-3 rounded-2xl border-2 border-brass/40 p-5">
-            <h2 className="font-semibold">아이가 쓴 문장이 어디로 가는지</h2>
+            <h2 className="font-semibold">{폼.고지제목}</h2>
             {/* **링크 뒤에 숨기지 않는다.** 「약관 보기」만 두면 아무도 읽지 않는다. */}
             <ul className="list-disc space-y-1 pl-5">
               {고지.map((줄) => (
@@ -231,8 +217,7 @@ export default function ParentSignup() {
                 className="mt-1 size-5"
               />
               <span>
-                <strong>[필수]</strong> 저는 이 아이의 보호자이고, 위 내용에
-                동의합니다.
+                <strong>{폼.필수표시}</strong> {폼.필수동의}
               </span>
             </label>
           </section>
@@ -241,7 +226,7 @@ export default function ParentSignup() {
             {/* 위 상자가 「무슨 일이 일어나는지」이고 여기가 「당신이 정하는 것」이다.
                 **제목이 그 경계를 선언한다** — 「선택」이라는 사실을 라벨 앞의 `[선택]` 글자
                 하나에만 기대지 않게 된다. 빠르게 훑는 사람도 읽는 모드가 바뀐 것을 여기서 안다. */}
-            <h2 className="font-semibold">여기서부터는 선택입니다</h2>
+            <h2 className="font-semibold">{폼.선택시작}</h2>
             {/* **별개 항목이다.** 위와 한 덩어리로 만들지 않는다 (PRD 1.1b). */}
             <label className="flex items-start gap-3">
               <input
@@ -255,15 +240,12 @@ export default function ParentSignup() {
                   나중에 알게 되면 **동의를 받은 것이 아니라 속인 것**이 된다
                   (`페인_가이드라인정책.md` 「숨기지 않고 고지한다」). */}
               <span>
-                <strong>[선택]</strong> 아이가 쓴 문장을 사람이 직접 읽고 평가
-                기준을 다듬는 데 쓰는 것에 동의합니다.
+                <strong>{폼.선택표시}</strong> {폼.선택동의}
               </span>
             </label>
             {/* 이 한 줄이 없으면 「체크 안 하면 기능이 줄어드나」 하고 그냥 누른다 —
                 그러면 동의를 **받은 것이 아니라 통과시킨 것**이 된다. */}
-            <p className="pl-8 opacity-80">
-              거부해도 모든 기능을 그대로 쓸 수 있습니다.
-            </p>
+<p className="pl-8 opacity-80">{폼.선택거부해도}</p>
           </section>
 
           <button
@@ -272,7 +254,7 @@ export default function ParentSignup() {
             className="self-end rounded-full bg-scarf px-10 py-3 text-markings
               disabled:opacity-40"
           >
-            가입하기
+            {폼.가입하기}
           </button>
         </form>
       )}
@@ -281,9 +263,10 @@ export default function ParentSignup() {
         // **여기서 멈춘다** (PM 확정 2026-09-07). 다음 단계(아이 계정 만들기)는 백엔드 6번이
         // 오면 **바로 이 자리**에 붙는다. 「곧 열립니다」 같은 문장을 지어두면 이틀 뒤에 거짓말이 된다.
         <div className="flex flex-col items-start gap-2">
-          <h1 className="text-3xl font-semibold">가입됐습니다</h1>
+          <h1 className="text-3xl font-semibold">{폼.가입됨}</h1>
           <p className="opacity-80">
-            동의 시각: <time dateTime={screen.consentAt}>{screen.consentAt}</time>
+            {폼.동의기록}{" "}
+            <time dateTime={screen.consentAt}>{screen.consentAt}</time>
           </p>
           {/* **「모든 기기에서 로그아웃됩니다」 같은 말을 쓰지 않는다** — 지금은 거짓말이다.
               `token_version` 은 컬럼만 있고 올리는 코드가 없다(E-3/E-4).
@@ -294,7 +277,7 @@ export default function ParentSignup() {
             onClick={() => void 로그아웃()}
             className="mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
           >
-            로그아웃
+            {폼.로그아웃}
           </button>
         </div>
       )}
@@ -303,9 +286,10 @@ export default function ParentSignup() {
 
       {screen.kind === "못닿음" && (
         <div className="flex flex-col gap-6">
-          <p className="text-xl/relaxed">
-            지금 서버에 닿지 못했습니다. 잠시 뒤에 다시 시도해 주세요.
-          </p>
+          {/* **`문구.md` 3.5 다. 자리마다 다르다** — 무엇이 안 됐는지를 말한다.
+              「인터넷 연결을 확인해 주세요」를 안 붙인다: **우리 쪽이 내려간 것일 수도 있는데
+              원인을 모르면서 상대 탓으로 읽히는 안내를 하지 않는다.** */}
+          <p className="text-xl/relaxed">{못닿음[screen.동작]}</p>
           {screen.hints.length > 0 && (
             // 개발 빌드 전용이다. 운영 번들에서는 `hints` 가 비어 이 블록이 안 그려진다.
             <ul

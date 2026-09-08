@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { 설치안내, 코드입력 } from "../src/app/child/auth/copy";
+import { 못닿음, 설치안내, 코드입력 } from "../src/app/child/auth/copy";
 
 /**
  * 자녀 인증 화면 (E-3 프론트 짝).
@@ -149,4 +149,22 @@ test("성공하면 화면을 하나 더 만들지 않고 모험 화면으로 간
 
   // 「환영합니다」류를 두지 않는다 — **환영은 가이드 몫**이고 그것은 모험 화면에서 일어난다.
   await expect(page).toHaveURL(/\/$/);
+});
+
+test("닿지 못하면 아이 사정으로 말한다 — 「서버」가 화면에 없다", async ({ page }) => {
+  await 홈화면앱으로(page);
+  // 응답을 주지 않는다. 서버가 **아무 말도 못 한** 자리다 — `error.message` 가 없다.
+  await page.route(ME, (route) => route.abort("failed"));
+  await page.goto("/child/auth");
+
+  await expect(page.getByText(못닿음)).toBeVisible();
+
+  // **`문구.md` 2.4 가 「서버」를 금지한다** — 2.1 의 「기술 용어를 섞지 않는다」가 여기에도 걸린다.
+  // 한때 이 자리에 「지금 **서버**에 닿지 못했습니다」가 박혀 있었다 (2026-09-07 갈아치웠다).
+  // 개발 단서(`data-dev-hints`)는 개발자용이라 세지 않는다 — 운영 번들에서는 아예 안 그려진다.
+  const 아이에게보이는것 = await page
+    .locator("main > div > p")
+    .first()
+    .innerText();
+  expect(아이에게보이는것).not.toContain("서버");
 });

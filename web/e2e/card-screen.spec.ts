@@ -4,6 +4,8 @@ import type { paths } from "../src/api/types.gen";
 // **가림 글자를 문자열로 박지 않는다.** 확정본이 바뀌면 상수 하나만 고치면 되고,
 // 여기 박아두면 **문구가 바뀌는 날 테스트가 제품을 붙잡는다** (`docs/문구.md` 1.1).
 import { PII_MASK } from "../src/lib/pii";
+// 문구도 같은 이유로 박지 않는다 — `docs/문구.md` 2.2·2.4·2.5 가 SSOT 다.
+import { 버튼, 못닿음, 상태표시 } from "../src/app/copy";
 
 /**
  * 오늘의 모험 화면(A0-2)이 응답 네 가지를 각각 그리는지 본다.
@@ -96,7 +98,7 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
   // **`main` 안에서 센다.** 밖까지 세면 개발 빌드의 Next 오버레이 버튼(`#next-logo`)이 함께 잡혀
   // **우리 UI 와 무관한 이유로 빨간불**이 된다 — 라우트가 둘이 되고 중간에 컴파일이 일어나자 실제로 그랬다.
   await expect(page.locator("main").getByRole("button")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "보내기" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: 버튼.보내기 })).toBeEnabled();
 
   await 가로스크롤없음(page);
 
@@ -145,7 +147,7 @@ test("쓴 것을 보낸다 — 글자 수로 잠기지 않고, retry_of 는 비�
   );
   await page.goto("/");
 
-  const 보내기 = page.getByRole("button", { name: "보내기" });
+  const 보내기 = page.getByRole("button", { name: 버튼.보내기 });
   const 입력창 = page.getByLabel(CARD.prompt_label);
 
   // 아무것도 안 썼을 때만 막힌다. **30자와 무관하다.**
@@ -187,7 +189,7 @@ test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", 
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill("문을 연다");
-  await page.getByRole("button", { name: "보내기" }).click();
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
 
   // 질문은 가이드 대사로 온다. 표정도 서버가 준 것으로 바뀐다.
   await expect(
@@ -197,7 +199,7 @@ test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", 
 
   // **입력창이 그대로 있고 쓴 문장도 그대로다.** 다시 보낼 수 있어야 한다.
   await expect(입력창).toHaveValue("문을 연다");
-  await expect(page.getByRole("button", { name: "보내기" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: 버튼.보내기 })).toBeEnabled();
 });
 
 test("차단돼도 쓴 문장을 지우지 않는다", async ({ page }) => {
@@ -219,13 +221,13 @@ test("차단돼도 쓴 문장을 지우지 않는다", async ({ page }) => {
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill("문을 열고 들어간다");
-  await page.getByRole("button", { name: "보내기" }).click();
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
 
   await expect(page.getByText("다르게 말해줄래?")).toBeVisible();
   await expect(입력창).toHaveValue("문을 열고 들어간다");
 
   // 오류 화면으로 때우지 않는다 — 아이는 자기가 뭘 잘못했는지 모른 채 막히면 안 된다.
-  await expect(page.getByRole("button", { name: "다시 열기" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
 });
 
 test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다", async ({ page }) => {
@@ -265,12 +267,12 @@ test("서버에 닿지 못하면 다시 열 수 있다", async ({ page }) => {
 
   await page.goto("/");
 
-  const 다시열기 = page.getByRole("button", { name: "다시 열기" });
+  const 다시열기 = page.getByRole("button", { name: 버튼.다시열기 });
   await expect(다시열기).toBeVisible();
 
   // **개발 빌드에서만** 원인 후보가 함께 뜬다 (운영 번들에서는 `hints` 가 비어 이 블록이 없다).
   // E2E 는 `next dev` 로 돌아 개발 빌드다. 아이가 읽는 문구는 그대로 있고, 이건 그 아래 따로 붙는다.
-  await expect(page.getByText("길이 잠깐 흐려졌어. 조금 뒤에 다시 열어볼까?")).toBeVisible();
+  await expect(page.getByText(못닿음.장면)).toBeVisible();
   const 단서 = page.locator("[data-dev-hints]");
   await expect(단서).toBeVisible();
   // 같은 오리진이라(`NEXT_PUBLIC_API_BASE_URL=/api/v1`) CORS·mixed content 는 후보가 아니다.
@@ -295,7 +297,7 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
   await page.goto("/");
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
-  const 보내기 = page.getByRole("button", { name: "보내기" });
+  const 보내기 = page.getByRole("button", { name: 버튼.보내기 });
 
   await 입력창.fill("등대지기한테 010-1234-5678 로 전화한다");
 
@@ -411,4 +413,45 @@ test("한글 조합 중에는 손대지 않는다 — 조합이 끝난 뒤에 �
   await 치기("우리 학교는 한빛초등학교야", "end");
   // 조합이 끝난 지금 가린다.
   await expect(입력창).toHaveValue(`우리 학교는 ${PII_MASK}야`);
+});
+
+test("불러오는 동안 무엇을 하고 있는지 말한다", async ({ page }) => {
+  // **응답을 우리가 쥐고 있다가 놓는다.** 그냥 두면 로딩이 눈 깜짝할 새 지나가
+  // 이 검사가 **있으나 마나**가 된다 — 재는 창을 우리가 만든다.
+  let 놓기: () => void = () => {};
+  const 붙잡기 = new Promise<void>((r) => (놓기 = r));
+  await page.route(CARDS_NEXT, async (route) => {
+    await 붙잡기;
+    return route.fulfill({ status: 200, json: CARD });
+  });
+
+  await page.goto("/");
+
+  // `문구.md` 2.5. **빈 화면으로 두지 않는다** — 아이는 왜 아무 일도 안 일어나는지 알 방법이 없다.
+  await expect(page.getByText(상태표시.장면부르는중)).toBeVisible();
+
+  놓기();
+  await expect(page.getByText(CARD.situation)).toBeVisible();
+  await expect(page.getByText(상태표시.장면부르는중)).toHaveCount(0);
+});
+
+test("보내기가 못 닿으면 쓴 문장을 지킨다 — 화면을 넘기지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await page.route(ATTEMPTS, (route) => route.abort("failed"));
+  await page.goto("/");
+
+  const 문장 = "낡은 등대 문틈으로 손전등을 비추자 젖은 발자국이 이어져 있었다";
+  const 입력창 = page.getByLabel(CARD.prompt_label);
+  await 입력창.fill(문장);
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // **`문구.md` 2.4 뼈대다** — 장면을 못 연 것이 아니라 **못 보낸 것**이다.
+  await expect(page.getByText(못닿음.보내기)).toBeVisible();
+  await expect(page.getByText(못닿음.장면)).toHaveCount(0);
+
+  // **핵심.** 화면을 넘기면 「다시 열기」가 **다른 카드**를 불러오고, 입력칸에 남은 문장이
+  // **앞 장면에 쓴 글인 채로 새 장면에 붙는다.** 그래서 카드도 문장도 그 자리에 있어야 한다.
+  await expect(page.getByText(CARD.situation)).toBeVisible();
+  await expect(입력창).toHaveValue(문장);
+  await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
 });

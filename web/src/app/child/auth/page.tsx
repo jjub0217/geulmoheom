@@ -7,7 +7,7 @@ import type { components } from "@/api/types.gen";
 import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
 import { useDisplayMode } from "@/lib/standalone";
 
-import { 설치안내, 코드길이, 코드입력 } from "./copy";
+import { 못닿음, 설치안내, 코드길이, 코드입력, 확인중 } from "./copy";
 
 type ChildAuthRequest = components["schemas"]["ChildAuthRequest"];
 type ChildAuthResponse = components["schemas"]["ChildAuthResponse"];
@@ -24,7 +24,8 @@ type ChildMe = components["schemas"]["ChildMe"];
  * **문구는 `docs/문구.md` 3.2·3.3 이 SSOT** 이고 `./copy.ts` 가 그것을 옮겨 온 것이다.
  * 여기서 문장을 짓지 않는다. **오류도 서버가 준 것을 그대로 쓴다.**
  *
- * **아이 로그아웃은 이 화면의 셋째 몫이고 다음 세션이다** (`web/tasks/W4.md` 2번).
+ * **아이 로그아웃(셋째 몫)은 붙었다** — 다만 화면은 여기가 아니라 모험 화면 맨 아래다
+ * (`src/components/leave.tsx`). **나가면 여기로 돌아온다** (`문구.md` 2.3).
  */
 
 /**
@@ -122,7 +123,7 @@ export default function ChildAuth() {
   return (
     <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-12">
       {(형태 === "확인중" || (형태 === "홈화면앱" && screen.kind === "확인중")) && (
-        <p className="opacity-70">확인하는 중…</p>
+        <p className="opacity-70">{확인중}</p>
       )}
 
       {형태 === "브라우저탭" && (
@@ -204,9 +205,9 @@ export default function ChildAuth() {
 
       {형태 === "홈화면앱" && screen.kind === "못닿음" && (
         <div className="flex flex-col gap-6">
-          <p className="text-xl/relaxed">
-            지금 서버에 닿지 못했습니다. 잠시 뒤에 다시 시도해 주세요.
-          </p>
+          {/* **`문구.md` 2.4 다.** 서버가 아무 말도 못 했으므로 화면이 고르지만,
+              그렇다고 화면이 짓는 것은 아니다 — 문서에 자리가 있다. */}
+          <p className="text-xl/relaxed">{못닿음}</p>
           {screen.hints.length > 0 && (
             // 개발 빌드 전용이다. 운영 번들에서는 `hints` 가 비어 이 블록이 안 그려진다.
             <ul
