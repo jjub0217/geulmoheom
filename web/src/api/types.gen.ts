@@ -197,7 +197,10 @@ export interface paths {
          *     **`token_version` 을 먼저 올린다.** 행이 지워지면 `require_child` 가 어차피 401 을
          *     내지만, 지우는 순서가 바뀌거나 실패해도 토큰이 살아남지 않게 한 번 더 닫는다.
          *
-         *     **Redis 잔여 파기는 E-4 다** — 되묻기 카운터가 남는다. 아이 원문은 없다.
+         *     **되묻기 카운터도 함께 지운다** (E-4). 아이 원문은 없지만 「어느 카드에서 몇 번
+         *     되물었는지」가 남고, TTL 24시간을 기다리는 것은 「즉시 파기」와 다른 말이다.
+         *     **DB 를 먼저 커밋하고 그다음 Redis 를 훑는다** — 순서를 바꾸면 커밋이 실패했을 때
+         *     살아 있는 아이의 카운터를 지운 채로 끝난다.
          */
         delete: operations["delete_child_api_v1_parents_children__child_id__delete"];
         options?: never;
