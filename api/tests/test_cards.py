@@ -5,12 +5,15 @@
 지웠으니 **다시 갈라지면 여기가 먼저 깨진다.**
 """
 
+import uuid
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, update
 
 from app import db
-from app.models import Card
+from app.models import Card, CardAttempt, Child
 from app.scaffold import 질문
 from app.scene_cards import 모험카드들, 카드들
 
@@ -111,3 +114,61 @@ async def test_카드를_안_뿌렸으면_준비된_것이_아니다(client: Tes
 
     assert response.status_code == 503
     assert response.json()["checks"]["cards"] == "down"
+
+
+# ── 같은 카드를 하루에 두 번 주지 않는다 (A0-1 잔여) ────────
+#
+# 소모 이력이 들어왔으니 `next` 가 그것을 읽는다. **오늘 쓴 카드는 후보에서 빠진다** —
+# 같은 장면을 두 번 주면 아이는 「내가 이미 한 건데」로 읽고, 그 순간 카드가
+# 퀘스트가 아니라 무작위 반복이 된다.
+
+
+async def _시도를_넣는다(
+    child_id: uuid.UUID, card_id: str, *, 언제: datetime | None = None
+) -> None:
+    """API 를 안 거친다 — 여기서 보는 것은 **`next` 가 이력을 읽는가**이지 저장이 아니다."""
+    async with db.SessionLocal() as session:
+        시도 = CardAttempt(
+            child_id=child_id,
+            card_id=card_id,
+            attempt=1,
+            grade="G2",
+            tier="rare",
+            char_len=10,
+            text="이미 다녀온 장면",
+        )
+        if 언제 is not None:
+            시도.created_at = 언제
+        session.add(시도)
+        await session.commit()
+
+
+async def test_오늘_쓴_카드는_다시_안_준다(client: TestClient, 자녀행: Child):
+    await _시도를_넣는다(자녀행.id, "c01")
+
+    나온것 = {client.get("/api/v1/cards/next").json()["card_id"] for _ in range(40)}
+
+    assert "c01" not in 나온것
+
+
+async def test_어제_쓴_카드는_다시_준다(client: TestClient, 자녀행: Child):
+    """**「오늘」이 기준이다.** 영영 빼면 스무 장을 쓰고 나서 줄 것이 없어진다."""
+    어제 = datetime.now(UTC) - timedelta(days=1)
+    for 카드 in 카드목록[1:]:  # c01 만 남기고 전부 어제 썼다
+        await _시도를_넣는다(자녀행.id, 카드.card_id, 언제=어제)
+
+    나온것 = {client.get("/api/v1/cards/next").json()["card_id"] for _ in range(10)}
+
+    assert len(나온것) > 1
+
+
+async def test_오늘_스무_장을_다_썼으면_줄_것이_없다(client: TestClient, 자녀행: Child):
+    """일일 상한(5장)이 먼저 걸려 실제로는 안 닿는다. **그래도 정의해 둔다** —
+    상한을 올리는 날 여기가 빈 응답이나 500 이 되면 아이 화면이 멈춘다."""
+    for 카드 in 카드목록:
+        await _시도를_넣는다(자녀행.id, 카드.card_id)
+
+    response = client.get("/api/v1/cards/next")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "DAILY_CAP_REACHED"

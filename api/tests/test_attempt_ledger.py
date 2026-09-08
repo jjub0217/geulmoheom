@@ -186,3 +186,32 @@ async def test_되묻기를_거친_횟수가_남는다(
 
     (행,) = await _이력(자녀행.id)
     assert 행.scaffold_count == 1
+
+
+# ── 같은 카드를 하루에 두 번 풀지 않는다 ────────────────────
+
+
+async def test_오늘_이미_푼_카드는_409(client: TestClient, 자녀행: Child):
+    """`/cards/next` 가 안 줘도 **클라이언트가 직접 부를 수 있다.**
+    주지 않는 것과 받지 않는 것은 다른 자리라 둘 다 막는다 (`공통규약.md` 오류 표)."""
+    _보내기(client)
+
+    응답 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": 문장})
+
+    assert 응답.status_code == 409
+    assert 응답.json()["error"]["code"] == "CARD_ALREADY_DONE_TODAY"
+    assert len(await _이력(자녀행.id)) == 1
+
+
+async def test_재시도는_같은_카드여도_통과한다(client: TestClient, 자녀행: Child):
+    """**재시도는 별도 경로다** (`공통규약.md`). 막으면 A0-3 의 「다시 써보기」가
+    통째로 안 돈다 — H2 재시도율(합격선 20%)이 재는 것이 그 동작이다."""
+    첫번째 = _보내기(client)
+
+    응답 = client.post(
+        "/api/v1/attempts",
+        json={"card_id": "c01", "text": 문장, "retry_of": 첫번째["attempt_id"]},
+    )
+
+    assert 응답.status_code == 200
+    assert len(await _이력(자녀행.id)) == 2

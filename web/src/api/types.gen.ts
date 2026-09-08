@@ -325,9 +325,10 @@ export interface paths {
          * Next Card
          * @description 오늘 아직 안 한 카드 중 하나. 소진 시 409 `DAILY_CAP_REACHED`.
          *
-         *     소진 응답에도 `guide.line`("내일 또 보자")을 담는다 — 아이가 빈 화면을 보지 않게.
+         *     **오늘 이미 푼 카드는 후보에서 뺀다** (A0-1). 같은 장면을 두 번 주면 아이는
+         *     「내가 이미 한 건데」로 읽고, 그 순간 카드가 퀘스트가 아니라 무작위 반복이 된다.
          *
-         *     **아이별 순서·소모 이력은 아직 없다.** 지금은 DB 의 20장에서 무작위다.
+         *     **아이별 순서는 아직 없다.** 남은 것 중 무작위다.
          */
         get: operations["next_card_api_v1_cards_next_get"];
         put?: never;

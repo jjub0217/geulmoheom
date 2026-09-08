@@ -36,6 +36,7 @@ from app.api.v1.deps import (
     mock_outcome,
     require_child,
 )
+from app.card_store import 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
@@ -175,6 +176,7 @@ async def create_attempt(
     # 뒤에 FK 로 터져 500 이 되고, **돈은 나갔는데 아이는 오류를 본다.**
     await _쓸수있는카드인가(session, payload.card_id)
     재시도 = await _재시도확인(session, 아이, payload.retry_of)
+    await _오늘_안_푼_카드인가(session, 아이, payload.card_id, 재시도)
 
     # **3. PII 2차 — 가린 뒤 진행한다. 막지 않는다** (`Stage0.md` 9절 3번,
     # 2026-09-08 대표 판정 · 미결 11-5). 막으면 아이에게 이유를 말해줄 수 없다 —
@@ -316,6 +318,27 @@ async def _재시도확인(session: AsyncSession, 아이: ChildRow, retry_of: st
     if await session.scalar(문) is None:
         raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": ["retry_of"]})
     return 아이디
+
+
+async def _오늘_안_푼_카드인가(
+    session: AsyncSession, 아이: ChildRow, card_id: str, 재시도: UUID | None
+) -> None:
+    """오늘 이미 푼 카드면 409 `CARD_ALREADY_DONE_TODAY` (`공통규약.md` 오류 표).
+
+    **`/cards/next` 가 안 줘도 클라이언트는 직접 부를 수 있다.** 주지 않는 것과 받지
+    않는 것은 다른 자리라 둘 다 막는다.
+
+    **재시도는 통과시킨다** — 「재시도는 별도 경로」가 그 표에 적힌 그대로다. 막으면
+    결과 연출(A0-3)의 「다시 써보기」가 통째로 안 돌고, **H2 재시도율이 재는 것이
+    그 동작**이다.
+
+    **되묻기는 애초에 안 걸린다.** 행을 안 만들기 때문이다 — 되묻기 뒤 고쳐 보낸 것이
+    여기서 막히면 아이가 그 카드에 갇힌다.
+    """
+    if 재시도 is not None:
+        return
+    if card_id in await 오늘쓴카드들(session, 아이.id):
+        raise AppError(ErrorCode.CARD_ALREADY_DONE_TODAY)
 
 
 async def _이력남기기(

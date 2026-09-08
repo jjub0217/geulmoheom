@@ -16,11 +16,14 @@
 경우는 「뿌리는 것을 잊었을 때」 하나뿐이고, 그 하나를 `/readyz` 가 잡는다.
 """
 
+import uuid
+from datetime import UTC, datetime
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import CARD_TYPES, TUTORIAL_TYPE, Card
+from app.models import CARD_TYPES, TUTORIAL_TYPE, Card, CardAttempt
 from app.scene_cards import 카드들
 
 # 카드 화면의 입력 유도 문장 (`Stage0.md` 3절 예시 · PRD 3장 「탐험가는 어떻게 할까?」).
@@ -108,3 +111,30 @@ async def 모험카드들(session: AsyncSession) -> list[Card]:
     """
     문 = select(Card).where(Card.type.in_(CARD_TYPES)).order_by(Card.display_order)
     return list(await session.scalars(문))
+
+
+def 오늘시작() -> datetime:
+    """「오늘」의 경계. **이 저장소에 이 기준은 하나여야 한다.**
+
+    **지금은 UTC 자정이다.** 자녀별 타임존으로 가르는 것은 미결 11-4(일일 상한 리셋)와
+    같은 판단이라 **거기서 한 번에 정한다** — 두 곳에서 따로 정하면 갈라지고, 갈라지면
+    **「오늘 했다는데 카드를 안 준다」**가 된다.
+
+    원래 `app/api/v1/parents.py` 에 있었다. 학부모 화면의 「오늘 놀았나」와 여기 「오늘
+    쓴 카드」가 **같은 경계를 봐야 해서** 옮겼다 — 그 함수의 주석이 이미 그렇게 적혀 있었다.
+    """
+    return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def 오늘쓴카드들(session: AsyncSession, child_id: uuid.UUID) -> set[str]:
+    """이 아이가 **오늘 실제로 소모한** 카드들.
+
+    `card_attempts` 행이 곧 소모다 — 되묻기·차단은 행을 안 만들므로 여기 안 잡힌다
+    (`Stage0.md` 4절). **재시도도 같은 카드라 잡힌다** — 이미 푼 카드이니 맞다.
+    """
+    문 = (
+        select(CardAttempt.card_id)
+        .where(CardAttempt.child_id == child_id, CardAttempt.created_at >= 오늘시작())
+        .distinct()
+    )
+    return set(await session.scalars(문))

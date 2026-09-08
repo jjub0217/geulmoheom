@@ -26,6 +26,7 @@ from app.accounts import (
 )
 from app.api.v1.deps import Session, require_parent
 from app.auth import PARENT_COOKIE, clear_auth_cookie, set_auth_cookie
+from app.card_store import 오늘시작 as 오늘시작기준
 from app.errors import AppError, ErrorCode
 from app.models import CardAttempt, Child, Parent
 from app.scaffold import 잔여지우기
@@ -127,7 +128,7 @@ async def me(학부모: ParentRow, session: Session) -> ParentMe:
         )
     ).all()
 
-    오늘시작 = _오늘시작()
+    오늘시작 = 오늘시작기준()
     오늘한아이 = (
         set(
             (
@@ -298,13 +299,3 @@ async def _내자녀(child_id: str, 학부모: Parent, session: Session) -> Chil
     if 아이 is None:
         raise AppError(ErrorCode.NOT_FOUND)
     return 아이
-
-
-def _오늘시작() -> datetime:
-    """「오늘 플레이했나」의 기준.
-
-    **지금은 UTC 자정이다.** 자녀별 타임존으로 가르는 것은 미결 11-4(일일 상한 리셋)와
-    같은 판단이라 **거기서 한 번에 정한다** — 여기서 따로 정하면 두 곳이 갈라지고,
-    갈라지면 「오늘 했다는데 카드가 안 준다」가 된다.
-    """
-    return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)

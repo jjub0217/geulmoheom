@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
-from app.card_store import 모험카드들
+from app.card_store import 모험카드들, 오늘쓴카드들
 from app.card_store import 카드 as 카드읽기
 from app.errors import AppError, ErrorCode
 from app.models import TUTORIAL_TYPE
@@ -45,32 +45,46 @@ def _응답(행: CardRow) -> Card:
     )
 
 
+def _오늘은끝() -> AppError:
+    """소진 응답에도 `guide.line`("내일 또 보자")을 담는다 — 아이가 빈 화면을 보지 않게."""
+    return AppError(
+        ErrorCode.DAILY_CAP_REACHED,
+        detail={
+            "guide": {"expression": "session_end", "line": "오늘 모험은 여기까지! 내일 또 보자"}
+        },
+    )
+
+
 @router.get("/next")
 async def next_card(
-    _: Child,
+    아이: Child,
     session: Session,
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> Card:
     """오늘 아직 안 한 카드 중 하나. 소진 시 409 `DAILY_CAP_REACHED`.
 
-    소진 응답에도 `guide.line`("내일 또 보자")을 담는다 — 아이가 빈 화면을 보지 않게.
+    **오늘 이미 푼 카드는 후보에서 뺀다** (A0-1). 같은 장면을 두 번 주면 아이는
+    「내가 이미 한 건데」로 읽고, 그 순간 카드가 퀘스트가 아니라 무작위 반복이 된다.
 
-    **아이별 순서·소모 이력은 아직 없다.** 지금은 DB 의 20장에서 무작위다.
+    **아이별 순서는 아직 없다.** 남은 것 중 무작위다.
     """
     if 소진:
-        raise AppError(
-            ErrorCode.DAILY_CAP_REACHED,
-            detail={
-                "guide": {"expression": "session_end", "line": "오늘 모험은 여기까지! 내일 또 보자"}
-            },
-        )
+        raise _오늘은끝()
 
     후보 = await 모험카드들(session)
     if not 후보:
         # **씨를 안 뿌렸다** (`make seed`). `/readyz` 가 이미 `degraded` 로 서 있고,
         # 여기서는 조용히 빈 값을 주지 않는다 — 아이 화면에는 「닿지 못했을 때」가 뜬다.
         raise AppError(ErrorCode.INTERNAL_ERROR)
-    return _응답(random.choice(후보))
+
+    쓴것 = await 오늘쓴카드들(session, 아이.id)
+    남은것 = [행 for 행 in 후보 if 행.id not in 쓴것]
+    if not 남은것:
+        # **일일 상한(5장)이 먼저 걸려 실제로는 안 닿는다.** 그래도 정의해 둔다 —
+        # 상한을 올리는 날 여기가 빈 응답이나 500 이 되면 **아이 화면이 멈춘다.**
+        raise _오늘은끝()
+
+    return _응답(random.choice(남은것))
 
 
 @router.get("/{card_id}")
