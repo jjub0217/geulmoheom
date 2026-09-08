@@ -35,6 +35,13 @@
   --container-frame: 80rem;
   --breakpoint-tablet: 64rem;
 
+  /* **읽고 쓰는 열의 폭.** 1280 을 다 쓰면 한 줄이 너무 길어 **눈이 줄 끝에서 되돌아온다**,
+     그리고 **별명처럼 대여섯 글자를 넣는 칸이 화면을 가로지른다** — 칸의 크기는
+     「얼마나 넣는가」를 말하는 신호라, 넓은 칸은 길게 쓰라는 뜻이 된다.
+     40rem 은 17px 한글로 한 줄 35~40자쯤 — 문단과 폼이 같이 편한 폭이다.
+     **모험 화면은 이걸 안 쓴다**: 묘사 입력창은 반대로 **넓어야 한다**(H2 합격선이 회당 150자). */
+  --container-reading: 40rem;
+
   /* 좌우 여백. 모바일 세로 16px ~ 태블릿 가로 32px 로 폭에 따라 흐른다 —
      분기점 없이 두 방향을 같은 규칙으로 덮기 위한 것. `px-gutter` 로 쓴다. */
   --spacing-gutter: clamp(1rem, 3vw, 2rem);
@@ -91,9 +98,19 @@ body {
 }
 
 /* ── 기준 컨테이너 ──────────────────────────────────────────────────────
-   태블릿 가로에서는 1280px 에서 멈춰 가운데로 모이고,
-   모바일 세로에서는 좌우 여백만 남기고 폭을 다 쓴다. 화면마다 이걸 붙인다.
-   가로 방향 노치(가로 모드의 iPad·iPhone)는 여백에 더해 피한다. */
+   둘 중 하나를 화면마다 붙인다. 좌우 여백 규칙은 같고 **폭만 다르다.**
+   가로 방향 노치(가로 모드의 iPad·iPhone)는 여백에 더해 피한다.
+   **둘을 같이 붙이지 않는다** — 둘 다 `max-width` 를 잡아 뒤에 오는 쪽이 이긴다. */
+/* 읽고 쓰는 열 — **문단과 폼이 주인공인 자리**(학부모 화면). */
+@utility reading-frame {
+  width: 100%;
+  max-width: var(--container-reading);
+  margin-inline: auto;
+  padding-inline: calc(var(--spacing-gutter) + env(safe-area-inset-left, 0px))
+    calc(var(--spacing-gutter) + env(safe-area-inset-right, 0px));
+}
+
+/* 기준 폭 — 태블릿 가로 1280 에서 멈춰 가운데로 모인다. 모바일 세로에서는 폭을 다 쓴다. */
 @utility page-frame {
   width: 100%;
   max-width: var(--container-frame);

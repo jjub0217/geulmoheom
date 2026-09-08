@@ -34,6 +34,11 @@ type ParentMe = components["schemas"]["ParentMe"];
  * ② **필수 동의와 라벨링 동의를 하나로 묶지 않는다** (PRD 1.1b) — 앞은 거부하면 이용할 수 없고,
  *    뒤는 **거부해도 그대로 쓸 수 있다.** 묶으면 거부할 수 없는 것을 거부할 수 있는 척하게 된다
  * ③ **고지를 링크 뒤에 숨기지 않는다.** 「어디로 가고 얼마나 남는가」는 화면에 문장으로 있다
+ *
+ * **`page-frame` 이 아니라 `reading-frame` 이다** (W3 에서 넘긴 ③, 2026-09-08).
+ * 1280 을 다 쓰면 한 줄이 너무 길어 눈이 되돌아오고, **별명처럼 대여섯 글자를 넣는 칸이
+ * 화면을 가로지른다** — **칸의 크기는 「얼마나 넣는가」를 말하는 신호**라, 넓은 칸은
+ * 길게 쓰라는 뜻이 된다. 모험 화면은 반대라 `page-frame` 그대로다.
  */
 
 
@@ -159,7 +164,7 @@ export default function ParentSignup() {
     email.trim() !== "" && password !== "" && consent && !보내는중;
 
   return (
-    <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-12">
+    <main className="reading-frame flex flex-1 flex-col justify-center gap-8 py-12">
       {screen.kind === "확인중" && <p className="opacity-70">{상태표시.확인중}</p>}
 
       {screen.kind === "가입전" && (
