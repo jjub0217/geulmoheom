@@ -63,7 +63,7 @@ export function LeaveButton() {
       }
       if (e instanceof ApiError) {
         // 서버가 준 문구를 그대로 쓴다. 화면이 다듬거나 덧붙이지 않는다.
-        set실패(e.childMessage);
+        set실패(e.서버문구);
         return;
       }
       throw e;

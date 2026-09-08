@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
+import { 학부모오류문구 } from "@/app/parents/signup/copy";
 
 import {
   나이선택,
@@ -63,7 +64,12 @@ export function ChildrenPanel() {
         set목록실패(null);
       })
       .catch((e: unknown) => {
-        if (e instanceof NetworkError || e instanceof ApiError) {
+        // **형식 갖춘 거절은 `code` 로 고르고**(`문구.md` 3.8), **못 닿은 것만 3.5** 다.
+        if (e instanceof ApiError) {
+          set목록실패(학부모오류문구(e.code));
+          return;
+        }
+        if (e instanceof NetworkError) {
           set목록실패(못닿음.목록);
           return;
         }
@@ -96,7 +102,10 @@ export function ChildrenPanel() {
         const kind = (e.detail as { reason?: string; kind?: unknown } | undefined);
         const 걸림 =
           kind?.reason === "PII_DETECTED" ? 별명이걸렸다(kind.kind) : null;
-        set만들기실패(걸림 ?? 못닿음.추가);
+        // **`detail` 을 먼저 본다** — 별명 PII 는 422 지만 **오류가 아니라 안내**다.
+        // 아니면 3.8 표. **`message` 로 되돌아가지 않는다** — 되돌아가면 새 코드가 생길 때마다
+        // 아이 목소리가 학부모 화면에 다시 샌다.
+        set만들기실패(걸림 ?? 학부모오류문구(e.code));
         return;
       }
       if (e instanceof NetworkError) {
@@ -123,9 +132,14 @@ export function ChildrenPanel() {
         expiresAt: 새코드.access_code_expires_at,
       });
     } catch (e) {
-      // **남의 자녀는 404 다**(403 이 아니다). 없는 것과 남의 것을 화면에서 **구분해 보여주지
-      // 않는다** — 구분하는 순간 「그 ID 는 존재한다」가 샌다. 그래서 한 문구로 묶는다.
-      if (e instanceof ApiError || e instanceof NetworkError) {
+      // **남의 자녀는 404 다**(403 이 아니다). 3.8 의 `NOT_FOUND` 가 **「찾으시는 정보가
+      // 없습니다.」로 끝나는 이유**가 그것이다 — 「권한이 없습니다」로 쓰면
+      // **「그 ID 는 존재한다」가 문구로 샌다.** 문구가 계약의 판단을 되돌리면 안 된다.
+      if (e instanceof ApiError) {
+        set재발급실패(학부모오류문구(e.code));
+        return;
+      }
+      if (e instanceof NetworkError) {
         set재발급실패(못닿음.재발급);
         return;
       }

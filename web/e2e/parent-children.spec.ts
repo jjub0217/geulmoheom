@@ -11,7 +11,7 @@ import {
   접속코드,
   하루상한,
 } from "../src/components/children-copy";
-import { 폼 } from "../src/app/parents/signup/copy";
+import { 학부모오류문구, 폼 } from "../src/app/parents/signup/copy";
 
 /**
  * 학부모 자녀 관리 (E-4 프론트 짝).
@@ -191,8 +191,9 @@ test("남의 아이인지 없는 아이인지 화면에서 구분하지 않는�
 
   await page.getByRole("button", { name: 재발급.버튼 }).click();
 
-  // **구분해 보여주는 순간 「그 ID 는 존재한다」가 샌다.** 못 닿은 것과 한 문구로 묶는다.
-  await expect(page.locator("[data-재발급실패]")).toHaveText(못닿음.재발급);
+  // **3.8 의 `NOT_FOUND` 다.** 「없습니다」로 끝나야 한다 —
+  // 「권한이 없습니다」로 쓰면 **「그 ID 는 존재한다」가 문구로 샌다.**
+  await expect(page.locator("[data-재발급실패]")).toHaveText(학부모오류문구("NOT_FOUND"));
   const 화면 = await page.locator("main").innerText();
   for (const 새는말 of ["없는", "다른 사람", "권한", "찾을 수 없어요"]) {
     expect(화면).not.toContain(새는말);

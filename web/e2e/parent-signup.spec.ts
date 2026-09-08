@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 // 문구를 박지 않는다 — `docs/문구.md` 3.1·3.5·3.6 이 SSOT 다.
 import { 상태표시 } from "../src/app/status-copy";
-import { 고지, 못닿음, 폼 } from "../src/app/parents/signup/copy";
+import { 고지, 못닿음, 학부모오류문구, 폼 } from "../src/app/parents/signup/copy";
 
 import type { components } from "../src/api/types.gen";
 
@@ -169,10 +169,14 @@ test("자녀 쿠키로 들어오면 다시 가입시키지 않는다 — 403 은
 
   await page.goto("/parents/signup");
 
-  // 서버가 준 문구를 그대로 보여준다. **가입 폼으로 되돌리지 않는다** —
+  // **`code` 로 고른 학부모 문구다** (`문구.md` 3.8). **가입 폼으로 되돌리지 않는다** —
   // 로그인이 풀린 게 아니라 역할이 다른 것이다.
-  await expect(page.getByText("여기는 지금 들어갈 수 없어요")).toBeVisible();
+  await expect(page.getByText(학부모오류문구("FORBIDDEN_ROLE"))).toBeVisible();
   await expect(page.getByRole("button", { name: 폼.가입하기 })).toHaveCount(0);
+
+  // **서버가 준 아이 목소리가 화면에 없다.** 이 검사는 한때 그 문구를 **기대하고** 있었다 —
+  // 즉 **테스트가 이 버그를 물고 있었다.** 문구를 문자열로 박으면 이렇게 된다.
+  expect(await page.locator("main").innerText()).not.toContain("여기는 지금 들어갈 수 없어요");
 });
 
 test("로그아웃은 서버를 부른다 — 클라이언트가 쿠키를 지우는 시늉이 아니다", async ({

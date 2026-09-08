@@ -105,7 +105,7 @@ export default function Home() {
       .catch((e: unknown) => {
         if (!alive) return;
         if (e instanceof ApiError) {
-          const line = guideLineOf(e.detail) ?? e.childMessage;
+          const line = guideLineOf(e.detail) ?? e.서버문구;
           setScreen(
             e.code === "DAILY_CAP_REACHED"
               ? { kind: "done", line }
@@ -150,7 +150,7 @@ export default function Home() {
       }
     } catch (e) {
       if (e instanceof ApiError) {
-        setScreen({ kind: "refused", line: e.childMessage });
+        setScreen({ kind: "refused", line: e.서버문구 });
         return;
       }
       if (e instanceof NetworkError) {

@@ -42,12 +42,20 @@ function baseUrl(): string {
 export class ApiError extends Error {
   constructor(
     readonly code: string,
-    /** 아이가 읽는 문구. 서버가 준 것이다 — 화면에서 바꾸지 않는다. */
-    readonly childMessage: string,
+    /**
+     * **서버가 준 문구.** 이름이 「누가 읽는가」가 아니라 **「어디서 왔는가」**다 —
+     * 한때 `childMessage` 였는데 **그 이름이 학부모 화면에서 틀렸다**: 같은 값이
+     * 두 화면에 나가는데 이름이 한쪽만 가리켜, **학부모 화면이 그대로 쓰는 것을
+     * 아무도 이상하게 안 봤다** (`문구.md` 3.8, 2026-09-08).
+     *
+     * **아이 화면은 이 값을 그대로 쓴다** (2.1 의 `CHILD_MESSAGE` 가 아이 목소리다).
+     * **학부모 화면은 이 값을 쓰지 않는다** — `code` 로 3.8 표에서 고른다.
+     */
+    readonly 서버문구: string,
     readonly status: number,
     readonly detail?: Record<string, unknown>,
   ) {
-    // Error.message 는 개발자용이다. 아이 화면에는 childMessage 를 쓴다.
+    // Error.message 는 개발자용이다. 화면에는 위 `서버문구` 를 쓴다 (학부모 화면은 `code`).
     super(`${code} (${status})`);
     this.name = "ApiError";
   }

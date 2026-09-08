@@ -74,7 +74,7 @@ export default function ChildAuth() {
           return;
         }
         if (e instanceof ApiError) {
-          setScreen({ kind: "거절", line: e.childMessage });
+          setScreen({ kind: "거절", line: e.서버문구 });
           return;
         }
         if (e instanceof NetworkError) {
@@ -107,7 +107,7 @@ export default function ChildAuth() {
         // **서버가 준 문구를 그대로 쓴다.** 없는 코드·만료된 코드·이미 쓴 코드가 전부
         // 같은 401 이라 **화면이 나눠 말할 수 없다** — 나눠 말하면 코드를 찍어보는 쪽에
         // 신호가 샌다. 아이 탓으로 읽히는 말도 짓지 않는다.
-        setScreen({ kind: "코드입력", line: e.childMessage });
+        setScreen({ kind: "코드입력", line: e.서버문구 });
         return;
       }
       if (e instanceof NetworkError) {

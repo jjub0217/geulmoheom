@@ -97,7 +97,7 @@ describe("apiGet", () => {
     expect(e).toBeInstanceOf(ApiError);
     expect(e).toMatchObject({
       code: "DAILY_CAP_REACHED",
-      childMessage: "오늘 카드를 다 썼어요",
+      서버문구: "오늘 카드를 다 썼어요",
       status: 409,
     });
   });
@@ -129,7 +129,7 @@ describe("apiGet", () => {
 
     expect(e).toBeInstanceOf(ApiError);
     expect(e.code).toBe("INTERNAL_ERROR");
-    expect(e.childMessage).toBe("");
+    expect(e.서버문구).toBe("");
   });
 
   it("서버에 닿지 못한 것과 서버가 거절한 것을 구분한다", async () => {

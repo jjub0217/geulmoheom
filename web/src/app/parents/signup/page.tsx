@@ -19,7 +19,7 @@ import { 날짜시각 } from "@/lib/format";
 
 import { 상태표시 } from "@/app/status-copy";
 
-import { 고지, 못닿음, 폼 } from "./copy";
+import { 고지, 못닿음, 학부모오류문구, 폼 } from "./copy";
 
 type SignupRequest = components["schemas"]["SignupRequest"];
 type SignupResponse = components["schemas"]["SignupResponse"];
@@ -85,11 +85,13 @@ export default function ParentSignup() {
         // **403 을 401 과 같이 다루지 않는다.** 자녀 쿠키로 들어온 경우가 여기다 —
         // 로그인이 풀린 게 아니라 **역할이 다른 것**이라, 가입 폼을 다시 보여주면 안 된다.
         if (역할이다르다(e)) {
-          setScreen({ kind: "거절", line: (e as ApiError).childMessage });
+          setScreen({ kind: "거절", line: 학부모오류문구((e as ApiError).code) });
           return;
         }
         if (e instanceof ApiError) {
-          setScreen({ kind: "거절", line: e.childMessage });
+          // **`code` 로 고른다. `message` 를 쓰지 않는다** (`문구.md` 3.8) —
+          // 그건 아이 목소리라 학부모 화면에서 틀린다.
+          setScreen({ kind: "거절", line: 학부모오류문구(e.code) });
           return;
         }
         if (e instanceof NetworkError) {
@@ -118,7 +120,7 @@ export default function ParentSignup() {
       setScreen({ kind: "가입됨", consentAt: res.consent_at });
     } catch (e) {
       if (e instanceof ApiError) {
-        setScreen({ kind: "거절", line: e.childMessage });
+        setScreen({ kind: "거절", line: 학부모오류문구(e.code) });
         return;
       }
       if (e instanceof NetworkError) {
@@ -148,7 +150,7 @@ export default function ParentSignup() {
         return;
       }
       if (e instanceof ApiError) {
-        setScreen({ kind: "거절", line: e.childMessage });
+        setScreen({ kind: "거절", line: 학부모오류문구(e.code) });
         return;
       }
       throw e;
