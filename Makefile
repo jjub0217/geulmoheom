@@ -58,14 +58,50 @@ KEY = .certs/geulmoheom.test-key.pem
 certs:
 	bash api/scripts/dev-certs.sh
 
+# ── 사무실 실행 (아이가 쓸 iPad 가 개발 머신에 붙는다) ──
+# 대표 판정으로 도메인을 보류하고 사무실에서 우리 기기로 돈다 (W4 「사무실 실행 준비」).
+#
+# **아이·학부모 기기에는 절대 안 깐다.** 남의 기기에 우리 루트 CA 를 넣는 것은
+# 그 기기의 모든 https 를 우리가 들여다볼 수 있게 만드는 것이고, **프라이버시를
+# 지키겠다고 모은 자리에서 정반대를 요구하는 것**이 된다.
+#
+# **왜 이름을 새로 만드나** — `.test` 는 `/etc/hosts` 로 푸는 것이라 **이 머신 안에서만**
+# 듣는다. iPad 에는 아무 효력이 없다. mDNS 이름은 iOS 가 그냥 풀고 **DHCP 로 주소가
+# 바뀌어도 안 변한다** — 홈 화면에 설치한 PWA 의 오리진이 고정으로 박히기 때문에
+# 그 안정성이 필요하다. **주소가 바뀌면 설치본이 깨지고, 접속 코드는 1회용이라
+# 아이가 다시 못 들어온다.**
+#
+# **`__Host-` 쿠키와 CORS 는 안 건드린다** — 같은 호스트의 다른 포트라 지금
+# `.test` 두 이름과 성질이 같다(cross-origin · same-site). 쿠키는 포트를 안 가린다.
+LAN_HOST = $(shell scutil --get LocalHostName 2>/dev/null).local
+LAN_IP = $(shell ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
+
+certs-lan:
+	@test -n "$(LAN_IP)" || { echo "LAN IP 를 못 찾았다. Wi-Fi 에 붙어 있나?"; exit 1; }
+	EXTRA_HOSTS="$(LAN_HOST) $(LAN_IP)" bash api/scripts/dev-certs.sh
+
+# api·web 을 LAN 에 연다. **평소 개발은 안 바뀐다** — 기본값이 loopback 그대로다.
+# 끝나면 끈다. 개발 DB 에 실제 자녀 계정이 있고, 사무실 망의 아무나 닿을 수 있다.
+dev-lan:
+	@test -n "$(LAN_IP)" || { echo "LAN IP 를 못 찾았다"; exit 1; }
+	@echo "iPad 에서 열 주소 →  https://$(LAN_HOST):3000"
+	@echo "                     (mDNS 가 막히면  https://$(LAN_IP):3000)"
+	@echo "**끝나면 끈다.** 개발 DB 에 실제 자녀 계정이 있다."
+	@$(MAKE) -j2 dev-api dev-web \
+		DEV_BIND=0.0.0.0 WEB_BIND=0.0.0.0 \
+		API_BASE_URL_OVERRIDE=https://$(LAN_HOST):8000/api/v1 \
+		CORS_OVERRIDE='["https://$(LAN_HOST):3000","https://$(LAN_IP):3000"]'
+
 # ── 개발 서버 (web + api 동시) ───────────────────────────
 dev:
 	@echo "api → https://$(API_HOST):8000  |  web → https://$(WEB_HOST):3000"
 	@$(MAKE) -j2 dev-api dev-web
 
+# `DEV_BIND` 는 `dev-lan` 만 바꾼다. 평소에는 loopback 이라 밖에서 안 닿는다.
+DEV_BIND = 127.0.0.1
 dev-api:
 	@test -f $(CERT) || { echo "인증서가 없다. 먼저 'make certs'"; exit 1; }
-	cd api && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 \
+	cd api && $(if $(CORS_OVERRIDE),CORS_ORIGINS='$(CORS_OVERRIDE)' ,)uv run uvicorn app.main:app --reload --host $(DEV_BIND) --port 8000 \
 		--ssl-certfile ../$(CERT) --ssl-keyfile ../$(KEY)
 
 # next 는 web/ 안의 .env 만 본다 — 저장소 루트 .env 는 안 읽는다. 그래서 여기서 넘긴다.
@@ -76,8 +112,8 @@ dev-web:
 	@test -f $(CERT) || { echo "인증서가 없다. 먼저 'make certs'"; exit 1; }
 	@grep -qE '^NEXT_PUBLIC_API_BASE_URL=.' .env || \
 		{ echo "루트 .env 에 NEXT_PUBLIC_API_BASE_URL 이 없다 (.env.example 참조)"; exit 1; }
-	cd web && NEXT_PUBLIC_API_BASE_URL="$$(sed -n 's/^NEXT_PUBLIC_API_BASE_URL=//p' ../.env | tail -1)" \
-		$(PNPM) dev --hostname $(WEB_HOST) --port 3000 --experimental-https \
+	cd web && NEXT_PUBLIC_API_BASE_URL="$(or $(API_BASE_URL_OVERRIDE),$(shell sed -n 's/^NEXT_PUBLIC_API_BASE_URL=//p' .env | tail -1))" \
+		$(PNPM) dev --hostname $(or $(WEB_BIND),$(WEB_HOST)) --port 3000 --experimental-https \
 		--experimental-https-cert ../$(CERT) --experimental-https-key ../$(KEY)
 
 # ── API 계약: api OpenAPI → web 타입 ─────────────────────

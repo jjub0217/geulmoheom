@@ -8,6 +8,8 @@
 # 파일럿이 태블릿이라 Safari 를 건너뛸 수 없어 개발 환경 자체를 https 로 옮긴다.
 #
 #   make certs        # 저장소 루트에서. api/ 안이면 `make -C .. certs`
+#   make certs-lan    # 위에 더해 이 머신의 mDNS 이름과 LAN IP 를 한 장에 같이 담는다
+#                     # (사무실 실행 — 아이가 쓸 iPad 가 붙는다)
 #
 # **별도 터미널에서 돌린다. Claude 세션 안에서는 sudo 프롬프트에 입력이 안 들어간다** —
 # 그러면 인증서 발급(sudo 불필요)만 되고 키체인 등록과 `/etc/hosts` 가 통째로
@@ -31,6 +33,21 @@ KEY="$CERT_DIR/geulmoheom.test-key.pem"
 EDIT_HOSTS=1
 [ "${1:-}" = "--no-hosts" ] && EDIT_HOSTS=0
 
+# 사무실 실행용 추가 이름. `EXTRA_HOSTS` 에 공백으로 구분해 넘긴다 (`make certs-lan`).
+#
+# **`.test` 는 iPad 가 못 푼다.** macOS 는 `/etc/hosts` 로 푸는데 그건 이 머신 안의 일이라
+# 다른 기기에는 아무 효력이 없다. 그래서 iPad 가 부를 이름을 인증서에 따로 넣는다.
+#
+# **둘을 같이 넣는다 — mDNS 이름과 LAN IP.**
+# mDNS(`*.local`)를 주로 쓴다: iOS 가 별도 설정 없이 풀고, **DHCP 로 주소가 바뀌어도
+# 이름이 그대로다.** 그 안정성이 편의가 아니다 — PWA 를 홈 화면에 설치하면 **오리진이
+# 고정으로 박히는데, 주소가 바뀌면 설치본이 깨지고 접속 코드는 1회용이라 아이가
+# 다시 못 들어온다.**
+# **그런데 사무실 Wi-Fi 가 멀티캐스트를 막으면 mDNS 가 안 된다.** 그때 IP 로 갈아타야
+# 하는데 **인증서를 다시 구우면 iPad 에 루트 CA 를 다시 깔아야 하는 것은 아니지만
+# 그 자리에서 할 일이 는다.** 그래서 **미리 한 장에 둘 다 담는다.**
+EXTRA_HOSTS="${EXTRA_HOSTS:-}"
+
 if ! command -v mkcert >/dev/null 2>&1; then
   echo "mkcert 가 없다:  brew install mkcert nss" >&2
   exit 1
@@ -42,8 +59,10 @@ mkcert -install
 
 # 2. 인증서 — 두 호스트를 한 장에 담는다. 나누면 갱신 때 한쪽만 만료된다
 mkdir -p "$CERT_DIR"
-echo "→ 인증서: $API_HOST · $WEB_HOST → $CERT_DIR"
-mkcert -cert-file "$CERT" -key-file "$KEY" "$API_HOST" "$WEB_HOST"
+# shellcheck disable=SC2086
+echo "→ 인증서: $API_HOST · $WEB_HOST$EXTRA_HOSTS → $CERT_DIR"
+# shellcheck disable=SC2086
+mkcert -cert-file "$CERT" -key-file "$KEY" "$API_HOST" "$WEB_HOST" $EXTRA_HOSTS
 chmod 600 "$KEY"
 
 # 3. 이름 풀이 — macOS 는 `.test` 를 자동으로 풀지 않는다
