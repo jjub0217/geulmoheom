@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import type { paths } from "../src/api/types.gen";
+import type { components, paths } from "../src/api/types.gen";
 // **가림 글자를 문자열로 박지 않는다.** 확정본이 바뀌면 상수 하나만 고치면 되고,
 // 여기 박아두면 **문구가 바뀌는 날 테스트가 제품을 붙잡는다** (`docs/문구.md` 1.1).
 import { PII_MASK } from "../src/lib/pii";
@@ -38,20 +38,25 @@ const CARDS_NEXT = "**/api/v1/cards/next";
 const ATTEMPTS = "**/api/v1/attempts";
 const EVENTS = "**/api/v1/events";
 
-/** (a) 정상 응답. 삽화·하이라이트 연출은 W4 라 여기서는 최소 형태만 쓴다. */
-function 결과(guide: { expression: string; line: string }) {
+/**
+ * (a) 정상 응답.
+ *
+ * **반환 타입을 계약에서 끌어온다.** 여기 타입이 없어서 **`placeholder_url` 이 계약에서
+ * 빠진 뒤에도 살아남았다** (2026-09-08). 위 `CARD` 는 타입이 붙어 있어 멀쩡했는데
+ * 이 함수만 맨 객체였다 — **낡은 픽스처가 아니라 검사 밖에 있던 픽스처**다.
+ * 타입을 붙이면 **다음번 계약 변경이 빨간불로 온다.**
+ */
+type AttemptResult = components["schemas"]["AttemptResult"];
+
+function 결과(guide: components["schemas"]["Guide"]): AttemptResult {
   return {
     outcome: "result",
     attempt_id: "a1",
     tier: "rare",
     highlights: [],
     guide,
-    artwork: {
-      artwork_id: "w1",
-      status: "pending",
-      url: null,
-      placeholder_url: CARD_SKETCH,
-    },
+    // `placeholder_url` 은 빠졌다 — **성공이든 폴백이든 `/artworks/{id}/image` 한 주소**다.
+    artwork: { artwork_id: "w1", status: "pending", url: null },
     today: { cards_done: 2, cap: 5, locked: false },
     can_retry: true,
   };
