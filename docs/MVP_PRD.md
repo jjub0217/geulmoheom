@@ -430,8 +430,13 @@ Stage 0에는 GM 서사 생성이 없다. 카드 제시·결과 반응·되묻�
 | `trial_path` [S1] | `path: force\|persuade\|observe\|care, passed: bool` | 4경로 사용 균형 |
 | `scaffold_triggered` | `turn_idx, attempt: 1\|2, followed_by_free: bool, next_char_len` | 발동률, 재입력률 |
 | `daily_cap_reached` | `cap: int` | 상한 도달률 |
-| `moderation_blocked` | `direction: in\|out, category, hash` | 안전 이슈 |
+| `moderation_blocked` | `direction: in\|out, category, text_hash` | 안전 이슈 |
 | `pii_masked` | `layer: client\|server, kind` | 안전 이슈 |
+
+**`moderation_blocked` 의 해시 필드는 `text_hash` 다** (2026-09-08 확정. 종전 `hash`). 코드·로그·테스트가 이미 `text_hash` 를 쓰고 있어 갈렸고, **백엔드가 고치지 않고 알려 와 여기서 골랐다.**
+**코드에 맞춘 것이 아니라 이 문서 안의 두 표기 중 다수를 택한 것이다** — 6장 데이터 모델이 `access_code_hash` 를 쓴다. **`<대상>_hash` 가 이 문서의 관례이고 맨 `hash` 가 예외였다.**
+**무엇을 해싱했는지가 이름에 있어야 하는 이유는 그 대상이 아이 원문이기 때문이다.** 「원문은 남기지 않고 카테고리·해시만」(4.4절 MUST)을 나중에 감사할 때, **그 필드가 정확히 무엇의 해시인지가 이름에서 보여야** 한다.
+**계약(`/openapi.json`)이 아니라 집계 쿼리가 보는 이름**이라 바꾸는 값이 싸다 — **그래서 지금 고르는 것이 가장 싸다. 두 이름이 살아 있는 동안 쓴 쿼리가 나중에 조용히 빈 결과를 낸다.**
 
 **`char_len` 의 정의 — 공백 포함 원문 길이** (2026-09-07 확정). 아이가 친 문자를 그대로 센다. **여기서 「원문」은 PII 마스킹 뒤 텍스트다** — 서버가 책 콘텐츠로 저장하는 것이 그것이므로 **화면의 30자·로그의 `char_len`·책의 문장이 같은 문자열을 세야 한다**. 공백·줄바꿈을 걷어낸 값은 **아이가 쓴 문장이 아닌 것을 재는 값**이고, H2 합격선(150자 · 2주차 80자)이 그 정의 위에 서 있다. **입력 화면의 「30자에서 나침반이 가득 찬다」도 같은 정의를 쓴다** — 화면이 세는 수와 로그가 세는 수가 갈리면 아이가 채운 감각과 우리가 재는 숫자가 달라진다. `tutorial_complete` 의 `char_lens[3]` · `scaffold_triggered` 의 `next_char_len` 도 같다.
 
