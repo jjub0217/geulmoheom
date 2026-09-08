@@ -82,7 +82,9 @@ class ChildSummary(BaseModel):
     nickname: str
     age_band: int
     daily_cap: int
-    played_today: bool
+    played_today: bool = Field(
+        description="오늘 했는지 여부. **개수가 아니다** — 「5장 중 2장」은 계약에 없다"
+    )
     last_active_at: datetime | None
 
 

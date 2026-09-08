@@ -739,7 +739,10 @@ export interface components {
             age_band: number;
             /** Daily Cap */
             daily_cap: number;
-            /** Played Today */
+            /**
+             * Played Today
+             * @description 오늘 했는지 여부. **개수가 아니다** — 「5장 중 2장」은 계약에 없다
+             */
             played_today: boolean;
             /** Last Active At */
             last_active_at: string | null;
