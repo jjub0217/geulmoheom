@@ -89,10 +89,14 @@ STYLE = (
 #
 # **가이드를 빼서 푸는 것이 아니다.** 가이드는 안전 MUST 라(PRD B-5) 반드시 있어야 하고,
 # 여기서 정하는 것은 **크기와 자리**뿐이다.
+# **「하나다」를 말한다** (2026-09-08 밤 · 3차). `c13` 에서 **한 화면에 가이드가 둘**
+# 나왔다 — 왼쪽 탁자와 오른쪽 분수대에 각각. **턴어라운드 시트 복제와 뿌리가 같다**
+# (레퍼런스 캐릭터를 여러 번 그린다). **크롭이 시트는 막았는데 복제 자체는 안 막았다.**
 구도 = (
-    "Wide shot of the scene; the scene fills the frame. The red panda guide is a small "
-    "secondary figure standing inside the scene, no more than one third of the frame "
-    "height, never overlapping or covering the scene's main subject."
+    "Wide shot of the scene; the scene fills the frame. Exactly one red panda guide "
+    "appears in the image, never two. The guide is a small secondary figure standing "
+    "inside the scene, no more than one third of the frame height, never overlapping "
+    "or covering the scene's main subject."
 )
 
 # **맨 뒤에 둔다.** 종전에는 `STYLE` 안에 있어 프롬프트 앞쪽이었고, 뒤에 오는
