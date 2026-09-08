@@ -3,20 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
+import { ArtworkFrame } from "@/components/artwork";
 import { AttemptInput } from "@/components/attempt-input";
 import { GuideFigure } from "@/components/guide";
 import { LeaveButton } from "@/components/leave";
 import { SceneCard } from "@/components/scene-card";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
+import { useArtwork } from "@/lib/artwork";
 import type { PiiKind } from "@/lib/pii";
 
 import { 버튼, 못닿음 } from "./copy";
 import { 상태표시 } from "./status-copy";
 
 type Card = components["schemas"]["Card"];
-/** 세 형태가 한 응답에 온다 (`outcome`). 이번 조각은 **보내는 것까지**고, 3분기 연출은 다음 항목이다. */
+type AttemptResult = components["schemas"]["AttemptResult"];
+/** 세 형태가 한 응답에 온다 (`outcome`). 셋 다 화면이 있다 — `blocked` 를 오류로 때우지 않는다. */
 type AttemptOutcome =
-  | components["schemas"]["AttemptResult"]
+  | AttemptResult
   | components["schemas"]["AttemptScaffold"]
   | components["schemas"]["AttemptBlocked"];
 type Guide = components["schemas"]["Guide"];
@@ -39,8 +42,13 @@ type Screen =
   | { kind: "card"; card: Card; guide: Guide }
   /** 보내는 중. 같은 화면을 두고 버튼만 잠근다 — 쓴 것이 사라지면 아이는 날아간 줄 안다. */
   | { kind: "sending"; card: Card; guide: Guide }
-  /** 결과를 받았다. **연출(삽화·하이라이트·티어)은 W4 A0-3** 이고 여기는 최소 전이다. */
-  | { kind: "sent"; guide: Guide }
+  /**
+   * 결과를 받았다. **응답을 통째로 들고 있는다** — 삽화 참조·등급·하이라이트가 전부 여기 있고,
+   * 연출이 붙을 때마다 화면 상태를 다시 고치지 않기 위해서다.
+   *
+   * **아직 그리는 것은 삽화와 가이드뿐이다.** 등급·하이라이트는 다음 조각이다.
+   */
+  | { kind: "sent"; result: AttemptResult }
   /** 오늘 카드를 다 썼다 (409 `DAILY_CAP_REACHED`). 서버가 함께 준 대사를 그대로 보여준다. */
   | { kind: "done"; line: string }
   /** 서버가 형식을 갖춰 거절했다. `message` 가 아이가 읽을 문구다. */
@@ -144,7 +152,7 @@ export default function Home() {
       // 입력창이 그대로 있고 **쓴 문장도 그대로 있다.** 차단도 마찬가지다: 이유도 모른 채
       // 공들여 쓴 글이 사라지면 그것 자체가 벌이 된다 (`Stage0.md` 4절).
       if (outcome.outcome === "result") {
-        setScreen({ kind: "sent", guide: outcome.guide });
+        setScreen({ kind: "sent", result: outcome });
       } else {
         setScreen({ kind: "card", card, guide: outcome.guide });
       }
@@ -164,6 +172,14 @@ export default function Home() {
       throw e;
     }
   };
+
+  /**
+   * **훅이라 조건 밖에서 부른다.** 결과 화면이 아닐 때는 `null` 을 넘겨 아무것도 안 물어본다.
+   *
+   * `useArtwork` 가 `artwork_id` 를 결과에 함께 담으므로, 카드가 바뀌면
+   * **앞 장면 그림이 새 결과 화면에 뜨는 일이 없다.**
+   */
+  const 삽화 = useArtwork(screen.kind === "sent" ? screen.result.artwork : null);
 
   const retry = () => {
     setScreen({ kind: "loading" });
@@ -216,9 +232,16 @@ export default function Home() {
         )}
 
         {screen.kind === "sent" && (
-          // 최소 전이다. 삽화·하이라이트·티어 연출과 「다음 장면」은 W4(A0-3) 자리다.
-          <div className="flex justify-center">
-            <GuideFigure guide={screen.guide} />
+          // **그림이 먼저 오는 자리다.** 등급·하이라이트·「다음 장면」은 아직 없다 (A0-3 다음 조각).
+          <div className="flex flex-col gap-8">
+            <ArtworkFrame 상태={삽화} />
+            {/* 표정도 대사도 서버가 준 것 그대로다.
+                **기다리는 동안 여기 뜨는 것이 이미 등급 반응이다** — 「등급을 미리 흘리지
+                않는다」는 **「삽화 대기」 대사가 들어오는 다음 조각에서 닫힌다**
+                (`문구.md` 1.3 이 결과 대사·대기 대사를 A0-3 과 같이 만들게 못 박아 뒀다). */}
+            <div className="flex justify-center">
+              <GuideFigure guide={screen.result.guide} />
+            </div>
           </div>
         )}
 

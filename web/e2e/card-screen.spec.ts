@@ -6,6 +6,8 @@ import type { components, paths } from "../src/api/types.gen";
 import { PII_MASK } from "../src/lib/pii";
 // 문구도 같은 이유로 박지 않는다 — `docs/문구.md` 2.2·2.4·2.5 가 SSOT 다.
 import { 버튼, 못닿음 } from "../src/app/copy";
+// 상한도 문구와 같다 — **숫자를 여기 박으면 규약이 바뀌는 날 테스트가 제품을 붙잡는다.**
+import { 폴링상한 } from "../src/lib/artwork";
 import { 상태표시 } from "../src/app/status-copy";
 
 /**
@@ -173,6 +175,114 @@ test("쓴 것을 보낸다 — 글자 수로 잠기지 않고, retry_of 는 비�
   expect(보낸것.text).toBe("문을 연다");
   // **항상 null.** 채우면 그 카드가 하루 5장에서 안 빠지고, H2 회당 평균도 갈린다.
   expect(보낸것.retry_of).toBeNull();
+});
+
+/**
+ * **삽화 주소는 서버가 절대 주소로 준다.** 앞에 아무것도 붙이지 않는 것이 계약이다
+ * (`docs/api/Stage0.md` 5절). E2E 는 web 과 api 가 같은 오리진이라 여기서도 그 모양이다.
+ */
+const ARTWORK = "w1";
+const ARTWORK_URL = `http://localhost:3000/api/v1/artworks/${ARTWORK}/image`;
+
+/** 1x1 투명 PNG. **그림이 실제로 떴는지**를 보려면 바이트가 진짜여야 한다. */
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+  );
+
+  // 첫 물음에는 아직 굽는 중이고, 그다음에 뜬다. **두 번은 물어야 폴링이 실제로 돈 것**이다.
+  let 물어본횟수 = 0;
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) => {
+    물어본횟수 += 1;
+    const artwork: components["schemas"]["Artwork"] = {
+      artwork_id: ARTWORK,
+      status: 물어본횟수 === 1 ? "pending" : "ready",
+      url: 물어본횟수 === 1 ? null : ARTWORK_URL,
+      tier: "rare",
+      // **참이어도 화면이 달라지지 않아야 한다** (B-3 완료 조건).
+      // 「기본 그림이야」라고 말하는 순간 아이가 자기 문장이 부족했다고 읽는다.
+      fallback: true,
+    };
+    return route.fulfill({ status: 200, json: artwork });
+  });
+
+  // **이미지 라우트를 나중에 건다.** Playwright 는 나중 것이 먼저 걸린다.
+  const 그림요청: string[] = [];
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) => {
+    그림요청.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 });
+  });
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // 굽는 동안에는 그림이 없다. **자리는 잡혀 있고 가이드는 이미 말하고 있다.**
+  await expect(page.locator("main [data-삽화자리]")).toBeVisible();
+  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+
+  const 그림 = page.locator(`main img[src="${ARTWORK_URL}"]`);
+  await expect(그림).toBeVisible();
+  expect(물어본횟수).toBeGreaterThanOrEqual(2);
+
+  // **`crossOrigin` 이 붙으면 쿠키가 안 실려 그림이 통째로 안 뜬다** (`Stage0.md` 5절 ⚠).
+  // 습관적으로 붙는 속성이라 **여기서 못을 박는다** — 붙는 날 네트워크 탭을 안 열면 원인이 안 보인다.
+  await expect(그림).not.toHaveAttribute("crossorigin", /.*/);
+
+  // **주소 앞에 아무것도 안 붙였다.** 상대 경로로 바꾸거나 오리진을 덧대면 여기서 걸린다.
+  expect(그림요청).toContain(ARTWORK_URL);
+
+  // **`fallback: true` 인데도 아이에게 아무 말도 안 한다.** 그냥 그림이 나온 것이어야 한다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 금지어 of ["기본", "실패", "대신", "임시"]) {
+    expect(화면).not.toContain(금지어);
+  }
+});
+
+test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 화면을 만들지 않는다", async ({
+  page,
+}) => {
+  // **상한(15초)을 실제로 넘겨본다.** 안 넘기면 「기다리는 중」만 보고 「못 받았다」를 봤다고 하게 된다.
+  test.slow();
+
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+  );
+  // **서버에 통째로 못 닿는 경우**다. 정상 경로에서는 서버가 15초에 기본 에셋으로 확정하므로
+  // 여기까지 오지 않는다 — 그래서 이 검사가 **유일하게 「못받음」을 밟는 자리**다.
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) => route.abort());
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // 굽는 동안에는 자리가 잡혀 있다. 그림이 뜰 때 아래가 밀려 내려가지 않게 하는 그 자리다.
+  const 자리 = page.locator("main [data-삽화자리]");
+  await expect(자리).toBeVisible();
+
+  // **상한을 넘기면 자리가 통째로 사라진다.** 빈 액자를 남기면 아이가
+  // 「여기 그림이 있어야 하는데 없다」로 읽어, 실패 화면을 안 만든다는 결정이 연출로 뒤집힌다.
+  await expect(자리).toHaveCount(0, { timeout: 폴링상한 + 5_000 });
+
+  // 그림만 없다. **가이드 대사는 그대로 있고**, 오류 문구도 다시 시도 버튼도 안 생긴다.
+  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
+  const 화면 = await page.locator("main").innerText();
+  expect(화면).not.toContain(못닿음.보내기);
+  for (const 금지어 of ["기본", "실패", "대신", "임시"]) {
+    expect(화면).not.toContain(금지어);
+  }
 });
 
 test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", async ({ page }) => {
