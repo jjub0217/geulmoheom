@@ -7,7 +7,10 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete, update
 
+from app import db
+from app.models import Card
 from app.scaffold import 질문
 from app.scene_cards import 모험카드들, 카드들
 
@@ -66,3 +69,45 @@ def test_모르는_카드와_튜토리얼은_404(client: TestClient, card_id: st
 
     assert response.status_code == 404
     assert response.json()["error"]["message"] == "찾는 것이 여기 없어요"
+
+
+# ── DB 에서 온다 (A0-1 잔여) ───────────────────────────────
+#
+# 위 테스트들은 **문서와 응답이 같은가**를 본다. 아래 둘은 **응답이 어느 쪽을 읽는가**를
+# 가른다 — 문서는 그대로 두고 DB 만 고치면, 문서 리더를 읽는 코드는 안 따라온다.
+
+
+async def test_카드_조회는_DB_를_읽는다(client: TestClient):
+    async with db.SessionLocal() as session:
+        await session.execute(
+            update(Card).where(Card.id == "c01").values(situation_text="DB 만 아는 장면")
+        )
+        await session.commit()
+
+    body = client.get("/api/v1/cards/c01").json()
+
+    assert body["situation"] == "DB 만 아는 장면"
+
+
+async def test_next_도_DB_를_읽는다(client: TestClient):
+    """한 장만 남기면 그 한 장만 나와야 한다. 문서를 읽고 있으면 스무 장에서 고른다."""
+    async with db.SessionLocal() as session:
+        await session.execute(delete(Card).where(Card.id != "c01"))
+        await session.commit()
+
+    나온것 = {client.get("/api/v1/cards/next").json()["card_id"] for _ in range(10)}
+
+    assert 나온것 == {"c01"}
+
+
+async def test_카드를_안_뿌렸으면_준비된_것이_아니다(client: TestClient):
+    """**아이가 빈 화면을 보기 전에 알아야 한다.** 뿌리는 것은 배포의 일이라
+    (`make seed`) 잊을 수 있고, 잊으면 `/cards/next` 가 줄 것이 없다."""
+    async with db.SessionLocal() as session:
+        await session.execute(delete(Card))
+        await session.commit()
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json()["checks"]["cards"] == "down"

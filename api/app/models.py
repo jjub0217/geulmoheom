@@ -29,6 +29,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 CARD_TYPES = ("crisis", "discovery", "encounter")  # 위기 / 발견 / 만남
+# 튜토리얼 T1~T3 의 자리. **문서의 그 열은 유형이 아니라 「목적」**이라 대응하는 값이
+# 없다 (`app/scene_cards.py`). 카드로는 들어가되 `/cards/next` 후보가 아니다
+# (노출 경로는 Stage 1 A-6). **`CARD_TYPES` 를 넓히지 않는다** — 그 셋은 API 의
+# `type` 이고, 넓히면 튜토리얼이 모험 카드 조회에 섞여 나간다
+TUTORIAL_TYPE = "tutorial"
+DB_CARD_TYPES = (*CARD_TYPES, TUTORIAL_TYPE)
 GRADES = ("G0", "G1", "G2", "G3")  # 내부 전용. 응답에 넣지 않는다 (용어사전 3장)
 TIERS = ("basic", "rare", "legendary")  # 아이가 보는 단계
 # `failed` 는 2026-09-08 계약에서 빠졌다 (`Stage0.md` 5절). **제약도 같이 좁힌다** —
@@ -103,7 +109,7 @@ class Card(Base):
     """장면 카드 20장 (`docs/장면카드_초안.md`). 튜토리얼 T1~T3 도 여기 들어간다."""
 
     __tablename__ = "cards"
-    __table_args__ = (CheckConstraint(f"type in {CARD_TYPES}", name="ck_cards_type"),)
+    __table_args__ = (CheckConstraint(f"type in {DB_CARD_TYPES}", name="ck_cards_type"),)
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True)  # "c01", "t1"
     type: Mapped[str] = mapped_column(String(16))

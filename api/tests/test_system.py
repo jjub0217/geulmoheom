@@ -28,7 +28,11 @@ def test_readyz_는_의존성이_살아_있으면_200(client: TestClient, monkey
     response = client.get("/readyz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "checks": {"postgres": "up", "redis": "up"}}
+    # `cards` 는 갈아끼우지 않는다 — 씨뿌리기가 실제로 돌았는지 여기서도 보인다 (A0-1).
+    assert response.json() == {
+        "status": "ready",
+        "checks": {"postgres": "up", "redis": "up", "cards": "up"},
+    }
 
 
 def test_readyz_는_의존성이_죽으면_503(client: TestClient, monkeypatch: pytest.MonkeyPatch):

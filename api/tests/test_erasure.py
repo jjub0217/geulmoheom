@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 
 from app import db
-from app.models import Artwork, Book, BookPage, Card, CardAttempt, Child, Event
+from app.models import Artwork, Book, BookPage, CardAttempt, Child, Event
 from app.scaffold import _아이키
 
 
@@ -21,20 +21,10 @@ async def _자녀데이터를_채운다(child_id: uuid.UUID) -> None:
     """책 한 장까지 만든다 — **`book_pages` 가 `card_attempts` 를 FK 로 물고 있어서**
     거기가 캐스케이드가 끊기기 가장 쉬운 자리다.
     """
+    # **카드는 만들지 않는다.** `conftest` 의 씨뿌리기가 이미 문서의 스물셋을 넣어 뒀다
+    # (A0-1). 여기서 또 만들면 같은 `c01` 이 두 벌이 되고, 그중 어느 쪽이 진짜인지가
+    # 테스트마다 갈린다.
     async with db.SessionLocal() as session:
-        session.add(
-            Card(
-                id="c01",
-                type="crisis",
-                situation_text="장면",
-                prompt_label="어떻게 할까?",
-                noun_tags=["문"],
-                sketch_r2_key="cards/c01.png",
-                display_order=1,
-            )
-        )
-        await session.flush()
-
         시도 = CardAttempt(
             child_id=child_id,
             card_id="c01",

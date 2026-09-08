@@ -39,6 +39,12 @@ db-up: docker-있나
 db-down: docker-있나
 	$(COMPOSE) down
 
+# 장면 카드를 DB 에 뿌린다 (A0-1). **정본은 docs/장면카드_초안.md 이고 DB 는 사본이다.**
+# 배포마다 돌려야 한다 — 검수로 문서가 바뀌면 그다음 배포에 따라와야 하고, 안 뿌리면
+# /readyz 가 degraded 로 선다 (api/app/api/system.py).
+seed:
+	cd api && PYTHONPATH=. uv run python scripts/seed_cards.py
+
 # ── 로컬 https (.test) ──────────────────────────────────
 # 개발 환경도 https 다 (docs/api/공통규약.md 「인증 쿠키」, 미결 11-2 확정).
 # `__Host-` 쿠키는 Secure 를 강제하는데 Secure 쿠키가 http://localhost 에 붙는지가

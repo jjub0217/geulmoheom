@@ -327,7 +327,7 @@ export interface paths {
          *
          *     소진 응답에도 `guide.line`("내일 또 보자")을 담는다 — 아이가 빈 화면을 보지 않게.
          *
-         *     **아이별 순서·소모 이력은 아직 없다** (W3 A0-1). 지금은 20장에서 무작위다.
+         *     **아이별 순서·소모 이력은 아직 없다.** 지금은 DB 의 20장에서 무작위다.
          */
         get: operations["next_card_api_v1_cards_next_get"];
         put?: never;

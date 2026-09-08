@@ -58,9 +58,7 @@ def test_지금은_설정이_비어_있다():
     assert not 설정됐나()
 
 
-@pytest.mark.parametrize(
-    "빈칸", ["r2_account_id", "r2_access_key_id", "r2_secret_access_key"]
-)
+@pytest.mark.parametrize("빈칸", ["r2_account_id", "r2_access_key_id", "r2_secret_access_key"])
 def test_하나라도_비면_안_켜진_것이다(설정됨, monkeypatch, 빈칸):
     """셋 다 있어야 켜진 것이다. 반쯤 설정된 채로 올리려 들면 실패가 업로드 시점까지 미뤄진다 —
     **아이가 6~8초 기다린 뒤에** 드러난다."""

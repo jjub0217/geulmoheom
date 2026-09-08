@@ -55,6 +55,7 @@ from sqlalchemy.pool import NullPool  # noqa: E402
 from app import db  # noqa: E402
 from app.accounts import 비밀번호해시, 접속코드만들기  # noqa: E402
 from app.auth import CHILD_COOKIE, PARENT_COOKIE  # noqa: E402
+from app.card_store import 씨뿌리기  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import Child, Parent  # noqa: E402
 from app.tokens import issue  # noqa: E402
@@ -113,6 +114,18 @@ async def _비우기() -> None:
         이름들 = ", ".join(f'"{t}"' for t in 표)
         if 이름들:
             await conn.execute(text(f"truncate {이름들} restart identity cascade"))
+
+
+@pytest.fixture(autouse=True)
+async def _카드시드(_비우기: None) -> None:
+    """장면 카드를 매번 다시 뿌린다. **`_비우기` 가 `cards` 까지 지우기 때문이다.**
+
+    운영에서 이 자리를 맡는 것은 배포다 (`scripts/seed_cards.py` · `make seed`).
+    테스트가 그 단계를 대신할 뿐이고, **뿌리는 코드는 같은 함수 하나**다 —
+    갈라지면 테스트에서만 도는 카드가 생긴다.
+    """
+    async with db.SessionLocal() as session:
+        await 씨뿌리기(session)
 
 
 def _데이터베이스만들기() -> None:

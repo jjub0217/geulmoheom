@@ -1,7 +1,8 @@
 """운영용 엔드포인트. 아이 화면과 무관하고 `/api/v1` 밖에 둔다.
 
 - `/healthz` — 프로세스가 살아 있는가. 의존성을 보지 않는다
-- `/readyz` — 요청을 받을 준비가 됐는가. Postgres·Redis 를 실제로 두드린다
+- `/readyz` — 요청을 받을 준비가 됐는가. Postgres·Redis 를 두드리고 **장면 카드가
+  뿌려져 있는지** 본다 (A0-1)
 
 **실패 사유에 예외 메시지를 싣지 않는다.** asyncpg·redis 예외 문자열에는 호스트·계정이
 그대로 들어 있다. 남기는 것은 예외 타입뿐이다.
@@ -18,6 +19,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app import db
+from app.card_store import 카드수
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,21 @@ async def _check_redis() -> str:
     return "up"
 
 
+async def _check_cards() -> str:
+    """**장면 카드가 뿌려져 있는가** (A0-1). 비어 있으면 `/cards/next` 가 줄 것이 없다.
+
+    뿌리는 것은 배포의 일이고(`make seed`) **잊을 수 있는 단계**다. 여기서 안 보면
+    그 사실을 **아이가 카드를 못 받는 것으로** 알게 된다.
+    """
+    try:
+        async with db.SessionLocal() as session:
+            수 = await 카드수(session)
+    except Exception as exc:
+        logger.warning("장면 카드 확인 실패", extra={"exc_type": type(exc).__name__})
+        return "down"
+    return "up" if 수 else "down"
+
+
 @router.get("/healthz", summary="프로세스 생존 확인")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
@@ -50,7 +67,11 @@ async def healthz() -> dict[str, str]:
 
 @router.get("/readyz", summary="의존성 포함 준비 확인")
 async def readyz() -> JSONResponse:
-    checks = {"postgres": await _check_postgres(), "redis": await _check_redis()}
+    checks = {
+        "postgres": await _check_postgres(),
+        "redis": await _check_redis(),
+        "cards": await _check_cards(),
+    }
     ready = all(state == "up" for state in checks.values())
 
     # 아이가 보는 화면이 아니라 공통 오류 형식(`공통규약.md`)을 쓰지 않는다.

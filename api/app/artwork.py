@@ -200,9 +200,7 @@ async def 생성(card_id: str, tier: Tier) -> 생성결과:
         return _끝("unconfigured")
 
     try:
-        받은것 = await asyncio.wait_for(
-            _한번(모델, 프롬프트문, 레퍼런스), timeout=TIMEOUT_SECONDS
-        )
+        받은것 = await asyncio.wait_for(_한번(모델, 프롬프트문, 레퍼런스), timeout=TIMEOUT_SECONDS)
     except TimeoutError:
         return _끝("timeout")
     except Exception as exc:
