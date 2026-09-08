@@ -1,10 +1,24 @@
-.PHONY: dev db-up db-down certs contracts contracts-check test lint clean
+.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check test lint clean
 
 # ── 로컬 인프라 ──────────────────────────────────────────
 # -p geulmoheom 을 반드시 붙인다. compose 는 파일의 상위 폴더 이름을 프로젝트로 쓰는데,
 # 이 머신의 다른 저장소도 infra/ 를 쓴다. 빼면 두 프로젝트가 하나로 합쳐져
 # 같은 서비스 이름(postgres·redis)의 남의 컨테이너를 지운다. 2026-08-30 실제 발생.
 COMPOSE = docker compose -p geulmoheom -f infra/docker-compose.yml
+
+# **`docker` 가 PATH 에 없는 것과 데몬이 죽은 것은 다르다.** 증상이 겹쳐서 오진한다 —
+# 컨테이너가 healthy 인 채로 `command not found` 가 나고, 그러면 데몬을 다시 띄우려다
+# 시간을 쓴다 (2026-09-08 실제 발생 — 백엔드 세션. `pnpm` 과 같은 부류다).
+#
+# **우회하지 않고 어디 있는지만 알려준다.** `pnpm` 은 corepack 이라는 진짜 대체 실행
+# 경로가 있었지만 docker 는 없다 — 없는 것을 있는 척 돌리면 그게 더 나쁘다.
+docker-있나:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "docker 가 PATH 에 없다. **데몬이 죽은 것과 다르다** — 컨테이너는 떠 있을 수 있다."; \
+		echo "   확인: ~/.docker/bin/docker ps"; \
+		echo "→ Docker Desktop 은 CLI 를 ~/.docker/bin 에 둔다. 셸 프로필에 넣어라:"; \
+		echo '   export PATH="$$HOME/.docker/bin:$$PATH"'; \
+		exit 1; }
 
 # ── pnpm ────────────────────────────────────────────────
 # **`pnpm` 을 직접 부르지 않는다.** 버전은 `web/package.json` 의 `packageManager` 가
@@ -19,10 +33,10 @@ COMPOSE = docker compose -p geulmoheom -f infra/docker-compose.yml
 # 핀을 보고 받아온다. **corepack 은 Node 에 딸려 오므로 따로 깔 것이 없다.**
 PNPM := $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo 'corepack pnpm')
 
-db-up:
+db-up: docker-있나
 	$(COMPOSE) up -d
 
-db-down:
+db-down: docker-있나
 	$(COMPOSE) down
 
 # ── 로컬 https (.test) ──────────────────────────────────
