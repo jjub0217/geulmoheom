@@ -38,6 +38,7 @@ from app.api.v1.deps import (
 )
 from app.artwork_store import 굽기
 from app.artwork_store import 만들기 as 삽화만들기
+from app.book_store import 페이지올리기
 from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
@@ -287,6 +288,11 @@ async def create_attempt(
     # 3초 뒤부터 폴링한다 (`Stage0.md` 5절).
     삽화 = await 삽화만들기(session, 시도.id, 평가.tier)
     뒤에서.add_task(굽기, 삽화.id, payload.card_id, 평가.tier)
+
+    # **책이 여기서 쌓인다** (`Stage0.md` 9절 10b). 카드별 **최고 티어 1건**이 한
+    # 페이지이고, 티어가 올랐을 때만 교체된다 — 같은 티어로 다시 쓰면 **처음 해낸
+    # 문장을 지킨다.**
+    await 페이지올리기(session, 아이, 시도, 삽화.id)
 
     await 남기기(아이.id, *남길것)
 

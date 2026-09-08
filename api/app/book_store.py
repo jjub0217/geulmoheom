@@ -1,0 +1,140 @@
+"""내 책 (A0-4) — **아이의 창작물이 쌓이는 자리.**
+
+**쓰기 엔진은 수단이고 책과 독자가 목적이다** (비전 2장). `card_attempts` 가 「무엇을
+썼나」의 이력이라면 여기는 **아이가 다시 열어 보는 결과물**이다.
+
+**자녀 1명 = 책 1권** (Stage 0). **카드별 최고 티어 시도 1건**이 한 페이지이고,
+재시도로 티어가 오르면 그 페이지가 교체된다 (`Stage0.md` 6절).
+
+**아이 원문 그대로 옮긴다.** 맞춤법·AI 보정을 하지 않는다 — `card_attempts.text` 를
+그대로 복사한다. 그 값은 이미 마스킹된 뒤 문장이고, **그것이 원문이다** (PRD 1.1b).
+
+**등급이 낮아도 똑같이 쌓인다.** 「기본」도 페이지가 된다 — `문구.md` 1.6 이
+「이 장면이 네 책에 남아」를 기본 등급 대사에 둔 이유가 그것이다.
+"""
+
+import uuid
+from typing import Final
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.card_store import 오늘시작
+from app.models import Artwork, Book, BookPage, CardAttempt, Child
+from app.schemas.stage0 import Tier
+
+# 높을수록 위. **문서의 순서를 코드가 다시 정하지 않는다** — `TIERS` 와 같은 차례다.
+_높이: Final[dict[str, int]] = {"basic": 0, "rare": 1, "legendary": 2}
+
+
+async def 책(session: AsyncSession, 아이: Child) -> Book:
+    """이 아이의 책. **없으면 만든다.**
+
+    **처음 들어온 아이가 빈 책에서 500 을 보면 안 된다** — 아직 아무것도 안 썼을 뿐이다.
+    제목은 닉네임에서 짓는다 (`Stage0.md` 6절 예시). 아이가 `PATCH /book` 으로 바꾼다.
+    """
+    있는것 = await session.scalar(select(Book).where(Book.child_id == 아이.id))
+    if 있는것 is not None:
+        return 있는것
+
+    새책 = Book(child_id=아이.id, title=f"{아이.nickname}의 모험", visibility="private")
+    session.add(새책)
+    await session.commit()
+    return 새책
+
+
+async def 페이지들(
+    session: AsyncSession, book_id: uuid.UUID, *, 오늘만: bool = False
+) -> list[BookPage]:
+    """페이지 번호 순. `오늘만` 은 세션 종료 화면용이다 (`GET /book/today`)."""
+    문 = select(BookPage).where(BookPage.book_id == book_id).order_by(BookPage.page_no)
+    if 오늘만:
+        문 = 문.where(BookPage.achieved_at >= 오늘시작())
+    return list(await session.scalars(문))
+
+
+async def 삽화주소들(
+    session: AsyncSession, 페이지목록: list[BookPage], 주소만들기
+) -> dict[uuid.UUID, str]:
+    """`{page.id: url}`. **`ready` 인 것만 넣는다.**
+
+    굽는 중인 삽화의 주소를 미리 주면 프론트가 **깨진 이미지**를 그린다 — 폴링이
+    끝나기 전에 「내 책」을 열 수 있다.
+    """
+    아이디들 = [p.artwork_id for p in 페이지목록 if p.artwork_id]
+    if not 아이디들:
+        return {}
+
+    문 = select(Artwork).where(Artwork.id.in_(아이디들), Artwork.status == "ready")
+    준비된 = {행.id: 행 for 행 in await session.scalars(문)}
+    return {p.id: 주소만들기(str(p.artwork_id)) for p in 페이지목록 if p.artwork_id in 준비된}
+
+
+async def 세어보기(session: AsyncSession, book_id: uuid.UUID) -> dict[str, int]:
+    """티어별 페이지 수. **셋 다 0 으로 시작한다** — 없는 키를 프론트가 만나지 않게."""
+    문 = (
+        select(BookPage.tier, func.count())
+        .where(BookPage.book_id == book_id)
+        .group_by(BookPage.tier)
+    )
+    센것 = dict((await session.execute(문)).all())
+    return {티어: int(센것.get(티어, 0)) for 티어 in _높이}
+
+
+async def 페이지올리기(
+    session: AsyncSession,
+    아이: Child,
+    시도: CardAttempt,
+    artwork_id: uuid.UUID | None,
+) -> None:
+    """카드 하나의 페이지를 만들거나 **티어가 올랐을 때만** 교체한다
+    (`Stage0.md` 9절 10b · 6절).
+
+    **같은 티어면 그대로 둔다.** 처음 해낸 문장을 지키는 쪽이다 — 다시 써서 페이지가
+    바뀌면 아이는 **자기가 좋아하던 문장을 잃는다.** 「최고 티어 1건」이지 「마지막
+    1건」이 아니다.
+
+    **자리(`page_no`)는 안 바꾼다.** 교체는 내용이 바뀌는 것이지 책이 다시 엮이는 것이
+    아니다 — 아이가 기억하는 순서가 흐트러진다.
+    """
+    그책 = await 책(session, 아이)
+
+    문 = select(BookPage).where(
+        BookPage.book_id == 그책.id,
+        BookPage.source == "card",
+        BookPage.source_id == 시도.card_id,
+    )
+    있던것 = await session.scalar(문)
+
+    새티어: Tier = 시도.tier or "basic"
+    if 있던것 is not None:
+        if _높이[새티어] <= _높이[있던것.tier]:
+            return
+        있던것.tier = 새티어
+        있던것.card_attempt_id = 시도.id
+        있던것.artwork_id = artwork_id
+        있던것.text = 시도.text
+        await session.commit()
+        return
+
+    다음번호 = (
+        await session.scalar(
+            select(func.count()).select_from(BookPage).where(BookPage.book_id == 그책.id)
+        )
+        or 0
+    ) + 1
+
+    session.add(
+        BookPage(
+            book_id=그책.id,
+            source="card",
+            source_id=시도.card_id,
+            page_no=다음번호,
+            card_attempt_id=시도.id,
+            artwork_id=artwork_id,
+            tier=새티어,
+            # **아이 원문 그대로 옮긴다.** 맞춤법·AI 보정 없음 (`Stage0.md` 6절).
+            text=시도.text,
+        )
+    )
+    await session.commit()

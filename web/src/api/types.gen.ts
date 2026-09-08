@@ -470,6 +470,8 @@ export interface paths {
         /**
          * Get Book
          * @description 자녀 1명 = 책 1권. 카드별 최고 티어 시도 1건이 한 페이지.
+         *
+         *     **빈 책은 오류가 아니다** — 처음 들어온 아이는 아직 아무것도 안 썼을 뿐이다.
          */
         get: operations["get_book_api_v1_book_get"];
         put?: never;
@@ -477,7 +479,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Book */
+        /**
+         * Update Book
+         * @description **아직 저장하지 않는다.** 제목은 아이가 쓰는 문장이라 **PII 검사가 함께 붙어야**
+         *     하고(`Stage0.md` 6절 SHOULD), 그 자리를 따로 세운다.
+         */
         patch: operations["update_book_api_v1_book_patch"];
         trace?: never;
     };
@@ -491,6 +497,9 @@ export interface paths {
         /**
          * Get Today
          * @description 세션 종료 화면용. 오늘 추가·교체된 페이지만.
+         *
+         *     **일일 상한에 닿았을 때 아이가 보는 화면이다** (A0-5) — 「오늘 쓴 건 네 책에
+         *     다 있어」(`문구.md` 1.10)가 가리키는 것이 이 목록이다.
          */
         get: operations["get_today_api_v1_book_today_get"];
         put?: never;

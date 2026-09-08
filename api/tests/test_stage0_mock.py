@@ -667,10 +667,17 @@ def test_전_엔드포인트가_응답한다(
 
 
 def test_책은_아이_원문을_그대로_돌려준다(client: TestClient):
-    """마스킹은 로그 경로에만 건다. 책에는 아이 문장이 그대로 있어야 한다 (PRD 1.1b)."""
+    """마스킹은 로그 경로에만 건다. 책에는 아이 문장이 그대로 있어야 한다 (PRD 1.1b).
+
+    **먼저 한 장을 푼다** (2026-09-08, A0-4). 책이 진짜가 되면서 **아무것도 안 쓴 아이의
+    책은 비어 있다** — 픽스처였을 때는 무엇을 안 해도 페이지가 하나 있었다.
+    """
+    문장 = "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
+    assert client.post("/api/v1/attempts", json={"card_id": "c01", "text": 문장}).status_code == 200
+
     page = client.get("/api/v1/book").json()["pages"][0]
 
-    assert page["text"] == "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
+    assert page["text"] == 문장
 
 
 def test_daily_cap_이_child_me_에_반영된다(client: TestClient):
