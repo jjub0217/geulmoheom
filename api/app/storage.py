@@ -15,11 +15,13 @@ R2 는 S3 호환이라 **서명을 직접 짜지 않고 클라이언트를 쓴�
 **로컬은 개발·프리테스트용이다.** 파일럿에서 그리로 떨어지면 삽화가 컨테이너와 함께
 사라지므로, R2 넷을 `config.PILOT_REQUIRED` 에 넣어 **파일럿은 기동 자체가 막히게** 했다.
 
-**아직 안 정한 것 하나 — 삽화 URL 의 접근 정책.** `r2_public_base_url` 이라는 이름은
-공개 버킷을 전제하는데, **삽화는 아이 원문과 같은 창작물**이고 「내 책」의 기본
-`visibility` 는 `private` 이다. URL 만 알면 누구나 열린다면 그 `private` 은 이름뿐이다.
-**그동안의 대비로 키를 추측 불가능하게 만든다** — 아래 `키()` 참고. 정책이 정해지면
-바꿀 자리는 `공개URL()` 하나다 (**미결 11-7**, PM 권고는 api 프록시, 대표 판정 대기).
+**버킷은 공개하지 않는다. api 가 프록시한다** (2026-09-08 대표 판정, 미결 11-7 ·
+`Stage0.md` 5절). 그래서 **여기는 URL 을 만들지 않는다** — `올리기()` 가 돌려주는 것은
+**오브젝트 키**이고, 그것이 `artworks.r2_key` 에 그대로 들어간다. URL 을 만드는 것은
+프록시 엔드포인트의 일이다.
+
+**저장소 주소를 클라이언트에 내보내지 않는다.** 「내 책」의 `visibility` 는 Stage 0 에서
+항상 `private` 인데, 공개 버킷이면 **URL 하나로 그 `private` 이 무너진다.**
 """
 
 import asyncio
@@ -47,14 +49,13 @@ logger = logging.getLogger(__name__)
 
 
 def 설정됐나() -> bool:
-    """넷이 다 있어야 한다. **하나라도 비면 안 켜진 것이다** — 반쯤 설정된 상태로
+    """셋이 다 있어야 한다. **하나라도 비면 안 켜진 것이다** — 반쯤 설정된 상태로
     올리려 들면 실패가 업로드 시점까지 미뤄져 아이가 기다린 뒤에 드러난다."""
     s = get_settings()
     return bool(
         s.r2_account_id
         and s.r2_access_key_id.get_secret_value()
         and s.r2_secret_access_key.get_secret_value()
-        and s.r2_public_base_url
     )
 
 
@@ -88,12 +89,11 @@ def _클라이언트() -> Any:
     )
 
 
-def 공개URL(오브젝트키: str) -> str:
-    return f"{get_settings().r2_public_base_url.rstrip('/')}/{오브젝트키}"
-
-
 async def 올리기(artwork_id: str, image: bytes, mime: str) -> str | None:
-    """올리고 URL 을 돌려준다. **실패하면 `None`** — 예외를 밖으로 내지 않는다.
+    """올리고 **오브젝트 키**를 돌려준다. **실패하면 `None`** — 예외를 밖으로 내지 않는다.
+
+    **URL 이 아니다.** 저장소가 R2 든 로컬이든 같은 키가 나오고, 그 키가
+    `artworks.r2_key` 에 들어간다. 클라이언트가 보는 주소는 프록시가 만든다.
 
     boto3 는 동기라 스레드로 넘긴다. 여기서 이벤트 루프를 잡으면 **같은 워커의 다른
     아이들이 함께 멈춘다** — 업로드는 네트워크 왕복이라 짧지 않다.
@@ -119,7 +119,7 @@ async def 올리기(artwork_id: str, image: bytes, mime: str) -> str | None:
         logger.warning("삽화 저장 실패", extra={"exc_type": type(exc).__name__})
         return None
 
-    return 공개URL(오브젝트키)
+    return 오브젝트키
 
 
 async def _로컬에(오브젝트키: str, image: bytes) -> str | None:
@@ -137,14 +137,7 @@ async def _로컬에(오브젝트키: str, image: bytes) -> str | None:
         return None
 
     logger.info("R2 가 없어 삽화를 로컬에 저장했다")
-    return 로컬URL(오브젝트키)
-
-
-def 로컬URL(오브젝트키: str) -> str:
-    """**공개 URL 이 아니다.** 접근 정책(미결 11-7)이 정해질 때까지, 이 경로를 실제로
-    서빙하는 자리는 만들지 않는다 — 만들면 그 순간 정책이 「공개」로 굳는다.
-    """
-    return f"/artworks/files/{오브젝트키}"
+    return 오브젝트키
 
 
 def 로컬경로(오브젝트키: str) -> Path | None:
@@ -156,3 +149,43 @@ def 로컬경로(오브젝트키: str) -> Path | None:
         logger.warning("보관함 밖을 가리키는 키를 거부했다")
         return None
     return 경로 if 경로.is_file() else None
+
+
+async def 읽기(오브젝트키: str) -> bytes | None:
+    """프록시가 내보낼 바이트. **없거나 실패하면 `None`.**
+
+    **저장한 곳에서 읽는다** — R2 가 설정돼 있으면 R2, 아니면 로컬. `올리기()` 와 짝을
+    맞춘다. 여기서 갈라지면 **자격증명이 온 날 예전 삽화가 통째로 안 보인다.**
+    """
+    if not 설정됐나():
+        경로 = 로컬경로(오브젝트키)
+        if 경로 is None:
+            return None
+        try:
+            return await asyncio.to_thread(경로.read_bytes)
+        except OSError as exc:
+            logger.warning("삽화 로컬 읽기 실패", extra={"exc_type": type(exc).__name__})
+            return None
+
+    try:
+        응답 = await asyncio.to_thread(
+            _클라이언트().get_object,
+            Bucket=get_settings().r2_bucket,
+            Key=오브젝트키,
+        )
+        return await asyncio.to_thread(응답["Body"].read)
+    except Exception as exc:
+        # **예외 메시지를 싣지 않는다.** botocore 는 요청 정보를 통째로 문자열에 담는다.
+        logger.warning("삽화 읽기 실패", extra={"exc_type": type(exc).__name__})
+        return None
+
+
+def mime추측(오브젝트키: str) -> str:
+    """키의 확장자에서 되돌린다. **저장할 때 우리가 붙인 것**이라 믿을 수 있다 —
+    `키()` 가 아는 셋 밖의 확장자는 애초에 저장되지 않았다.
+    """
+    확 = 오브젝트키.rsplit(".", 1)[-1]
+    for mime, 알던확 in 확장자.items():
+        if 알던확 == 확:
+            return mime
+    return "application/octet-stream"

@@ -45,7 +45,6 @@ PILOT_REQUIRED = (
     "r2_account_id",
     "r2_access_key_id",
     "r2_secret_access_key",
-    "r2_public_base_url",
 )
 
 
@@ -81,7 +80,11 @@ class Settings(BaseSettings):
     r2_access_key_id: SecretStr = SecretStr("")
     r2_secret_access_key: SecretStr = SecretStr("")
     r2_bucket: str = "geulmoheom-artworks"
-    r2_public_base_url: str = ""
+    # **공개 base URL 을 두지 않는다.** 2026-09-08 대표 판정으로 **버킷은 공개하지 않고
+    # api 가 프록시한다** (미결 11-7 · `Stage0.md` 5절). 프록시는 S3 API 로 서버에서
+    # 읽으므로 공개 주소가 아예 필요 없다 — **이름을 바꾸는 대신 없앴다.**
+    # 남겨 두면 다음 사람이 그 이름을 보고 **공개 버킷을 다시 만든다.**
+    # 서명 URL 로 옮길 때(파일럿 후)도 이 값이 아니라 S3 클라이언트가 발급한다.
 
     jwt_secret: SecretStr = SecretStr("")
     daily_card_cap: int = 5

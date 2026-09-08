@@ -10,6 +10,7 @@
 """
 
 import asyncio
+import io
 import logging
 
 import pytest
@@ -17,7 +18,7 @@ from pydantic import SecretStr
 
 from app import storage
 from app.config import get_settings
-from app.storage import 공개URL, 설정됐나, 올리기, 키
+from app.storage import mime추측, 설정됐나, 올리기, 읽기, 키
 
 이미지 = b"\x89PNG\r\n\x1a\n" + b"0" * 64
 
@@ -29,7 +30,6 @@ def 설정됨(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(s, "r2_account_id", "acct", raising=False)
     monkeypatch.setattr(s, "r2_access_key_id", SecretStr("키"), raising=False)
     monkeypatch.setattr(s, "r2_secret_access_key", SecretStr("비밀"), raising=False)
-    monkeypatch.setattr(s, "r2_public_base_url", "https://img.geulmoheom.test/", raising=False)
     monkeypatch.setattr(s, "r2_bucket", "geulmoheom-artworks", raising=False)
     return s
 
@@ -59,10 +59,10 @@ def test_지금은_설정이_비어_있다():
 
 
 @pytest.mark.parametrize(
-    "빈칸", ["r2_account_id", "r2_access_key_id", "r2_secret_access_key", "r2_public_base_url"]
+    "빈칸", ["r2_account_id", "r2_access_key_id", "r2_secret_access_key"]
 )
 def test_하나라도_비면_안_켜진_것이다(설정됨, monkeypatch, 빈칸):
-    """반쯤 설정된 채로 올리려 들면 실패가 업로드 시점까지 미뤄진다 —
+    """셋 다 있어야 켜진 것이다. 반쯤 설정된 채로 올리려 들면 실패가 업로드 시점까지 미뤄진다 —
     **아이가 6~8초 기다린 뒤에** 드러난다."""
     빈값 = SecretStr("") if "key" in 빈칸 else ""
     monkeypatch.setattr(설정됨, 빈칸, 빈값, raising=False)
@@ -99,18 +99,20 @@ def test_모르는_형식은_저장하지_않는다():
 # ── 올리기 ──────────────────────────────────────────────
 
 
-def test_올리면_공개_URL_을_돌려준다(설정됨, monkeypatch):
+def test_올리면_오브젝트_키를_돌려준다(설정됨, monkeypatch):
+    """**URL 이 아니다.** 버킷을 공개하지 않고 api 가 프록시한다 (대표 판정, 미결 11-7) —
+    **저장소 주소가 클라이언트로 안 나간다.**"""
     받은 = _올림(monkeypatch)
 
-    url = asyncio.run(올리기("a1", 이미지, "image/png"))
+    키값 = asyncio.run(올리기("a1", 이미지, "image/png"))
 
     assert len(받은) == 1
     보낸 = 받은[0]
     assert 보낸["Bucket"] == "geulmoheom-artworks"
     assert 보낸["Body"] == 이미지
     assert 보낸["ContentType"] == "image/png"
-    # 슬래시가 겹치지 않는다 — base url 끝의 `/` 를 떼고 붙인다
-    assert url == 공개URL(보낸["Key"]) == f"https://img.geulmoheom.test/{보낸['Key']}"
+    assert 키값 == 보낸["Key"]
+    assert "http" not in 키값
 
 
 def test_모르는_형식이면_올리지_않는다(설정됨, monkeypatch):
@@ -151,13 +153,13 @@ def test_R2_가_비면_로컬에_저장한다(보관함, monkeypatch):
     자격증명이 오면 이 경로를 안 탄다."""
     받은 = _올림(monkeypatch)
 
-    url = asyncio.run(올리기("a1", 이미지, "image/png"))
+    키값 = asyncio.run(올리기("a1", 이미지, "image/png"))
 
     assert not 받은, "R2 로 올리려 들면 안 된다"
     저장된 = list(보관함.rglob("*.png"))
     assert len(저장된) == 1
     assert 저장된[0].read_bytes() == 이미지
-    assert url == f"/artworks/files/artworks/{저장된[0].name}"
+    assert 키값 == f"artworks/{저장된[0].name}"
 
 
 def test_R2_가_있으면_로컬을_안_쓴다(설정됨, 보관함, monkeypatch):
@@ -186,7 +188,78 @@ def test_보관함_밖을_가리키는_키를_거부한다(보관함):
 
 def test_로컬경로가_저장한_파일을_찾는다(보관함, monkeypatch):
     _올림(monkeypatch)
-    url = asyncio.run(올리기("a1", 이미지, "image/png"))
-    오브젝트키 = url.removeprefix("/artworks/files/")
+    오브젝트키 = asyncio.run(올리기("a1", 이미지, "image/png"))
 
     assert storage.로컬경로(오브젝트키).read_bytes() == 이미지
+
+
+# ── 읽기 (프록시가 쓴다) ─────────────────────────────────
+
+
+def test_로컬에_저장한_것을_되읽는다(보관함, monkeypatch):
+    """**저장한 곳에서 읽는다.** 여기서 갈라지면 자격증명이 온 날 예전 삽화가
+    통째로 안 보인다."""
+    _올림(monkeypatch)
+    오브젝트키 = asyncio.run(올리기("a1", 이미지, "image/png"))
+
+    assert asyncio.run(읽기(오브젝트키)) == 이미지
+
+
+def test_R2_에_저장한_것을_되읽는다(설정됨, monkeypatch):
+    class _가짜:
+        def put_object(self, **kw):
+            pass
+
+        def get_object(self, **kw):
+            assert kw["Bucket"] == "geulmoheom-artworks"
+            return {"Body": io.BytesIO(이미지)}
+
+    monkeypatch.setattr(storage, "_클라이언트", lambda: _가짜())
+
+    assert asyncio.run(읽기("artworks/a1-abc.png")) == 이미지
+
+
+def test_없는_것을_읽으면_None(보관함, monkeypatch):
+    _올림(monkeypatch)
+
+    assert asyncio.run(읽기("artworks/없다.png")) is None
+
+
+def test_보관함_밖은_읽기에서도_막힌다(보관함):
+    """`로컬경로()` 를 지나야만 읽는다 — 프록시가 키를 URL 에서 받으므로
+    **여기가 실제 관문이다.**"""
+    보관함.mkdir(parents=True)
+    (보관함.parent / "비밀.txt").write_text("나가면 안 된다")
+
+    assert asyncio.run(읽기("../비밀.txt")) is None
+
+
+def test_R2_읽기_실패는_예외를_안_낸다(설정됨, monkeypatch, caplog):
+    비밀 = "AKIA-비밀키-가-예외에-실렸다"
+
+    class _가짜:
+        def get_object(self, **kw):
+            raise RuntimeError(비밀)
+
+    monkeypatch.setattr(storage, "_클라이언트", lambda: _가짜())
+
+    with caplog.at_level(logging.WARNING, logger="app.storage"):
+        assert asyncio.run(읽기("artworks/a1-abc.png")) is None
+
+    for r in [r for r in caplog.records if r.name == "app.storage"]:
+        assert 비밀 not in str(r.__dict__)
+
+
+@pytest.mark.parametrize(
+    ("키값", "mime"),
+    [
+        ("artworks/a1-x.png", "image/png"),
+        ("artworks/a1-x.jpg", "image/jpeg"),
+        ("artworks/a1-x.webp", "image/webp"),
+        ("artworks/a1-x.exe", "application/octet-stream"),
+    ],
+)
+def test_mime_을_확장자에서_되돌린다(키값, mime):
+    """저장할 때 **우리가 붙인 확장자**라 믿을 수 있다 — 아는 셋 밖은 애초에
+    저장되지 않았다."""
+    assert mime추측(키값) == mime

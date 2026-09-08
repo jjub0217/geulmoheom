@@ -71,7 +71,6 @@ def test_키가_다_있으면_pilot_이_뜬다():
         r2_account_id="acct",
         r2_access_key_id="키",
         r2_secret_access_key="비밀",
-        r2_public_base_url="https://img.geulmoheom.test",
     )
 
     assert missing_pilot_keys(settings) == []
@@ -93,7 +92,6 @@ def test_R2_가_비면_pilot_이_안_뜬다():
         "r2_account_id",
         "r2_access_key_id",
         "r2_secret_access_key",
-        "r2_public_base_url",
     }
 
 
