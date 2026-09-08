@@ -75,9 +75,38 @@ TIMEOUT_SECONDS: Final = 15.0
 _정면 = (0.0, 0.10, 0.40, 0.79)  # (좌, 상, 우, 하) 비율
 
 STYLE = (
-    "2D cel-shaded webtoon illustration, bold dark outlines, flat shading, "
-    "warm storybook palette, no text, no watermark"
+    "2D cel-shaded webtoon illustration, bold dark outlines, flat shading, warm storybook palette"
 )
+
+# **구도를 말한다** (2026-09-08, W4 「삽화 결함 수리」 ㉠ · `benchmarks/W4-artwork-eyes.md`).
+# 20장 실물에서 **`c08`·`c16` 이 장면을 잃었다** — 눈밭의 문이 **가이드 배 위에** 그려졌고
+# 성문 앞 문지기가 아예 사라졌다. 뿌리는 시트 복제(크롭으로 막았다)와 같다:
+# **레퍼런스가 장면을 이긴다.**
+#
+# **`GUIDE` 는 캐릭터를 `exactly consistent` 하게 유지하라고 강하게 말하는데,
+# 어디에 얼마나 크게 둘지는 아무도 말하지 않았다.** 그래서 모델이 캐릭터를 화면
+# 가운데 세우고 장면을 배경으로 밀었다 — 20장 중 절반 가까이가 정면 전신이었다.
+#
+# **가이드를 빼서 푸는 것이 아니다.** 가이드는 안전 MUST 라(PRD B-5) 반드시 있어야 하고,
+# 여기서 정하는 것은 **크기와 자리**뿐이다.
+구도 = (
+    "Wide shot of the scene; the scene fills the frame. The red panda guide is a small "
+    "secondary figure standing inside the scene, no more than one third of the frame "
+    "height, never overlapping or covering the scene's main subject."
+)
+
+# **맨 뒤에 둔다.** 종전에는 `STYLE` 안에 있어 프롬프트 앞쪽이었고, 뒤에 오는
+# 티어 접미어·`GUIDE` 에 밀렸다 — `c07` 은 카드가 글자를 안 시켰는데도 **하늘 전체에
+# 유사 문자 여러 줄**이 박혔다.
+#
+# **이 방법을 믿을 근거가 약하다는 것을 안다.** 기본 삽화 때 「문구로는 안 막히고
+# 레퍼런스에서 없애야 통한다」를 이미 한 번 확인했다(`_정면` 주석). **그래서 이건
+# 가장 싼 것을 먼저 해 보는 것이고, 안 되면 그 사실을 적고 다음을 찾는다** —
+# 통과 기준을 뽑기 전에 적어 둔 이유가 그것이다 (`benchmarks/W4-artwork-eyes.md`).
+#
+# **`c12`·`c14` 는 이걸로 안 없어진다.** 그 둘은 카드 본문이 신문·간판을 시켜서
+# 난 것이라 고칠 자리가 `docs/장면카드_초안.md` 이고 **PM·대표 몫**이다.
+글자금지 = "No lettering, no words, no signs, no captions, no watermark anywhere in the image."
 
 # 레퍼런스 이미지와 짝이다. 둘 중 하나만 넣으면 가이드가 안 그려지거나 딴판이 된다.
 GUIDE = (
@@ -104,7 +133,7 @@ def 프롬프트(card_id: str, tier: Tier) -> str | None:
     장면 = 카드(card_id)
     if 장면 is None or not 장면.스케치프롬프트:
         return None
-    return f"{STYLE}. Scene: {장면.스케치프롬프트}. {접미어[tier]}. {GUIDE}"
+    return f"{STYLE}. Scene: {장면.스케치프롬프트}. {접미어[tier]}. {구도} {GUIDE} {글자금지}"
 
 
 @lru_cache

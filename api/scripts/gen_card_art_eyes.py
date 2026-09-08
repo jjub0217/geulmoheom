@@ -20,19 +20,30 @@
 (`dramatic cinematic lighting, intricate detail, painterly finish`) 레퍼런스 지시가
 그만큼 밀려서, **모델이 레퍼런스 시트를 더 많이 베낀다.** 근거는 `benchmarks/W4-artwork-eyes.md`.
 
-실행: `PYTHONPATH=. uv run python scripts/gen_card_art_eyes.py`
-생성물은 `api/out/카드삽화_G3/` (gitignore). **저장소에 안 넣는다** — 20장이면 수 MB 이고,
-여기서 봐야 할 것은 파일이 아니라 판정이다. 판정은 벤치 문서에 남는다.
+실행:
+    `PYTHONPATH=. uv run python scripts/gen_card_art_eyes.py`            — 20장 전수
+    `PYTHONPATH=. uv run python scripts/gen_card_art_eyes.py 표본 c07 c08 …` — 앞이 폴더 이름
+
+**전수를 한 번에 못 치는 때가 있다.** `adr/0010` 이 **한 번 700원**을 상한으로 두는데
+20장(G3)이 약 900원이라 넘는다. 그래서 카드를 골라 받는다 — **나눠 뽑으면 총액은 같고
+한 번 한도만 지켜진다.**
+
+**표본으로 갈 때는 몇 장 중 몇 장이 통과인지 뽑기 전에 적는다** (C-2 가 그걸 안 해서
+6:6 으로 갈렸다). 기준은 `benchmarks/W4-artwork-eyes.md`.
+
+생성물은 `api/out/<폴더>/` (gitignore). **저장소에 안 넣는다** — 여기서 봐야 할 것은
+파일이 아니라 판정이다. 판정은 벤치 문서에 남는다.
 """
 
 import asyncio
+import sys
 import time
 from pathlib import Path
 
 from app.artwork import 장당USD, 생성
 from app.scene_cards import 모험카드들
 
-OUT = Path(__file__).resolve().parents[1] / "out" / "카드삽화_G3"
+OUT뿌리 = Path(__file__).resolve().parents[1] / "out"
 
 # **G3 다.** `app.artwork.접미어` 의 키와 같은 값을 쓴다 — 여기 문자열을 지어내면
 # 제품에 없는 티어를 뽑고도 모른다.
@@ -42,11 +53,27 @@ TIER = "legendary"
 
 
 async def main() -> None:
-    카드들 = 모험카드들()
     # **튜토리얼 T1~T3 은 `모험카드들()` 이 이미 뺀다** — 대표 미검수라
     # 프리테스트에 안 쓰고, 그래서 여기서 볼 이유도 없다.
-    print(f"카드 {len(카드들)}장 · 티어 {TIER} · 약 ${장당USD * len(카드들):.2f}\n")
+    전체 = 모험카드들()
+    폴더, *고른것 = sys.argv[1:] or ["카드삽화_G3"]
+    if 고른것:
+        아는것 = {c.card_id for c in 전체}
+        # **모르는 카드 id 를 조용히 건너뛰지 않는다** — 오타 하나로 표본이 아홉 장이
+        # 되고, 그러면 「몇 장 중 몇 장」을 뽑기 전에 적어 둔 것이 무의미해진다.
+        if 모르는것 := [cid for cid in 고른것 if cid not in 아는것]:
+            raise SystemExit(f"모르는 카드: {', '.join(모르는것)}")
+        카드들 = [c for c in 전체 if c.card_id in set(고른것)]
+    else:
+        카드들 = 전체
 
+    비용 = 장당USD * len(카드들)
+    print(f"카드 {len(카드들)}장 · 티어 {TIER} · 약 ${비용:.2f} (~{비용 * 1400:.0f}원)")
+    # `adr/0010` — **한 번 700원.** 넘으면 나눠 뽑는다. 여기서 막지는 않는다:
+    # 한도를 아는 것은 사람이고, 스크립트가 대신 판단하면 그 판단이 안 보인다.
+    print(f"→ out/{폴더}\n")
+
+    OUT = OUT뿌리 / 폴더
     OUT.mkdir(parents=True, exist_ok=True)
     받은것 = 0
     for 장면 in 카드들:
