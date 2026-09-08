@@ -10,6 +10,8 @@ import { 버튼, 못닿음 } from "../src/app/copy";
 import { 폴링상한 } from "../src/lib/artwork";
 // 대기 대사도 박지 않는다 — `docs/문구.md` **1.5** 가 SSOT 다.
 import { 삽화대기대사 } from "../src/components/artwork-copy";
+// 배지 낱말도 박지 않는다 — `docs/문구.md` **1.8** · `용어사전.md` 36행이 SSOT 다.
+import { 티어이름 } from "../src/components/tier-badge";
 import { 상태표시 } from "../src/app/status-copy";
 
 /**
@@ -238,13 +240,16 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
   // **결과 대사가 여기 있으면 안 된다.** 있으면 아이가 그림보다 먼저 등급 반응을 읽는다 —
   // 2026-09-08 까지 실제로 그랬고, 1.5 가 생긴 이유가 그것이다.
   await expect(page.getByText(CARD.guide.line)).toHaveCount(0);
+  // **배지도 마찬가지다.** 배지가 먼저 뜨면 그림은 이미 아는 것을 확인하는 절차가 된다.
+  await expect(page.locator("main [data-티어배지]")).toHaveCount(0);
 
   const 그림 = page.locator(`main img[src="${ARTWORK_URL}"]`);
   await expect(그림).toBeVisible();
   expect(물어본횟수).toBeGreaterThanOrEqual(2);
 
-  // 그림이 온 **뒤에** 결과 대사가 온다. 대기 대사는 그림이 덮어 사라진다.
+  // 그림이 온 **뒤에** 결과 대사와 배지가 온다. 대기 대사는 그림이 덮어 사라진다.
   await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  await expect(page.locator("main [data-티어배지]")).toHaveText(티어이름.rare);
   await expect(대기대사).toHaveCount(0);
 
   // **`crossOrigin` 이 붙으면 쿠키가 안 실려 그림이 통째로 안 뜬다** (`Stage0.md` 5절 ⚠).
@@ -255,10 +260,17 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
   expect(그림요청).toContain(ARTWORK_URL);
 
   // **`fallback: true` 인데도 아이에게 아무 말도 안 한다.** 그냥 그림이 나온 것이어야 한다.
+  //
+  // **「기본」을 여기서 못 센다** — 2026-09-08 부터 그것이 **티어 배지의 낱말**이다
+  // (`용어사전.md` 36행 아이 화면 열). 폴백이 샌 신호로 쓰면 **`basic` 결과에서 무조건 빨간불**이 된다.
   const 화면 = await page.locator("main").innerText();
-  for (const 금지어 of ["기본", "실패", "대신", "임시"]) {
+  for (const 금지어 of ["실패", "대신", "임시"]) {
     expect(화면).not.toContain(금지어);
   }
+
+  // **「티어」는 내부 용어라 화면에 없어야 한다** (`문구.md` 1.8).
+  // 「희귀」는 되고 「희귀 티어」는 안 된다 — 사전의 열을 넘지 않는다.
+  expect(화면).not.toContain("티어");
 });
 
 test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 화면을 만들지 않는다", async ({
@@ -290,14 +302,16 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   // 「여기 그림이 있어야 하는데 없다」로 읽어, 실패 화면을 안 만든다는 결정이 연출로 뒤집힌다.
   await expect(자리).toHaveCount(0, { timeout: 폴링상한 + 5_000 });
 
-  // 그림만 없다. **가이드 대사는 그대로 있고**, 오류 문구도 다시 시도 버튼도 안 생긴다.
+  // 그림만 없다. **가이드 대사도 배지도 그대로 있다** (`문구.md` 1.7) — 아이는 자기 문장이
+  // 통했다는 것을 알아야 하고, 그림은 「내 책」에서 다시 본다. 오류 문구도 버튼도 안 생긴다.
   await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  await expect(page.locator("main [data-티어배지]")).toHaveText(티어이름.rare);
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
-  const 화면 = await page.locator("main").innerText();
+  // **아무 말도 안 한다** (`문구.md` 1.7). 금지어 목록으로 막지 않고 **화면에 남은 것을 통째로
+  // 센다** — 목록은 **적어 둔 낱말만** 막지만, 여기서 막아야 하는 것은 **새 문장이 생기는 것**이다.
+  const 화면 = (await page.locator("main").innerText()).trim();
+  expect(화면).toBe(`${티어이름.rare}\n${CARD.guide.line}`);
   expect(화면).not.toContain(못닿음.보내기);
-  for (const 금지어 of ["기본", "실패", "대신", "임시"]) {
-    expect(화면).not.toContain(금지어);
-  }
 });
 
 test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", async ({ page }) => {
@@ -457,7 +471,10 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
     return route.fulfill({ status: 200, json: 결과(CARD.guide) });
   });
   await 보내기.click();
-  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  // **결과 화면에 닿은 신호는 삽화 자리다** — 위 「쓴 것을 보낸다」와 같은 이유다.
+  // 여기 있던 `CARD.guide.line` 은 **경쟁 조건으로 초록이었다**: 전환이 끝나기 전
+  // **카드 화면에 떠 있던 같은 대사**를 잡고 있었다. 결과 화면의 대사는 그림이 뜬 뒤에야 온다.
+  await expect(page.locator("main [data-삽화자리]")).toBeVisible();
   expect(보낸것.text).toBe(`등대지기한테 ${PII_MASK} 로 전화한다 그리고 문을 연다`);
 });
 

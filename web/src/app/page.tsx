@@ -8,6 +8,7 @@ import { AttemptInput } from "@/components/attempt-input";
 import { GuideFigure } from "@/components/guide";
 import { LeaveButton } from "@/components/leave";
 import { SceneCard } from "@/components/scene-card";
+import { TierBadge } from "@/components/tier-badge";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
 import { useArtwork } from "@/lib/artwork";
 import type { PiiKind } from "@/lib/pii";
@@ -243,7 +244,10 @@ export default function Home() {
                 **못 받았을 때는 그린다.** 그림만 없고 나머지는 그대로다 (1.7) — 아이는
                 자기 문장이 통했다는 것을 알아야 하고, 그림은 「내 책」에서 다시 본다. */}
             {삽화.kind !== "기다림" && (
-              <div className="flex justify-center">
+              <div className="flex flex-col items-center gap-6">
+                {/* **그림과 같이 열린다.** 배지가 먼저 뜨면 그림은 이미 아는 것을 확인하는
+                    절차가 된다 — 「등급을 미리 흘리지 않는다」가 낱말이 아니라 순서로 깨진다. */}
+                <TierBadge tier={screen.result.tier} />
                 <GuideFigure guide={screen.result.guide} />
               </div>
             )}
