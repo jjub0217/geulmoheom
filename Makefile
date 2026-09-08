@@ -73,7 +73,18 @@ certs:
 #
 # **`__Host-` 쿠키와 CORS 는 안 건드린다** — 같은 호스트의 다른 포트라 지금
 # `.test` 두 이름과 성질이 같다(cross-origin · same-site). 쿠키는 포트를 안 가린다.
-LAN_HOST = $(shell scutil --get LocalHostName 2>/dev/null).local
+# **소문자로 내린다.** `scutil` 은 사람이 맥에 붙인 이름을 그대로 주는데
+# (`osejin-ui-MacBookPro`), **브라우저는 `Origin` 헤더의 호스트를 소문자로
+# 정규화해서 보낸다.** FastAPI `CORSMiddleware` 는 정확 문자열 비교라 안 맞고,
+# **그러면 401 응답이 CORS 헤더 없이 나가 브라우저가 못 읽어 화면이 로딩에서 멈춘다.**
+# 2026-09-08 iPad 리허설에서 실제로 밟았다.
+#
+# **TLS 는 안 건드려도 된다** — 호스트 매칭이 대소문자를 안 가려서 이미 발급된
+# SAN 이 소문자 접속에도 그대로 맞는다. 바뀌는 것은 CORS 문자열과 API 주소뿐이다.
+#
+# **대소문자를 둘 다 넣지 않는다.** 브라우저는 절대 대문자로 안 보내므로
+# 안 쓰이는 줄이 남고, **다음 사람이 「대문자도 지원한다」로 읽는다.**
+LAN_HOST = $(shell scutil --get LocalHostName 2>/dev/null | tr 'A-Z' 'a-z').local
 LAN_IP = $(shell ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
 
 certs-lan:
