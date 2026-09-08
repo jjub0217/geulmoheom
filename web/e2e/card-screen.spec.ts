@@ -212,7 +212,11 @@ test("차단돼도 쓴 문장을 지우지 않는다", async ({ page }) => {
       status: 200,
       json: {
         outcome: "blocked",
-        reason: "pii",
+        // **`"moderation"` 하나뿐이다.** 한때 `"pii"` 가 있었는데 **대표가 「서버 2차도 가리고
+        // 진행」으로 판정**하면서 계약에서 빠졌다 (미결 11-5, 2026-09-08) — PII 로는 차단이
+        // **아예 안 나가므로** 그 분기는 영영 안 쓰인다. **없는 응답을 테스트가 지어내면
+        // 죽은 분기를 살아 있는 것처럼 붙잡는다.**
+        reason: "moderation",
         guide: { expression: "compass_dim", line: "나침반이 그 말은 못 알아듣네. 다르게 말해줄래?" },
         today: { cards_done: 1, cap: 5, locked: false },
       },
