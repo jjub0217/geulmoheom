@@ -24,7 +24,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,8 @@ from app.api.v1.deps import (
     mock_outcome,
     require_child,
 )
+from app.artwork_store import 굽기
+from app.artwork_store import 만들기 as 삽화만들기
 from app.card_store import 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
@@ -160,6 +162,7 @@ async def create_attempt(
     payload: AttemptRequest,
     아이: Child,
     session: Session,
+    뒤에서: BackgroundTasks,
     outcome: Annotated[MockOutcome | None, Depends(mock_outcome)],
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> AttemptResponse:
@@ -263,6 +266,12 @@ async def create_attempt(
     # 죽이면 안 된다), 저장이 그 뒤에 있으면 **삼킨 실패 다음에 아이 문장이 날아간다.**
     시도 = await _이력남기기(session, 아이, payload, text=text, 평가=평가, 재시도=재시도)
 
+    # **행만 만들고 응답한다** (B-3 ①). 굽는 데 평균 6.2초가 드는데
+    # (`benchmarks/W1-image-bench.md`) 그동안 아이를 세워 두지 않는다 — 프론트가
+    # 3초 뒤부터 폴링한다 (`Stage0.md` 5절).
+    삽화 = await 삽화만들기(session, 시도.id, 평가.tier)
+    뒤에서.add_task(굽기, 삽화.id, payload.card_id, 평가.tier)
+
     await 남기기(아이.id, *남길것)
 
     # **등급은 여기서 끝난다.** 응답에 담기는 것은 티어뿐이다 (`Stage0.md` 4절).
@@ -273,7 +282,7 @@ async def create_attempt(
         highlights=하이라이트,
         guide=_guide(평가.tier, 하이라이트),
         artwork={
-            "artwork_id": fx.ARTWORK_ID,
+            "artwork_id": str(삽화.id),
             "status": "pending",
             "url": None,
             "placeholder_url": fx.sketch_url(payload.card_id),

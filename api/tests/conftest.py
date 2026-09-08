@@ -52,8 +52,9 @@ from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
-from app import db  # noqa: E402
+from app import artwork_store, db  # noqa: E402
 from app.accounts import 비밀번호해시, 접속코드만들기  # noqa: E402
+from app.artwork import 생성결과  # noqa: E402
 from app.auth import CHILD_COOKIE, PARENT_COOKIE  # noqa: E402
 from app.card_store import 씨뿌리기  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -126,6 +127,25 @@ async def _카드시드(_비우기: None) -> None:
     """
     async with db.SessionLocal() as session:
         await 씨뿌리기(session)
+
+
+@pytest.fixture(autouse=True)
+def _삽화는_안_굽는다(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**어떤 테스트도 실제로 이미지를 굽지 않는다.**
+
+    `POST /attempts` 가 백그라운드로 굽기 시작하면서(B-3 ①) **시도를 보내는 모든
+    테스트가 이미지 API 를 부를 수 있게 됐다.** 장당 $0.0336 이고, 무엇보다
+    **조용하다** — 느려질 뿐 빨간불이 안 뜬다. 실제로 구워 보는 것은
+    `scripts/bench_image.py` 몫이다.
+
+    **`생성` 만 갈아끼운다.** 행을 만들고 `ready` 로 굳히는 길은 그대로 돌아야
+    그 자리를 테스트가 볼 수 있다. 굽기 자체를 보는 테스트는 이 위에 덧끼운다.
+    """
+
+    async def _안만듦(card_id: str, tier: str) -> 생성결과:
+        return 생성결과(사유="unconfigured")
+
+    monkeypatch.setattr(artwork_store, "생성", _안만듦)
 
 
 def _데이터베이스만들기() -> None:
