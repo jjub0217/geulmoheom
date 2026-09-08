@@ -13,6 +13,8 @@ import {
   인증이풀렸다,
 } from "@/lib/api";
 
+import { ChildrenPanel } from "@/components/children";
+
 import { 상태표시 } from "@/app/status-copy";
 
 import { 고지, 못닿음, 폼 } from "./copy";
@@ -262,9 +264,11 @@ export default function ParentSignup() {
       )}
 
       {screen.kind === "가입됨" && (
-        // **여기서 멈춘다** (PM 확정 2026-09-07). 다음 단계(아이 계정 만들기)는 백엔드 6번이
-        // 오면 **바로 이 자리**에 붙는다. 「곧 열립니다」 같은 문장을 지어두면 이틀 뒤에 거짓말이 된다.
-        <div className="flex flex-col items-start gap-2">
+        // **백엔드 6번(E-4)이 왔고 아이 계정 만들기가 바로 이 자리에 붙었다** (2026-09-08).
+        // 앞 세션이 「곧 열립니다」를 안 지어두고 비워 둔 자리다 — 지어뒀으면 이틀 뒤 거짓말이 됐다.
+        // **라우트를 새로 만들지 않았다**: 새 화면으로 빼면 **거기로 가는 링크 글자**가 필요한데
+        // `문구.md` 에 그 자리가 없다.
+        <div className="flex w-full flex-col items-start gap-2">
           <h1 className="text-3xl font-semibold">{폼.가입됨}</h1>
           <p className="opacity-80">
             {폼.동의기록}{" "}
@@ -281,6 +285,11 @@ export default function ParentSignup() {
           >
             {폼.로그아웃}
           </button>
+
+          {/* 자녀 관리 (E-4 프론트 짝). **아이에게 건넬 접속 코드가 여기서 나온다.** */}
+          <div className="mt-8 w-full border-t-2 border-brass/30 pt-8">
+            <ChildrenPanel />
+          </div>
         </div>
       )}
 
