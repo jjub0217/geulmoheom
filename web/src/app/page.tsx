@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
@@ -14,6 +15,7 @@ import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
 import { useArtwork } from "@/lib/artwork";
 import type { PiiKind } from "@/lib/pii";
 
+import { 내책라벨 } from "./book/copy";
 import { 버튼, 못닿음 } from "./copy";
 import { 상태표시 } from "./status-copy";
 
@@ -300,6 +302,15 @@ export default function Home() {
                     하이라이트도 **그림과 같이** 열린다 — 표시가 많고 적은 것 자체가
                     등급을 짐작하게 하는 신호라, 굽는 동안 미리 보이면 안 된다. */}
                 <WrittenLine text={text} highlights={screen.result.highlights} />
+                {/* **그림을 막 받은 이 자리가 「내 책에 쌓인다」를 가장 잘 말한다** —
+                    결과 대사(1.6 기본 2번)가 파는 것이 정확히 그것이다.
+                    **나가기 옆에 두지 않는다**: 하나는 눈에 안 띄어야 하고 이건 반대다. */}
+                <Link
+                  href="/book"
+                  className="rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                >
+                  {내책라벨}
+                </Link>
               </div>
             )}
           </div>

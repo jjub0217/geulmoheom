@@ -10,6 +10,8 @@ import { 버튼, 못닿음 } from "../src/app/copy";
 import { 폴링상한 } from "../src/lib/artwork";
 // 대기 대사도 박지 않는다 — `docs/문구.md` **1.5** 가 SSOT 다.
 import { 삽화대기대사 } from "../src/components/artwork-copy";
+// 진입 라벨은 `용어사전.md` 48행 **아이 화면** 열이다.
+import { 내책라벨 } from "../src/app/book/copy";
 // 배지 낱말도 박지 않는다 — `docs/문구.md` **1.8** · `용어사전.md` 36행이 SSOT 다.
 import { 티어이름 } from "../src/components/tier-badge";
 // 가림 안내도 같은 이유로 박지 않는다 — `docs/문구.md` **1.1** 이 SSOT 다.
@@ -264,6 +266,13 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
   // **주소 앞에 아무것도 안 붙였다.** 상대 경로로 바꾸거나 오리진을 덧대면 여기서 걸린다.
   expect(그림요청).toContain(ARTWORK_URL);
 
+  // **그림을 막 받은 이 자리에서 내 책으로 들어간다** — 「이 장면이 네 책에 남아」가
+  // 파는 것이 그것이다. **굽는 동안에는 이 자리 전체가 안 그려지므로 링크도 없다.**
+  await expect(page.getByRole("link", { name: 내책라벨 })).toHaveAttribute(
+    "href",
+    "/book",
+  );
+
   // **`fallback: true` 인데도 아이에게 아무 말도 안 한다.** 그냥 그림이 나온 것이어야 한다.
   //
   // **「기본」을 여기서 못 센다** — 2026-09-08 부터 그것이 **티어 배지의 낱말**이다
@@ -321,7 +330,7 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
     .split("\n")
     .map((줄) => 줄.trim())
     .filter((줄) => 줄 !== "");
-  expect(줄들).toEqual([티어이름.rare, CARD.guide.line, 쓴것]);
+  expect(줄들).toEqual([티어이름.rare, CARD.guide.line, 쓴것, 내책라벨]);
   expect(화면).not.toContain(못닿음.보내기);
 });
 
