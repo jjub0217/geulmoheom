@@ -31,7 +31,9 @@ from app.db import Base
 CARD_TYPES = ("crisis", "discovery", "encounter")  # 위기 / 발견 / 만남
 GRADES = ("G0", "G1", "G2", "G3")  # 내부 전용. 응답에 넣지 않는다 (용어사전 3장)
 TIERS = ("basic", "rare", "legendary")  # 아이가 보는 단계
-ARTWORK_STATUSES = ("pending", "ready", "failed")
+# `failed` 는 2026-09-08 계약에서 빠졌다 (`Stage0.md` 5절). **제약도 같이 좁힌다** —
+# 넓은 채로 두면 코드가 못 쓰는 값을 DB 는 받아들이고, 그 행은 API 로 못 나온다.
+ARTWORK_STATUSES = ("pending", "ready")
 VISIBILITIES = ("private", "family", "public")  # Stage 0 은 항상 private
 PAGE_SOURCES = ("card", "chapter")
 

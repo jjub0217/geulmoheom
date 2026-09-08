@@ -506,7 +506,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "ready" | "failed";
+            status: "pending" | "ready";
             /** Url */
             url: string | null;
             /**
@@ -528,7 +528,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "ready" | "failed";
+            status: "pending" | "ready";
             /** Url */
             url: string | null;
             /** Placeholder Url */
@@ -1512,7 +1512,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description **목 서버 전용.** pending | ready | failed 를 강제한다 */
+                /** @description **목 서버 전용.** pending | ready 를 강제한다 */
                 "x-mock-status"?: string | null;
             };
             path: {

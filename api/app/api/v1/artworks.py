@@ -25,11 +25,11 @@ async def get_artwork(
     _: Child,
     x_mock_status: Annotated[
         str | None,
-        Header(description="**목 서버 전용.** pending | ready | failed 를 강제한다"),
+        Header(description="**목 서버 전용.** pending | ready 를 강제한다"),
     ] = None,
 ) -> Artwork:
     """프론트: 2초 간격 폴링, 15초 초과 시 중단하고 `placeholder_url` 유지 (B-3)."""
-    status = x_mock_status if x_mock_status in {"pending", "ready", "failed"} else "ready"
+    status = x_mock_status if x_mock_status in {"pending", "ready"} else "ready"
 
     return Artwork(
         artwork_id=artwork_id,

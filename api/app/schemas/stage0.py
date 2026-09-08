@@ -14,7 +14,11 @@ from pydantic import BaseModel, Field
 
 CardType = Literal["crisis", "discovery", "encounter"]
 Tier = Literal["basic", "rare", "legendary"]
-ArtworkStatus = Literal["pending", "ready", "failed"]
+# **`failed` 를 뺐다** (2026-09-08 계약 변경, `Stage0.md` 5절). 나갈 자리가 없는
+# 값이었다 — 15초 초과도, 생성 실패도, 출력 검사 차단도 전부 **안전한 기본 삽화**로
+# 가서 `ready` 로 수렴한다 (PRD B-3 「플레이 중단 없음」).
+# **되살리려면 그 결정을 먼저 뒤집어야 한다.**
+ArtworkStatus = Literal["pending", "ready"]
 Visibility = Literal["private", "family", "public"]
 GuideExpression = Literal["default", "compass_bright", "compass_dim", "session_end"]
 # **`moderation` 하나다** (2026-09-08 대표 판정, 미결 11-5). 종전 `moderation | pii`.
