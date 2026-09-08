@@ -24,7 +24,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +43,7 @@ from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
 from app.middleware import current_request_id
-from app.models import Card, CardAttempt
+from app.models import Artwork, Card, CardAttempt
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
 from app.pii import 가리기, 실명까지가리기
@@ -428,6 +428,70 @@ async def _되묻기(자녀id: str, card_id: str) -> AttemptScaffold | None:
 
 
 @router.get("/{attempt_id}")
-async def get_attempt(attempt_id: str, _: Child) -> AttemptResult:
-    """새로고침 복구용. 정상(result) 형식으로만 돌려준다."""
-    return _result()
+async def get_attempt(
+    attempt_id: str, 아이: Child, session: Session, request: Request
+) -> AttemptResult:
+    """새로고침 복구용. **저장된 그 시도를** 정상(result) 형식으로 돌려준다.
+
+    **픽스처였을 때는 버그였다** — `attempt_id` 가 진짜가 된 뒤로 아이가 결과 화면에서
+    새로고침하면 **자기 것이 아닌 결과**를 봤다. 프리테스트에서 아이가 실제로 하는
+    동작이다.
+
+    **남의 시도는 404 다.** 403 으로 가르면 「그 시도는 존재한다」가 샌다.
+
+    **되묻기·차단은 복구할 것이 없다** — 행을 안 만들기 때문이다 (`Stage0.md` 4절).
+    그래서 이 경로는 `result` 하나만 돌려준다.
+    """
+    시도 = await _내시도읽기(session, attempt_id, 아이)
+    if 시도 is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    # **`descriptors` 는 저장하지 않는다** (`Stage0.md` 10절 열 목록). 그래서 여기
+    # 하이라이트는 `signals` 만으로 다시 만든다 — **처음 화면보다 적게 나올 수 있다.**
+    # `signals` 는 말을 원형으로 주는데(「캄캄한」) 문장에는 활용형이 있어(「캄캄했지만」)
+    # 원문 대조에서 걸러지기 때문이다. **덧칠이 사라져도 화면은 죽지 않는다** —
+    # 하이라이트는 보상이지 필수 정보가 아니다 (`Stage0.md` 4절).
+    하이라이트 = highlights(평가결과(grade=시도.grade, signals=시도.signals), 시도.text)
+    티어: Tier = 시도.tier or "basic"
+
+    return AttemptResult(
+        outcome="result",
+        attempt_id=str(시도.id),
+        tier=티어,
+        highlights=하이라이트,
+        guide=_guide(티어, 하이라이트),
+        artwork=await _삽화참조(session, 시도.id, request),
+        today=TodayState(cards_done=3, cap=5, locked=False),
+        can_retry=True,
+    )
+
+
+async def _내시도읽기(session: AsyncSession, attempt_id: str, 아이: ChildRow) -> CardAttempt | None:
+    """**이 아이의** 시도만. 모양이 UUID 가 아니면 없는 것이다."""
+    try:
+        아이디 = UUID(attempt_id)
+    except ValueError:
+        return None
+
+    문 = select(CardAttempt).where(CardAttempt.id == 아이디, CardAttempt.child_id == 아이.id)
+    return await session.scalar(문)
+
+
+async def _삽화참조(session: AsyncSession, card_attempt_id: UUID, request: Request) -> dict:
+    """그 시도에 달린 삽화. **없으면 `pending` 으로 준다.**
+
+    **다른 삽화 id 를 주면 안 된다** — 아이가 새로고침한 순간 폴링이 남의 행을 물고,
+    자기 그림을 영영 못 받는다.
+    """
+    문 = select(Artwork).where(Artwork.card_attempt_id == card_attempt_id)
+    삽화 = await session.scalar(문)
+    if 삽화 is None:
+        return {"artwork_id": fx.ARTWORK_ID, "status": "pending", "url": None}
+
+    return {
+        "artwork_id": str(삽화.id),
+        "status": 삽화.status,
+        "url": str(request.url_for("get_artwork_image", artwork_id=str(삽화.id)))
+        if 삽화.status == "ready"
+        else None,
+    }

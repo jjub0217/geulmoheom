@@ -390,7 +390,16 @@ export interface paths {
         };
         /**
          * Get Attempt
-         * @description 새로고침 복구용. 정상(result) 형식으로만 돌려준다.
+         * @description 새로고침 복구용. **저장된 그 시도를** 정상(result) 형식으로 돌려준다.
+         *
+         *     **픽스처였을 때는 버그였다** — `attempt_id` 가 진짜가 된 뒤로 아이가 결과 화면에서
+         *     새로고침하면 **자기 것이 아닌 결과**를 봤다. 프리테스트에서 아이가 실제로 하는
+         *     동작이다.
+         *
+         *     **남의 시도는 404 다.** 403 으로 가르면 「그 시도는 존재한다」가 샌다.
+         *
+         *     **되묻기·차단은 복구할 것이 없다** — 행을 안 만들기 때문이다 (`Stage0.md` 4절).
+         *     그래서 이 경로는 `result` 하나만 돌려준다.
          */
         get: operations["get_attempt_api_v1_attempts__attempt_id__get"];
         put?: never;

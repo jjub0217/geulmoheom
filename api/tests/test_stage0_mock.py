@@ -618,6 +618,7 @@ def test_전_엔드포인트가_응답한다(
     시도 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": "은빛 검을 들었다"})
     assert 시도.status_code == 200
     삽화 = 시도.json()["artwork"]["artwork_id"]
+    푼것 = 시도.json()["attempt_id"]
 
     호출 = [
         (
@@ -635,7 +636,7 @@ def test_전_엔드포인트가_응답한다(
         ("PATCH", "/api/v1/child/guide", {"guide_name": "나침이"}, 200),
         ("GET", "/api/v1/cards/next", None, 200),
         ("GET", "/api/v1/cards/c01", None, 200),
-        ("GET", "/api/v1/attempts/a1", None, 200),
+        ("GET", f"/api/v1/attempts/{푼것}", None, 200),
         ("GET", f"/api/v1/artworks/{삽화}", None, 200),
         ("GET", "/api/v1/book", None, 200),
         ("GET", "/api/v1/book/today", None, 200),
