@@ -10,8 +10,11 @@
 - `today` 카운트가 목이라 **차단이 카드를 안 쓰는 것이 응답으로는 안 보인다** — DB 가
   들어오면 드러난다
 
-**`outcome=blocked` 는 이제 실제 검사에서 나온다** (E-1 · `adr/0009`). 입력 검사와 평가를
-**동시에 던지고**, 검사가 차단하면 평가 결과를 버린다. PII 서버 2차(E-2)는 아직이다.
+**`outcome=blocked` 는 실제 검사에서 나온다** (E-1 · `adr/0009`). 입력 검사·평가·실명
+NER **셋을 동시에 던지고**, 검사가 차단하면 평가 결과를 버린다.
+
+**PII 는 막지 않고 가린 뒤 진행한다** (E-2 · 2026-09-08 대표 판정, 미결 11-5).
+그래서 `blocked` 의 `reason` 은 `moderation` 하나다.
 """
 
 import asyncio
@@ -29,7 +32,7 @@ from app.events import 남기기, 이벤트
 from app.middleware import current_request_id
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
-from app.pii import 가리기
+from app.pii import 가리기, 실명까지가리기
 from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 질문
 from app.schemas.stage0 import (
     AttemptBlocked,
@@ -164,22 +167,32 @@ async def create_attempt(
     # 검사와 평가가 **원문을 프로바이더로 내보낸다.** 아래 `text` 만 쓰는 이유가 그것이고,
     # `payload.text` 를 다시 꺼내 쓰면 그 순간 원문이 새어 나간다.
     #
-    # **아직 정규식 층뿐이다.** 실명·학교명(NER)은 안 붙었다 — `app/pii.py`.
-    text, 가린종류 = 가리기(payload.text)
+    # 정규식 층은 동기라 먼저 끝난다. **검사·평가는 이 문장을 본다** — 전화번호·메일·
+    # 주소·학교명은 여기서 이미 가려져 프로바이더로 안 나간다.
+    검사할것, _ = 가리기(payload.text)
+
+    # **셋을 동시에 던진다** (`adr/0009` 결정 2 와 같은 이유). 실명 NER 을 앞에 세워
+    # 기다리면 +875ms 가 그대로 붙어 1.5초 예산을 깬다.
+    #
+    # **실명이 검사·평가 호출에 실려 나가는 것은 이 구조의 대가가 아니다** — NER 호출
+    # 자체가 같은 프로바이더로 그 문장을 보낸다. `adr/0009` 48행이 「원문이 밖으로
+    # 나간다는 사실은 순차든 병렬이든 같다」고 적어 둔 자리다. 여기서 막는 것은
+    # **우리가 저장하는 것**이고, 아래 `text` 가 그 마스킹된 문자열이다.
+    #
+    # `기록=False` 다 — 차단이면 이 판정은 버려지고 `eval_result` 도 남기지 않는다
+    # (결정 3). 버린 판정이 남으면 **화면에 보여주지도 않은 평가가 등급 분포를 오염시킨다.**
+    검사, 평가, 가림 = await asyncio.gather(
+        검사하기(검사할것),
+        evaluate(검사할것, 기록=False),
+        실명까지가리기(payload.text, 제외=(아이.nickname, 아이.guide_name or "")),
+    )
+    text, 가린종류 = 가림
     if 가린종류:
         # **종류만 남긴다.** 가린 값도, 몇 개였는지도 싣지 않는다 (PRD 1.1b).
         await 남기기(
             아이.id,
             *(이벤트("pii_masked", {"layer": "server", "kind": 종류}) for 종류 in 가린종류),
         )
-
-    # **검사와 평가를 동시에 던진다** (`adr/0009` 결정 2). 검사 결과가 평가의 입력이
-    # 아니라 순서를 강제할 이유가 없고, 순차로 두면 +875ms 라 1.5초 예산을 깬다.
-    # 병렬이면 늘어나는 것은 「검사 호출 시간」이 아니라 둘 중 느린 쪽과의 차이(+13ms)다.
-    #
-    # `기록=False` 다 — 차단이면 이 판정은 버려지고 `eval_result` 도 남기지 않는다
-    # (결정 3). 버린 판정이 남으면 **화면에 보여주지도 않은 평가가 등급 분포를 오염시킨다.**
-    검사, 평가 = await asyncio.gather(검사하기(text), evaluate(text, 기록=False))
 
     # **내장 필터가 막은 것도 차단이다.** 전에는 `evaluate()` 가 그걸 삼켜 G1 폴백으로
     # 넘겼고, 그러면 차단이 「그냥 평범한 문장」으로 기록됐다 (2026-09-07 PM 요청).

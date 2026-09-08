@@ -14,12 +14,22 @@
 (PRD 1.1b). 감지된 값도 로그에 싣지 않는다. 나가는 것은 **종류뿐**이다.
 """
 
+import asyncio
+import logging
 import re
 import unicodedata
+from collections.abc import Sequence
 from typing import Literal, NamedTuple
 
+from pydantic import BaseModel, Field
+
+from app.middleware import current_request_id
+
+logger = logging.getLogger(__name__)
+
 # `pii_masked` 이벤트의 `kind` 로 그대로 나간다 (`Stage0.md` 7절).
-PiiKind = Literal["phone", "email", "address", "school"]
+# `name` 은 서버 2차(NER) 전용이다 — 프론트 정규식은 실명을 안 잡는다.
+PiiKind = Literal["phone", "email", "address", "school", "name"]
 
 # 가린 자리에 남는 글자. **확정본은 `docs/문구.md` 1.1.**
 # **길이와 무관하게 고정 3자다** — 가린 길이가 새면 몇 자리였는지가 드러난다.
@@ -115,3 +125,93 @@ def 가리기(text: str) -> tuple[str, list[PiiKind]]:
             종류.append(것.kind)
 
     return "".join(조각), 종류
+
+
+# ── 실명 (NER) ────────────────────────────────────────────
+#
+# **NER 이 맡는 것은 실명뿐이다** (2026-09-08 대표 판정, 미결 11-6).
+# 학교명은 위 정규식이 결정적으로 잡고, NER 은 같은 문장을 두 번 중 한 번 놓쳤다
+# (`benchmarks/W3-ner-cost.md`) — 중복이면서 더 불안정하다.
+#
+# **이 호출로 아이 문장이 프로바이더에 간다.** 그건 이 단계의 결함이 아니라 전제다 —
+# 검사·평가도 같은 곳으로 가고, `adr/0009` 48행이 「원문이 밖으로 나간다는 사실은
+# 순차든 병렬이든 같다」고 이미 적어 뒀다. 여기서 막는 것은 **우리가 저장하는 것**이다:
+# 마스킹 뒤 문자열만 `card_attempts.text` 로 가고 책에 인쇄된다.
+
+NER_TIMEOUT = 3.0
+
+
+class 실명들(BaseModel):
+    """**문장에 있는 그대로** 돌려받는다. 위치를 숫자로 받지 않는 이유는 모델이
+    글자 offset 을 잘 못 세기 때문이고, 그러면 **엉뚱한 자리를 가린다.**
+    """
+
+    names: list[str] = Field(default_factory=list)
+
+
+_NER_지시 = """너는 아동 글쓰기 서비스의 개인정보 검사기다.
+문장에 **실제 사람의 이름**이 있으면 그 이름을 문장에 있는 그대로 골라낸다.
+
+- 실제로 존재할 법한 한국 사람 이름(성+이름)만 고른다
+- **아이가 지어낸 이름은 고르지 않는다.** 판타지 인물·괴물·가이드 캐릭터 이름,
+  성이 없는 별명은 전부 아니다
+- **애매하면 고르지 않는다** — 아이가 지은 이름을 가리면 아이 문장이 망가진다
+- 고른 이름은 **문장에 나온 글자 그대로** 적는다. 바꾸거나 풀어 쓰지 않는다"""
+
+
+async def _실명물어보기(text: str) -> list[str]:
+    """단발 호출. **여기만 갈아끼우면 테스트가 네트워크를 안 탄다.**"""
+    from google.genai import types
+
+    from app.config import get_settings
+    from app.llm import get_client
+
+    응답 = await get_client().aio.models.generate_content(
+        model=get_settings().evaluator_model.strip(),
+        contents=text,
+        config=types.GenerateContentConfig(
+            system_instruction=_NER_지시,
+            response_mime_type="application/json",
+            response_schema=실명들,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
+    )
+    return 실명들.model_validate_json(응답.text or "").names
+
+
+async def 실명까지가리기(text: str, *, 제외: Sequence[str]) -> tuple[str, list[PiiKind]]:
+    """정규식 층 + 실명 NER. **아이를 막지 않는다.**
+
+    `제외` 는 자녀 닉네임·가이드 이름이다 — **서버가 이미 아는 값이라 호출 없이
+    오탐을 줄인다** (PRD E-2). 모델이 가이드 이름을 실명이라고 해도 우리는 안다.
+
+    **NER 이 죽어도 정규식 결과로 진행한다.** 실명을 못 잡는 것과 아이가 못 쓰는 것
+    중 후자가 나쁘다 — 판정을 못 받으면 막는 E-1 과 방향이 반대이고, 그건 값이 다르기
+    때문이다. 여기서 통과시키는 것은 **못 가린 것**이지 **막아야 할 것을 내보내는 것**이
+    아니다.
+    """
+    가려진, 종류 = 가리기(text)
+
+    try:
+        이름들 = await asyncio.wait_for(_실명물어보기(가려진), timeout=NER_TIMEOUT)
+    except Exception as 오류:  # 뒷단이 죽어도 아이는 계속 쓴다
+        logger.warning(
+            "ner_unavailable",
+            extra={"request_id": current_request_id(), "exc_type": type(오류).__name__},
+        )
+        return 가려진, 종류
+
+    빼둘것 = {값.strip() for 값 in 제외 if 값 and 값.strip()}
+    잡힌것 = 0
+    for 이름 in 이름들:
+        이름 = 이름.strip()
+        # **문장에 그대로 없으면 버린다.** 모델이 지어낸 문자열은 어디를 가릴지
+        # 알 수 없고, 억지로 맞추면 엉뚱한 자리를 가린다.
+        if not 이름 or 이름 in 빼둘것 or 이름 not in 가려진:
+            continue
+        가려진 = 가려진.replace(이름, PII_MASK)
+        잡힌것 += 1
+
+    if 잡힌것:
+        종류 = [*종류, "name"]
+    return 가려진, 종류

@@ -229,3 +229,92 @@ def test_전각_번호를_가려도_나머지_글자는_그대로다():
     가려진, 종류 = 가리기(f"내 번호 {_전각('01012345678')} 이야")
     assert 가려진 == f"내 번호 {PII_MASK} 이야"
     assert 종류 == ["phone"]
+
+
+# ── 실명 (NER) ────────────────────────────────────────────
+
+
+async def test_모델이_짚은_실명을_가린다(monkeypatch):
+    """**대표 판정 2026-09-08** (미결 11-6) — NER 이 맡는 것은 실명뿐이다."""
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김민준"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기("김민준이랑 같이 동굴로 들어갔다", 제외=())
+    assert 가려진 == f"{PII_MASK}이랑 같이 동굴로 들어갔다"
+    assert 종류 == ["name"]
+
+
+async def test_문장에_없는_이름을_돌려주면_버린다(monkeypatch):
+    """모델이 지어낸 문자열은 **어디를 가릴지 알 수 없다.**
+
+    억지로 맞추려 들면 엉뚱한 자리를 가린다 — 아이 문장이 이유 없이 망가진다.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["박서연"]  # 문장에 없다
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기("김민준이랑 같이 동굴로 들어갔다", 제외=())
+    assert 가려진 == "김민준이랑 같이 동굴로 들어갔다"
+    assert 종류 == []
+
+
+async def test_아이가_지은_이름은_화이트리스트로_뺀다(monkeypatch):
+    """**서버가 이미 아는 값이라 호출 없이 오탐을 줄인다** (PRD E-2).
+
+    모델이 가이드 이름을 실명이라고 해도 **우리가 지어준 이름인 걸 안다.**
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["나침이"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기("나침이가 달려갔다", 제외=("나침이", "불꽃탐험가"))
+    assert 가려진 == "나침이가 달려갔다"
+    assert 종류 == []
+
+
+async def test_NER_이_죽어도_정규식_결과는_살아_있다(monkeypatch):
+    """**아이를 막지 않는다.** 실명을 못 잡는 것과 아이가 못 쓰는 것 중 후자가 나쁘다 —
+    E-1 검사와 방향이 반대인 이유는 `app/moderation.py` 머리말에 있다.
+    """
+    from app import pii
+
+    async def _터짐(text: str) -> list[str]:
+        raise TimeoutError("모델 없음")
+
+    monkeypatch.setattr(pii, "_실명물어보기", _터짐)
+
+    가려진, 종류 = await pii.실명까지가리기("내 번호 01012345678 이야", 제외=())
+    assert 가려진 == f"내 번호 {PII_MASK} 이야"
+    assert 종류 == ["phone"]
+
+
+async def test_실명도_흐름에서_가려지고_이벤트로_남는다(client, 자녀행, 판정_고정, monkeypatch):
+    """**셋을 동시에 던진다** — 검사·평가·실명 NER. 순차로 두면 지연 예산이 깨진다
+    (`adr/0009` 결정 2 와 같은 이유).
+    """
+    from sqlalchemy import select
+
+    from app import db, pii
+    from app.models import Event
+
+    async def _판정(text: str) -> list[str]:
+        return ["김민준"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    client.post("/api/v1/attempts", json={"card_id": "c01", "text": "김민준이랑 동굴로 갔다"})
+
+    async with db.SessionLocal() as session:
+        행들 = list((await session.execute(select(Event))).scalars())
+    (마스킹,) = [행 for 행 in 행들 if 행.event == "pii_masked"]
+    assert 마스킹.payload == {"layer": "server", "kind": "name"}
