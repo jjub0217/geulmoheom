@@ -6,6 +6,19 @@
 # 같은 서비스 이름(postgres·redis)의 남의 컨테이너를 지운다. 2026-08-30 실제 발생.
 COMPOSE = docker compose -p geulmoheom -f infra/docker-compose.yml
 
+# ── pnpm ────────────────────────────────────────────────
+# **`pnpm` 을 직접 부르지 않는다.** 버전은 `web/package.json` 의 `packageManager` 가
+# 핀이고(11.25.0), 그것을 지키는 건 corepack 이다.
+#
+# corepack 심(`corepack enable pnpm`)이 안 깔린 셸에서 `pnpm` 을 부르면 남는 것은
+# `command not found: pnpm` · **종료코드 127** 하나뿐이라, 계약 검사가 「명세가
+# 갈렸다」가 아니라 **환경 때문에** 빨개진다. 둘을 구분 못 하면 잘못된 자리를 판다
+# (2026-09-08 실제 발생 — 백엔드 세션).
+#
+# 심이 있으면 그것을 쓰고(CI 는 pnpm/action-setup 이 깔아 둔다), 없으면 corepack 이
+# 핀을 보고 받아온다. **corepack 은 Node 에 딸려 오므로 따로 깔 것이 없다.**
+PNPM := $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo 'corepack pnpm')
+
 db-up:
 	$(COMPOSE) up -d
 
@@ -44,7 +57,7 @@ dev-web:
 	@grep -qE '^NEXT_PUBLIC_API_BASE_URL=.' .env || \
 		{ echo "루트 .env 에 NEXT_PUBLIC_API_BASE_URL 이 없다 (.env.example 참조)"; exit 1; }
 	cd web && NEXT_PUBLIC_API_BASE_URL="$$(sed -n 's/^NEXT_PUBLIC_API_BASE_URL=//p' ../.env | tail -1)" \
-		pnpm dev --hostname $(WEB_HOST) --port 3000 --experimental-https \
+		$(PNPM) dev --hostname $(WEB_HOST) --port 3000 --experimental-https \
 		--experimental-https-cert ../$(CERT) --experimental-https-key ../$(KEY)
 
 # ── API 계약: api OpenAPI → web 타입 ─────────────────────
@@ -54,7 +67,7 @@ dev-web:
 contracts:
 	curl -sf --cacert "$$(mkcert -CAROOT)/rootCA.pem" \
 		https://$(API_HOST):8000/openapi.json -o /tmp/openapi.json
-	cd web && pnpm exec openapi-typescript /tmp/openapi.json -o src/api/types.gen.ts
+	cd web && $(PNPM) exec openapi-typescript /tmp/openapi.json -o src/api/types.gen.ts
 	@echo "→ web/src/api/types.gen.ts 갱신. 수동 편집 금지."
 
 # 계약 드리프트 검사. CI가 그대로 이 타깃을 부른다 — 로컬에서 먼저 돌려 볼 수 있게.
@@ -63,7 +76,7 @@ contracts:
 # 실패했을 때 무엇이 원래 커밋본이었는지가 사라진다.
 contracts-check:
 	cd api && PYTHONPATH=. uv run python scripts/dump_openapi.py /tmp/openapi.check.json
-	cd web && pnpm exec openapi-typescript /tmp/openapi.check.json -o /tmp/types.check.ts
+	cd web && $(PNPM) exec openapi-typescript /tmp/openapi.check.json -o /tmp/types.check.ts
 	@diff -u web/src/api/types.gen.ts /tmp/types.check.ts && echo "계약 일치" || { \
 		echo ""; \
 		echo "명세가 바뀌었는데 재생성물이 커밋되지 않았다."; \
@@ -73,11 +86,11 @@ contracts-check:
 # ── 품질 ────────────────────────────────────────────────
 test:
 	cd api && uv run pytest
-	cd web && pnpm test
+	cd web && $(PNPM) test
 
 lint:
 	cd api && uv run ruff check . && uv run ruff format --check .
-	cd web && pnpm lint
+	cd web && $(PNPM) lint
 
 clean:
 	rm -rf web/.next api/.pytest_cache api/.ruff_cache
