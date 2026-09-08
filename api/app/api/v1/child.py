@@ -11,13 +11,14 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import select
 
 from app.accounts import 접속코드해시, 코드가살아있나
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
 from app.auth import CHILD_COOKIE, clear_auth_cookie, set_auth_cookie
+from app.child_auth_limit import 클라이언트IP, 기기식별자, 기기풀기, 막을까, 실패기록
 from app.errors import AppError, ErrorCode
 from app.middleware import current_request_id
 from app.models import Child
@@ -37,11 +38,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/child", tags=["child"])
 
 ChildRow = Annotated[Child, Depends(require_child)]
+기기 = Annotated[str, Depends(기기식별자)]
 
 
 @router.post("/auth")
 async def auth(
-    payload: ChildAuthRequest, response: Response, session: Session
+    payload: ChildAuthRequest,
+    request: Request,
+    response: Response,
+    session: Session,
+    기기id: 기기,
 ) -> ChildAuthResponse:
     """접속 코드 교환. 코드는 소진 후 재사용 불가, 토큰 30일.
 
@@ -53,7 +59,18 @@ async def auth(
     **이 화면은 standalone(홈 화면 실행)에서만 연다** (`공통규약.md` iOS 절).
     코드가 1회용이라 Safari 탭에서 써 버리면 홈 화면 앱에서는 재발급 없이 못 들어온다.
     **그 판단은 프론트가 한다** — 서버는 `display-mode` 를 알 수 없다.
+
+    **속도 제한이 여기 걸린다** (`app/child_auth_limit.py` · 2026-09-07 대표 승인).
+    토큰을 받기 전이라 공통규약 표의 「자녀 토큰 10회/분」이 안 걸리는 유일한 자리다.
     """
+    아이피 = 클라이언트IP(request)
+    # **코드를 대조하기 전에 막는다.** 뒤에 두면 잠긴 기기의 요청도 매번 DB 를 치고,
+    # 무엇보다 **틀린 코드와 잠긴 것이 같은 401 로 나가** 아이가 왜 안 되는지 모른다.
+    if await 막을까(기기id, 아이피):
+        # **누가 걸렸는지 남기지 않는다.** 기기 표식도 IP 도 아이를 가리키는 값이다.
+        logger.info("접속 코드 속도 제한", extra={"request_id": current_request_id()})
+        raise AppError(ErrorCode.RATE_LIMITED)
+
     코드 = payload.access_code.strip()
     # 해시 하나로 곧장 찾는다 — 인덱스가 붙어 있고(`8ef582cb7716`) 소금 없는 HMAC 이라
     # 등호로 찾을 수 있다. 소금을 쳤다면 **미사용 코드가 있는 자녀를 전부 훑어야** 했고,
@@ -61,9 +78,16 @@ async def auth(
     아이 = await session.scalar(select(Child).where(Child.access_code_hash == 접속코드해시(코드)))
 
     if 아이 is None or not 코드가살아있나(아이.access_code_expires_at, 아이.access_code_used_at):
+        # **세는 단위는 「요청자」다.** 코드마다 세면 안 듣는다 — 찍는 쪽은 매번 다른
+        # 코드를 넣으므로 코드별 카운터는 1에서 멈춘다 (`공통규약.md` 함정 절).
+        await 실패기록(기기id, 아이피)
         # **누른 코드를 로그에 남기지 않는다.** 6자리라 로그만 모아도 코드북이 된다.
         logger.info("접속 코드 교환 실패", extra={"request_id": current_request_id()})
         raise AppError(ErrorCode.UNAUTHORIZED)
+
+    # **형제자매가 한 기기에서 차례로 들어오는 것이 정상 사용이다.** 앞의 아이가 두어
+    # 번 틀린 것을 남겨 두면 아무도 공격하지 않았는데 가족이 잠긴다.
+    await 기기풀기(기기id)
 
     # **1회용.** 여기서 소진 표시를 하고, 해시는 남겨 두지 않는다 — 남기면 재사용
     # 판정이 `used_at` 하나에만 걸리고, 그 컬럼을 실수로 비우는 코드가 생기면

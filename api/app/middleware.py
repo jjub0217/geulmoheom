@@ -7,7 +7,7 @@
 
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from contextvars import ContextVar
 from time import perf_counter
 
@@ -72,4 +72,45 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             _request_id.reset(token)
 
         response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+
+
+# ── 예외로 끝난 응답에도 나가야 하는 쿠키 ─────────────────────────
+#
+# FastAPI 가 주입해 주는 `Response` 는 **정상 반환일 때만** 실제 응답에 합쳐진다.
+# `AppError` 를 던지면 예외 핸들러가 새 `JSONResponse` 를 만들어 그 헤더가 통째로
+# 버려진다. 대부분은 그게 맞다 — 실패한 요청이 토큰을 굽는 일은 없어야 한다.
+#
+# **`/child/auth` 의 기기 표식만 반대다.** 그 쿠키가 필요한 이유가 「실패를 세는 것」인데
+# 실패 응답에서 안 나가면, 클라이언트는 매 요청마다 표식 없이 와서 **매번 새 기기로
+# 보이고 카운터가 5에 못 간다.** 즉 ①이 통째로 무력해진다.
+_PENDING = "pending_cookies"
+
+
+def 쿠키굽기예약(request: Request, 굽기: Callable[[Response], None]) -> None:
+    """이 요청이 **어떻게 끝나든** 응답에 이 쿠키를 굽는다.
+
+    `request.state` 는 ASGI `scope` 에 얹혀 있어 미들웨어와 엔드포인트가 같은 것을 본다.
+    """
+    예약: list[Callable[[Response], None]] = getattr(request.state, _PENDING, [])
+    예약.append(굽기)
+    setattr(request.state, _PENDING, 예약)
+
+
+class PendingCookieMiddleware(BaseHTTPMiddleware):
+    """`쿠키굽기예약` 으로 걸어 둔 것을 실제 응답에 붙인다.
+
+    **엔드포인트 안에서 `response.set_cookie` 를 하는 것으로 대신할 수 없다** — 위에
+    적은 대로 예외 경로에서 그 응답 객체가 버려진다.
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        예약: Iterable[Callable[[Response], None]] = getattr(request.state, _PENDING, ())
+        for 굽기 in 예약:
+            굽기(response)
         return response

@@ -8,7 +8,11 @@ from app.api.v1.router import router as v1_router
 from app.config import Settings, get_settings
 from app.errors import register_error_handlers
 from app.logging_config import configure_logging
-from app.middleware import RequestLogMiddleware, silence_uvicorn_access_log
+from app.middleware import (
+    PendingCookieMiddleware,
+    RequestLogMiddleware,
+    silence_uvicorn_access_log,
+)
 
 API_V1_PREFIX = "/api/v1"  # docs/api/공통규약.md
 
@@ -30,6 +34,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # 미들웨어는 나중에 추가한 것이 바깥이다. 로깅을 CORS 보다 먼저 추가해
     # CORS 응답까지 같은 request_id 로 남게 한다.
     app.add_middleware(RequestLogMiddleware)
+    # 예외 핸들러보다 바깥이라 `AppError` 로 끝난 응답에도 붙는다
+    # (`/child/auth` 기기 표식 — 실패 응답에서 안 나가면 실패를 셀 수 없다).
+    app.add_middleware(PendingCookieMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

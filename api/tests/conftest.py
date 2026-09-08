@@ -118,6 +118,24 @@ async def _비우기() -> None:
 
 
 @pytest.fixture(autouse=True)
+async def _속도제한비우기() -> None:
+    """`/child/auth` 속도 제한 카운터를 테스트마다 비운다.
+
+    **키가 「기기 + IP」인데 테스트는 전부 같은 IP(`testclient`)에서 온다.** 안 비우면
+    인증 실패를 내는 테스트들의 실패가 한 세션 안에서 합산돼, **어느 시점부터 관계없는
+    테스트가 429 로 죽는다.** 실행 순서에 따라 달라져서 재현도 잘 안 된다.
+
+    **Redis 가 없어도 그냥 지나간다** — CI 에는 안 뜬다
+    (`.github/workflows/ci.yml` 은 postgres 만 띄운다).
+    """
+    try:
+        async for 키 in db.redis_client.scan_iter(match="childauth:*"):
+            await db.redis_client.delete(키)
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
 async def _카드시드(_비우기: None) -> None:
     """장면 카드를 매번 다시 뿌린다. **`_비우기` 가 `cards` 까지 지우기 때문이다.**
 

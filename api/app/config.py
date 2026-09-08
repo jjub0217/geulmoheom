@@ -45,6 +45,11 @@ PILOT_REQUIRED = (
     "r2_account_id",
     "r2_access_key_id",
     "r2_secret_access_key",
+    # 앞단이 덮어쓰는 클라이언트 IP 헤더 이름 (2026-09-08, `/child/auth` 속도 제한 ②).
+    # **비어 있으면 소켓 주소를 쓰는데, 파일럿에서는 그게 앞단 IP 하나다** — 시간당
+    # 30회가 전체 사용자에게 걸려 **아무 잘못 없는 아이가 막힌다.** 안 채운 것을
+    # 기동에서 잡지 않으면 그 사고가 파일럿 중에 처음 보인다.
+    "client_ip_header",
 )
 
 
@@ -85,6 +90,11 @@ class Settings(BaseSettings):
     # 읽으므로 공개 주소가 아예 필요 없다 — **이름을 바꾸는 대신 없앴다.**
     # 남겨 두면 다음 사람이 그 이름을 보고 **공개 버킷을 다시 만든다.**
     # 서명 URL 로 옮길 때(파일럿 후)도 이 값이 아니라 S3 클라이언트가 발급한다.
+
+    # 앞단(Cloudflare `CF-Connecting-IP` · Fly `Fly-Client-IP`)이 **덮어쓰는** 헤더 이름.
+    # **`X-Forwarded-For` 를 적지 않는다** — 클라이언트가 직접 채워 보낼 수 있어서
+    # 속도 제한을 요청마다 다른 값으로 비껴갈 수 있다 (`app/child_auth_limit.py`).
+    client_ip_header: str = ""
 
     jwt_secret: SecretStr = SecretStr("")
     daily_card_cap: int = 5

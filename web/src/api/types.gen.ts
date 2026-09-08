@@ -230,6 +230,9 @@ export interface paths {
          *     **이 화면은 standalone(홈 화면 실행)에서만 연다** (`공통규약.md` iOS 절).
          *     코드가 1회용이라 Safari 탭에서 써 버리면 홈 화면 앱에서는 재발급 없이 못 들어온다.
          *     **그 판단은 프론트가 한다** — 서버는 `display-mode` 를 알 수 없다.
+         *
+         *     **속도 제한이 여기 걸린다** (`app/child_auth_limit.py` · 2026-09-07 대표 승인).
+         *     토큰을 받기 전이라 공통규약 표의 「자녀 토큰 10회/분」이 안 걸리는 유일한 자리다.
          */
         post: operations["auth_api_v1_child_auth_post"];
         delete?: never;

@@ -71,6 +71,7 @@ def test_키가_다_있으면_pilot_이_뜬다():
         r2_account_id="acct",
         r2_access_key_id="키",
         r2_secret_access_key="비밀",
+        client_ip_header="CF-Connecting-IP",
     )
 
     assert missing_pilot_keys(settings) == []
@@ -92,6 +93,9 @@ def test_R2_가_비면_pilot_이_안_뜬다():
         "r2_account_id",
         "r2_access_key_id",
         "r2_secret_access_key",
+        # 2026-09-08 에 함께 들어왔다 (`/child/auth` 속도 제한 ②). 비어 있으면
+        # 모든 요청이 앞단 IP 하나로 뭉쳐 **시간당 30회가 전체에 걸린다.**
+        "client_ip_header",
     }
 
 

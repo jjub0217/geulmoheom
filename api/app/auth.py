@@ -26,6 +26,16 @@ from app import tokens
 PARENT_COOKIE: Final = "__Host-gm_parent"
 CHILD_COOKIE: Final = "__Host-gm_child"
 
+# **자격증명이 아니다.** 값은 난수 하나이고 아무 권한도 열지 않는다 —
+# `/child/auth` 속도 제한이 「같은 기기」를 셀 손잡이로만 쓴다
+# (`app/child_auth_limit.py` · `공통규약.md` 「`/child/auth` 속도 제한」).
+# 그래도 여기 두는 이유는 **`__Host-` 세 속성이 이 파일에만 있어야 하기 때문**이다.
+# 다른 모듈에 복사하면 갈라지고, 갈라진 쪽이 조용히 약한 쿠키를 굽는다.
+DEVICE_COOKIE: Final = "__Host-gm_device"
+# 하루면 된다. 세는 창이 15분·1시간이라 그보다 길 이유가 없고,
+# **기기를 오래 따라다니는 값을 아이 브라우저에 남기지 않는다.**
+DEVICE_MAX_AGE_SECONDS: Final = 24 * 60 * 60
+
 # JWT `exp` 는 발급 시각 + 30일 **절대 고정**이고, 쿠키 만료만 슬라이딩한다.
 # 여기 값은 그 절대 상한이자 **처음 구울 때의 값**이다. 「남은 시간으로 다시 굽기」는
 # E-3 에서 붙었다 — `app/tokens.py` 가 재는 자리이고 `deps._수명밀기` 가 실행한다.
@@ -63,6 +73,21 @@ def set_auth_cookie(
     (`app/api/v1/deps.py` 「_수명밀기」). **JWT `exp` 는 그대로 두고 쿠키만 민다.**
     """
     response.set_cookie(name, value, max_age=max_age, **_ATTRS)  # type: ignore[arg-type]
+    _캐시금지(response)
+
+
+def set_device_cookie(response: Response, value: str) -> None:
+    """속도 제한이 셀 기기 표식을 굽는다. 인증 쿠키와 **속성이 같다.**
+
+    `HttpOnly` 를 붙인다 — JS 가 읽을 일이 없고, 읽을 수 있으면 화면 코드가
+    「기기 id」로 다른 일을 하기 시작한다.
+
+    **이 쿠키를 지우면 그 기기의 실패 카운터도 사라진다.** 그래서 기기 하나만으로는
+    ① 이 완결되지 않고 ②(IP) 가 병행한다 — 계약이 아니라 설계다.
+    """
+    response.set_cookie(  # type: ignore[arg-type]
+        DEVICE_COOKIE, value, max_age=DEVICE_MAX_AGE_SECONDS, **_ATTRS
+    )
     _캐시금지(response)
 
 
