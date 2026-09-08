@@ -209,3 +209,22 @@ test("나이 선택지는 셋뿐이다 — 계약이 닫아 둔 것이다", asyn
     await expect(나이.locator("option", { hasText: 글자 })).toHaveCount(1);
   }
 });
+
+test("동의 시각을 기계 말로 내지 않는다", async ({ page }) => {
+  await 관리화면(page, []);
+
+  // **`문구.md` 6장.** 한때 이 자리에 `2026-09-08T01:00:00Z` 가 그대로 나갔다 —
+  // 문장은 3.6 에 등록돼 있었는데 **값의 형식이 어디에도 없었다.**
+  const 화면 = await page.locator("main").innerText();
+  expect(화면).not.toContain("2026-09-08T01:00:00Z");
+  expect(화면).not.toContain("Z");
+
+  // 로컬 시간으로 바뀐다 — 서버가 준 UTC 를 그대로 쓰면 아홉 시간 어긋난다.
+  const 같은순간 = new Date("2026-09-08T01:00:00Z");
+  await expect(
+    page.getByText(`${같은순간.getFullYear()}년 ${같은순간.getMonth() + 1}월 ${같은순간.getDate()}일`),
+  ).toBeVisible();
+
+  // **초를 안 보여준다.** 화면은 사람이 확인하는 자리다.
+  expect(화면).not.toMatch(/\d+초/);
+});

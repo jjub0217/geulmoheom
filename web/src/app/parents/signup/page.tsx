@@ -15,6 +15,8 @@ import {
 
 import { ChildrenPanel } from "@/components/children";
 
+import { 날짜시각 } from "@/lib/format";
+
 import { 상태표시 } from "@/app/status-copy";
 
 import { 고지, 못닿음, 폼 } from "./copy";
@@ -275,10 +277,17 @@ export default function ParentSignup() {
         // `문구.md` 에 그 자리가 없다.
         <div className="flex w-full flex-col items-start gap-2">
           <h1 className="text-3xl font-semibold">{폼.가입됨}</h1>
-          <p className="opacity-80">
-            {폼.동의기록}{" "}
-            <time dateTime={screen.consentAt}>{screen.consentAt}</time>
-          </p>
+          {/* **기계가 준 값을 그대로 내지 않는다** (`문구.md` 6장). 한때 여기에
+              `2026-09-08T01:00:00Z` 가 그대로 나갔다 — **문장은 3.6 에 등록돼 있었는데
+              값의 형식이 어디에도 없었다.** 못 읽는 값이면 **줄을 통째로 안 그린다**:
+              「NaN년」을 내보내느니 없는 편이 낫다.
+              `dateTime` 속성에는 기계 값이 남는다 — 화면에 안 보이고 의미론상 맞는 자리다. */}
+          {날짜시각(screen.consentAt) !== null && (
+            <p className="opacity-80">
+              {폼.동의기록}{" "}
+              <time dateTime={screen.consentAt}>{날짜시각(screen.consentAt)}</time>
+            </p>
+          )}
           {/* **「모든 기기에서 로그아웃됩니다」 같은 말을 쓰지 않는다** — 지금은 거짓말이다.
               `token_version` 은 컬럼만 있고 올리는 코드가 없다(E-3/E-4).
               **「전부 로그아웃」처럼 보이게 만들지도 않는다** — 이 호출은 자녀 쿠키를 안 건드리고,
