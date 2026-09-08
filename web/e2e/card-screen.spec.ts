@@ -8,6 +8,8 @@ import { PII_MASK } from "../src/lib/pii";
 import { 버튼, 못닿음 } from "../src/app/copy";
 // 상한도 문구와 같다 — **숫자를 여기 박으면 규약이 바뀌는 날 테스트가 제품을 붙잡는다.**
 import { 폴링상한 } from "../src/lib/artwork";
+// 대기 대사도 박지 않는다 — `docs/문구.md` **1.5** 가 SSOT 다.
+import { 삽화대기대사 } from "../src/components/artwork-copy";
 import { 상태표시 } from "../src/app/status-copy";
 
 /**
@@ -170,7 +172,10 @@ test("쓴 것을 보낸다 — 글자 수로 잠기지 않고, retry_of 는 비�
   });
   await 보내기.click();
 
-  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  // **결과 화면에 닿은 신호로 삽화 자리를 본다.** 전에는 가이드 대사를 봤는데,
+  // 그 대사는 **그림이 뜬 뒤에만** 나온다 — 굽는 6~8초 동안은 등급이 새지 않게 가려져 있다
+  // (`문구.md` 1.5). 이 검사가 보는 것은 **보낸 내용**이지 연출이 아니다.
+  await expect(page.locator("main [data-삽화자리]")).toBeVisible();
   expect(보낸것.card_id).toBe(CARD.card_id);
   expect(보낸것.text).toBe("문을 연다");
   // **항상 null.** 채우면 그 카드가 하루 5장에서 안 빠지고, H2 회당 평균도 갈린다.
@@ -225,13 +230,22 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
   await page.getByRole("button", { name: 버튼.보내기 }).click();
 
-  // 굽는 동안에는 그림이 없다. **자리는 잡혀 있고 가이드는 이미 말하고 있다.**
-  await expect(page.locator("main [data-삽화자리]")).toBeVisible();
-  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  // 굽는 동안 화면의 유일한 말은 **액자 안 대기 대사**다 (`문구.md` 1.5).
+  const 대기대사 = page.locator("main [data-대기대사]");
+  await expect(대기대사).toBeVisible();
+  expect([...삽화대기대사]).toContain((await 대기대사.innerText()).trim());
+
+  // **결과 대사가 여기 있으면 안 된다.** 있으면 아이가 그림보다 먼저 등급 반응을 읽는다 —
+  // 2026-09-08 까지 실제로 그랬고, 1.5 가 생긴 이유가 그것이다.
+  await expect(page.getByText(CARD.guide.line)).toHaveCount(0);
 
   const 그림 = page.locator(`main img[src="${ARTWORK_URL}"]`);
   await expect(그림).toBeVisible();
   expect(물어본횟수).toBeGreaterThanOrEqual(2);
+
+  // 그림이 온 **뒤에** 결과 대사가 온다. 대기 대사는 그림이 덮어 사라진다.
+  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  await expect(대기대사).toHaveCount(0);
 
   // **`crossOrigin` 이 붙으면 쿠키가 안 실려 그림이 통째로 안 뜬다** (`Stage0.md` 5절 ⚠).
   // 습관적으로 붙는 속성이라 **여기서 못을 박는다** — 붙는 날 네트워크 탭을 안 열면 원인이 안 보인다.
@@ -267,9 +281,10 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
   await page.getByRole("button", { name: 버튼.보내기 }).click();
 
-  // 굽는 동안에는 자리가 잡혀 있다. 그림이 뜰 때 아래가 밀려 내려가지 않게 하는 그 자리다.
+  // 굽는 동안에는 자리가 잡혀 있고 그 안에서 대기 대사가 기다린다.
   const 자리 = page.locator("main [data-삽화자리]");
   await expect(자리).toBeVisible();
+  await expect(page.locator("main [data-대기대사]")).toBeVisible();
 
   // **상한을 넘기면 자리가 통째로 사라진다.** 빈 액자를 남기면 아이가
   // 「여기 그림이 있어야 하는데 없다」로 읽어, 실패 화면을 안 만든다는 결정이 연출로 뒤집힌다.

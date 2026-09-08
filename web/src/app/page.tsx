@@ -235,13 +235,18 @@ export default function Home() {
           // **그림이 먼저 오는 자리다.** 등급·하이라이트·「다음 장면」은 아직 없다 (A0-3 다음 조각).
           <div className="flex flex-col gap-8">
             <ArtworkFrame 상태={삽화} />
-            {/* 표정도 대사도 서버가 준 것 그대로다.
-                **기다리는 동안 여기 뜨는 것이 이미 등급 반응이다** — 「등급을 미리 흘리지
-                않는다」는 **「삽화 대기」 대사가 들어오는 다음 조각에서 닫힌다**
-                (`문구.md` 1.3 이 결과 대사·대기 대사를 A0-3 과 같이 만들게 못 박아 뒀다). */}
-            <div className="flex justify-center">
-              <GuideFigure guide={screen.result.guide} />
-            </div>
+            {/* **굽는 동안에는 안 그린다.** 표정도 대사도 서버가 준 것 그대로인데,
+                결과 응답의 `guide` 는 **이미 등급 반응**이라 그림보다 먼저 뜨면
+                **아이가 반응을 읽고 그다음 그림을 본다** — 「등급을 미리 흘리지 않는다」가
+                거기서 깨진다 (`문구.md` 1.5). 그 6~8초는 **액자 안 대기 대사**가 맡는다.
+
+                **못 받았을 때는 그린다.** 그림만 없고 나머지는 그대로다 (1.7) — 아이는
+                자기 문장이 통했다는 것을 알아야 하고, 그림은 「내 책」에서 다시 본다. */}
+            {삽화.kind !== "기다림" && (
+              <div className="flex justify-center">
+                <GuideFigure guide={screen.result.guide} />
+              </div>
+            )}
           </div>
         )}
 

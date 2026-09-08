@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 
+import { 대기대사하나 } from "@/components/artwork-copy";
 import type { 삽화상태 } from "@/lib/artwork";
 
 /**
@@ -16,8 +18,19 @@ import type { 삽화상태 } from "@/lib/artwork";
  *
  * **`url` 앞에 아무것도 붙이지 않는다.** 서버가 절대 주소로 준다 — web 은 `app.`, api 는
  * `api.` 라 상대 경로로 바꾸면 web 오리진에 붙어 안 뜬다 (`adr/0007`).
+ *
+ * **기다리는 동안 이 액자가 화면의 유일한 말이다** (`문구.md` 1.5). 결과 대사는 **그림이 뜬 뒤**에
+ * 온다 — 순서가 뒤집히면 아이가 반응을 먼저 읽고 그림을 나중에 본다.
  */
 export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
+  /**
+   * **한 번 고르고 안 바꾼다.** 폴링이 2초마다 리렌더를 부르는데 그때마다 새로 고르면
+   * **대사가 6~8초 동안 서너 번 갈아치워진다** — 읽던 아이가 문장을 잃는다.
+   *
+   * 결과 화면을 벗어나면 이 컴포넌트가 통째로 사라지므로 **다음 카드에서는 다시 고른다.**
+   */
+  const [대기대사] = useState(대기대사하나);
+
   /**
    * **못 받았으면 자리를 통째로 뺀다.** 빈 액자를 남기면 아이가 「여기 그림이 있어야 하는데
    * 없다」로 읽는데, 그건 **실패 화면을 안 만든다는 결정을 연출로 뒤집는 것**이다.
@@ -30,13 +43,24 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
   return (
     // **기다리는 동안에도 같은 크기의 자리를 잡아둔다.** 그림이 뜨는 순간 아래 것들이
     // 밀려 내려가면, 6~8초를 기다린 끝에 **보상이 아니라 화면이 흔들리는 것**으로 온다.
-    // 「삽화 대기」 대사가 이 자리에 들어온다 (다음 조각 · `문구.md` 1.3).
+    // 기다리는 동안에는 이 안에 대기 대사가 들어차 있다 (`문구.md` 1.5).
     <div
       // **자리가 있는지 없는지가 곧 상태다.** 「못받음」이면 이 요소가 통째로 사라진다 —
       // E2E 가 그 사라짐을 기다려 **상한을 실제로 넘겨보고 확인한다.**
       data-삽화자리
       className="relative aspect-4/3 w-full overflow-hidden rounded-3xl bg-vest/10"
     >
+      {상태.kind === "기다림" && (
+        // **액자 안이다** (`문구.md` 1.5). 그림이 뜨면 그 자리를 그림이 그대로 덮는다 —
+        // 대사가 다른 자리에 있으면 그림이 온 뒤에도 남아 **결과 대사와 나란히 선다.**
+        <p
+          data-대기대사
+          className="absolute inset-0 flex items-center justify-center p-6
+            text-center text-xl/relaxed tablet:text-2xl/relaxed"
+        >
+          {대기대사}
+        </p>
+      )}
       {상태.kind === "떴다" && (
         <Image
           // **훅이 준 주소를 그대로 넣는다.** 성공이든 기본 에셋이든 같은 주소로 온다 —
