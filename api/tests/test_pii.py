@@ -10,6 +10,10 @@
 서버가 더 넓게 잡는 것은 설계대로다(프론트를 믿지 않는다). **좁게 잡는 쪽이 사고다.**
 """
 
+from typing import get_args
+
+import pytest
+
 from app.pii import PII_MASK, 가리기, 찾기
 
 
@@ -102,3 +106,91 @@ def test_아무것도_없으면_문장을_안_건드린다():
     가려진, 종류 = 가리기(문장)
     assert 가려진 == 문장
     assert 종류 == []
+
+
+# ── 흐름에 붙어 있다 (E-2 서버 2차) ───────────────────────
+
+전화번호가섞인문장 = "은빛 검을 들고 01012345678 로 달려갔다"
+
+
+@pytest.fixture
+def 판정_고정(monkeypatch):
+    """모델을 갈아끼우고 **무엇이 모델에 갔는지**를 붙잡는다."""
+    from app.api.v1 import attempts
+    from app.evaluator import 평가결과
+    from app.moderation import 검사결과
+
+    본것: dict[str, str] = {}
+
+    async def _판정(text: str, **_) -> 평가결과:
+        본것["평가"] = text
+        return 평가결과(grade="G2", signals=["adj:은빛"], latency_ms=12.0)
+
+    async def _통과(text: str) -> 검사결과:
+        본것["검사"] = text
+        return 검사결과(blocked=False)
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    monkeypatch.setattr(attempts, "검사하기", _통과)
+    return 본것
+
+
+async def test_가린_뒤_진행한다_막지_않는다(client, 판정_고정):
+    """**대표 판정 2026-09-08** (미결 11-5). 막으면 아이에게 이유를 말해줄 수 없다."""
+    응답 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": 전화번호가섞인문장})
+
+    assert 응답.status_code == 200
+    assert 응답.json()["outcome"] == "result"
+
+
+async def test_원문이_프로바이더로_안_나간다(client, 판정_고정):
+    """**이 테스트가 E-2 서버 몫의 존재 이유다.**
+
+    가리는 것이 저장 직전이면 늦다 — 그 사이에 검사·평가가 **원문을 밖으로 보낸다.**
+    """
+    client.post("/api/v1/attempts", json={"card_id": "c01", "text": 전화번호가섞인문장})
+
+    for 어디, 간것 in 판정_고정.items():
+        assert "01012345678" not in 간것, 어디
+        assert PII_MASK in 간것, 어디
+
+
+async def test_pii_masked_가_layer_server_로_남는다(client, 자녀행, 판정_고정):
+    from sqlalchemy import select
+
+    from app import db
+    from app.models import Event
+
+    client.post("/api/v1/attempts", json={"card_id": "c01", "text": 전화번호가섞인문장})
+
+    async with db.SessionLocal() as session:
+        행들 = list((await session.execute(select(Event))).scalars())
+    (마스킹,) = [행 for 행 in 행들 if 행.event == "pii_masked"]
+    assert 마스킹.payload == {"layer": "server", "kind": "phone"}
+
+
+async def test_char_len_은_가린_뒤_길이다(client, 자녀행, 판정_고정):
+    """PRD 5장 — 「원문」은 **PII 마스킹 뒤 텍스트**다. 화면·로그·책이 같은 문자열을 센다."""
+    from sqlalchemy import select
+
+    from app import db
+    from app.models import Event
+
+    client.post("/api/v1/attempts", json={"card_id": "c01", "text": 전화번호가섞인문장})
+
+    async with db.SessionLocal() as session:
+        행들 = list((await session.execute(select(Event))).scalars())
+    (입력,) = [행 for 행 in 행들 if 행.event == "turn_input"]
+    가려진, _ = 가리기(전화번호가섞인문장)
+    assert 입력.payload["char_len"] == len(가려진)
+    assert 입력.payload["char_len"] != len(전화번호가섞인문장)
+
+
+def test_차단_사유에_pii_가_없다():
+    """**PII 로는 차단 응답이 안 나간다** (`Stage0.md` 4절 (c), 2026-09-08 정정).
+
+    값이 살아 있으면 **영영 안 쓰이는 분기**가 계약에 남는다.
+    """
+    from app.schemas.stage0 import BlockedReason
+
+    assert get_args(BlockedReason) == ("moderation",)

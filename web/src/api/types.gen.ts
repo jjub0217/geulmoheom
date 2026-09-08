@@ -543,9 +543,9 @@ export interface components {
             outcome: "blocked";
             /**
              * Reason
-             * @enum {string}
+             * @constant
              */
-            reason: "moderation" | "pii";
+            reason: "moderation";
             guide: components["schemas"]["Guide"];
             today: components["schemas"]["TodayState"];
         };

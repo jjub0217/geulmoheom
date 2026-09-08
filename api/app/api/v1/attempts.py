@@ -29,6 +29,7 @@ from app.events import 남기기, 이벤트
 from app.middleware import current_request_id
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
+from app.pii import 가리기
 from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 질문
 from app.schemas.stage0 import (
     AttemptBlocked,
@@ -155,13 +156,30 @@ async def create_attempt(
     if outcome is not None:  # 목 강제 (W3 화면 작업)
         return {"result": _result, "scaffold": _scaffold, "blocked": _blocked}[outcome]()
 
+    # **3. PII 2차 — 가린 뒤 진행한다. 막지 않는다** (`Stage0.md` 9절 3번,
+    # 2026-09-08 대표 판정 · 미결 11-5). 막으면 아이에게 이유를 말해줄 수 없다 —
+    # 차단 응답이 종류를 안 싣기 때문이다.
+    #
+    # **여기가 검사·평가보다 앞이어야 한다.** 저장 직전에 가리면 늦다 — 그 사이에
+    # 검사와 평가가 **원문을 프로바이더로 내보낸다.** 아래 `text` 만 쓰는 이유가 그것이고,
+    # `payload.text` 를 다시 꺼내 쓰면 그 순간 원문이 새어 나간다.
+    #
+    # **아직 정규식 층뿐이다.** 실명·학교명(NER)은 안 붙었다 — `app/pii.py`.
+    text, 가린종류 = 가리기(payload.text)
+    if 가린종류:
+        # **종류만 남긴다.** 가린 값도, 몇 개였는지도 싣지 않는다 (PRD 1.1b).
+        await 남기기(
+            아이.id,
+            *(이벤트("pii_masked", {"layer": "server", "kind": 종류}) for 종류 in 가린종류),
+        )
+
     # **검사와 평가를 동시에 던진다** (`adr/0009` 결정 2). 검사 결과가 평가의 입력이
     # 아니라 순서를 강제할 이유가 없고, 순차로 두면 +875ms 라 1.5초 예산을 깬다.
     # 병렬이면 늘어나는 것은 「검사 호출 시간」이 아니라 둘 중 느린 쪽과의 차이(+13ms)다.
     #
     # `기록=False` 다 — 차단이면 이 판정은 버려지고 `eval_result` 도 남기지 않는다
     # (결정 3). 버린 판정이 남으면 **화면에 보여주지도 않은 평가가 등급 분포를 오염시킨다.**
-    검사, 평가 = await asyncio.gather(검사하기(payload.text), evaluate(payload.text, 기록=False))
+    검사, 평가 = await asyncio.gather(검사하기(text), evaluate(text, 기록=False))
 
     # **내장 필터가 막은 것도 차단이다.** 전에는 `evaluate()` 가 그걸 삼켜 G1 폴백으로
     # 넘겼고, 그러면 차단이 「그냥 평범한 문장」으로 기록됐다 (2026-09-07 PM 요청).
@@ -177,7 +195,7 @@ async def create_attempt(
         if 되물음 is not None:
             return 되물음
 
-    하이라이트 = highlights(평가, payload.text)
+    하이라이트 = highlights(평가, text)
 
     # **`char_len` 은 공백 포함 길이다** (PRD 5장). 여기서 「원문」은 PII 마스킹 뒤
     # 텍스트이고, 그것이 `card_attempts.text` 로 저장되는 문자열이라 `len` 그대로가 맞다.
@@ -188,7 +206,7 @@ async def create_attempt(
             {
                 "card_id": payload.card_id,
                 "input_type": "free",
-                "char_len": len(payload.text),
+                "char_len": len(text),
                 "grade": 평가.grade,
             },
         ),

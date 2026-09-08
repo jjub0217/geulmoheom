@@ -17,7 +17,10 @@ Tier = Literal["basic", "rare", "legendary"]
 ArtworkStatus = Literal["pending", "ready", "failed"]
 Visibility = Literal["private", "family", "public"]
 GuideExpression = Literal["default", "compass_bright", "compass_dim", "session_end"]
-BlockedReason = Literal["moderation", "pii"]
+# **`moderation` 하나다** (2026-09-08 대표 판정, 미결 11-5). 종전 `moderation | pii`.
+# **PII 는 막지 않고 가린 뒤 진행하므로 차단 응답이 나오지 않는다** — 값을 남겨 두면
+# 영영 안 쓰이는 분기가 계약에 남는다 (`Stage0.md` 4절 (c)).
+BlockedReason = Literal["moderation"]
 HighlightKind = Literal["adj", "adv", "clause"]
 
 
