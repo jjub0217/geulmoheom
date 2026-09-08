@@ -345,7 +345,8 @@
 | `parents` | 1절 |
 | `children` | 1·2절. `guide_name`, `access_code_hash`, `daily_cap`, `timezone`, **`token_version INTEGER NOT NULL DEFAULT 1`** 추가 |
 | `cards` | 3절. `type`, `situation`, `noun_tags[]`, `sketch_r2_key` |
-| `card_attempts` | 4절. `grade`, `tier`, `signals JSON`, `scaffold_count`, `retry_of`, `prompted`, `text` (항상 보관, 책 콘텐츠) |
+| `card_attempts` | 4절. `grade`, `tier`, `signals JSON`, **`highlights JSON`** (2026-09-08 추가), `scaffold_count`, `retry_of`, `prompted`, `text` (항상 보관, 책 콘텐츠) |
+| ↳ | **`highlights` 를 따로 저장하는 이유** — `signals` 만으로 다시 만들면 **처음 화면보다 적어진다.** `signals` 는 말을 **원형**으로 주는데(「캄캄한」) 문장에는 **활용형**이 있어(「캄캄했지만」) **원문에 그대로 있는 것만 내려보낸다**는 규칙(4절)에 걸려 떨어진다. **새로고침하면 보상이 줄어든다** |
 | `books` / `book_pages` | 6절. 자녀당 1권 자동 생성, 카드 최고 티어 시도 → 페이지 upsert |
 | `parents.labeling_consent` | 1절. 라벨링 셋 추출 시 필터 |
 | `artworks` | 5절. `status`, `r2_key`, `tier`, `fallback` |
