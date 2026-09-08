@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 
+import { 앱 } from "./app-copy";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,14 +22,14 @@ const geistMono = Geist_Mono({
 // apple-* 메타 태그와 apple-touch-icon 을 본다. 태블릿에 iPad 가 포함되므로 필요하다.
 export const metadata: Metadata = {
   title: {
-    default: "글모험",
-    template: "%s · 글모험",
+    default: 앱.이름,
+    template: 앱.제목틀,
   },
-  description: "내가 쓴 문장이 이야기가 되는 모험",
-  applicationName: "글모험",
+  description: 앱.설명,
+  applicationName: 앱.이름,
   appleWebApp: {
     capable: true,
-    title: "글모험",
+    title: 앱.이름,
     statusBarStyle: "default",
   },
   icons: {

@@ -13,6 +13,8 @@ import {
   인증이풀렸다,
 } from "@/lib/api";
 
+import { 상태표시 } from "@/app/status-copy";
+
 import { 고지, 못닿음, 폼 } from "./copy";
 
 type SignupRequest = components["schemas"]["SignupRequest"];
@@ -156,7 +158,7 @@ export default function ParentSignup() {
 
   return (
     <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-12">
-      {screen.kind === "확인중" && <p className="opacity-70">확인하는 중…</p>}
+      {screen.kind === "확인중" && <p className="opacity-70">{상태표시.확인중}</p>}
 
       {screen.kind === "가입전" && (
         <form

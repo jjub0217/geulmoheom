@@ -7,7 +7,9 @@ import type { components } from "@/api/types.gen";
 import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
 import { useDisplayMode } from "@/lib/standalone";
 
-import { 못닿음, 설치안내, 코드길이, 코드입력, 확인중 } from "./copy";
+import { 상태표시 } from "@/app/status-copy";
+
+import { 못닿음, 설치안내, 코드길이, 코드입력 } from "./copy";
 
 type ChildAuthRequest = components["schemas"]["ChildAuthRequest"];
 type ChildAuthResponse = components["schemas"]["ChildAuthResponse"];
@@ -123,7 +125,7 @@ export default function ChildAuth() {
   return (
     <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-12">
       {(형태 === "확인중" || (형태 === "홈화면앱" && screen.kind === "확인중")) && (
-        <p className="opacity-70">{확인중}</p>
+        <p className="opacity-70">{상태표시.확인중}</p>
       )}
 
       {형태 === "브라우저탭" && (

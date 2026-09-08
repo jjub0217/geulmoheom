@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 // 문구를 박지 않는다 — `docs/문구.md` 3.1·3.5·3.6 이 SSOT 다.
+import { 상태표시 } from "../src/app/status-copy";
 import { 고지, 못닿음, 폼 } from "../src/app/parents/signup/copy";
 
 import type { components } from "../src/api/types.gen";
@@ -143,7 +144,7 @@ test("확인 중에는 가입 폼을 그리지 않는다 — 2상태면 여기�
 
   await page.goto("/parents/signup");
 
-  await expect(page.getByText("확인하는 중…")).toBeVisible();
+  await expect(page.getByText(상태표시.확인중)).toBeVisible();
   await expect(page.getByRole("button", { name: 폼.가입하기 })).toHaveCount(0);
 
   await expect.poll(() => 응답하기 !== null).toBe(true);
@@ -200,7 +201,7 @@ test("로그아웃은 서버를 부른다 — 클라이언트가 쿠키를 지�
   expect(불렀나).toBe(true);
   // **3상태가 「로그아웃됨」으로 간다.** 「확인 중」에 걸려 있으면 안 된다.
   await expect(page.getByRole("button", { name: 폼.가입하기 })).toBeVisible();
-  await expect(page.getByText("확인하는 중…")).toHaveCount(0);
+  await expect(page.getByText(상태표시.확인중)).toHaveCount(0);
   // 가족 태블릿이다. **다음 사람이 앞사람 이메일을 보면 안 된다.**
   await expect(page.getByLabel(폼.이메일)).toHaveValue("");
   await expect(page.locator('input[name="consent"]')).not.toBeChecked();

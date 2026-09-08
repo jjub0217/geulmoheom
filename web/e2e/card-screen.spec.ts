@@ -5,7 +5,8 @@ import type { paths } from "../src/api/types.gen";
 // 여기 박아두면 **문구가 바뀌는 날 테스트가 제품을 붙잡는다** (`docs/문구.md` 1.1).
 import { PII_MASK } from "../src/lib/pii";
 // 문구도 같은 이유로 박지 않는다 — `docs/문구.md` 2.2·2.4·2.5 가 SSOT 다.
-import { 버튼, 못닿음, 상태표시 } from "../src/app/copy";
+import { 버튼, 못닿음 } from "../src/app/copy";
+import { 상태표시 } from "../src/app/status-copy";
 
 /**
  * 오늘의 모험 화면(A0-2)이 응답 네 가지를 각각 그리는지 본다.

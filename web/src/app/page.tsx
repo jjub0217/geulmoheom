@@ -10,7 +10,8 @@ import { SceneCard } from "@/components/scene-card";
 import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
 import type { PiiKind } from "@/lib/pii";
 
-import { 버튼, 못닿음, 상태표시 } from "./copy";
+import { 버튼, 못닿음 } from "./copy";
+import { 상태표시 } from "./status-copy";
 
 type Card = components["schemas"]["Card"];
 /** 세 형태가 한 응답에 온다 (`outcome`). 이번 조각은 **보내는 것까지**고, 3분기 연출은 다음 항목이다. */

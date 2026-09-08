@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+import { 앱 } from "./app-copy";
+
 // Next 16 App Router 의 manifest 파일 컨벤션.
 // 이 파일이 /manifest.webmanifest 를 만들고 <link rel="manifest"> 도 Next 가 자동으로 넣는다.
 // (참고: node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/01-metadata/manifest.md)
@@ -10,9 +12,9 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "글모험",
-    short_name: "글모험",
-    description: "내가 쓴 문장이 이야기가 되는 모험",
+    name: 앱.이름,
+    short_name: 앱.이름,
+    description: 앱.설명,
     start_url: "/",
     scope: "/",
     display: "standalone",
