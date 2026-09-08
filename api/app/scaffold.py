@@ -16,8 +16,11 @@ import re
 from functools import lru_cache
 from typing import Any
 
+# **`from app.db import redis_client` 을 쓰지 않는다.** 이름으로 들여오면 import 시점의
+# 객체를 붙잡아, 나중에 갈아끼우는 쪽(테스트)과 **서로 다른 클라이언트를 보게 된다** —
+# 엔진에서 이미 밟은 자리다 (`app/api/system.py`).
+from app import db
 from app.config import REPO_ROOT
-from app.db import redis_client
 from app.docs_md import 민, 읽기
 from app.middleware import current_request_id
 from app.scene_cards import 카드
@@ -149,7 +152,7 @@ async def 되묻기횟수(자녀id: str, card_id: str, *, client: Any = None) ->
     """
     키 = f"scaffold:{_아이키(자녀id)}:{card_id}"
     try:
-        redis = client or redis_client
+        redis = client or db.redis_client
         횟수 = int(await redis.incr(키))
         if 횟수 == 1:
             await redis.expire(키, TTL_SECONDS)
@@ -160,3 +163,28 @@ async def 되묻기횟수(자녀id: str, card_id: str, *, client: Any = None) ->
         )
         return None
     return 횟수
+
+
+async def 잔여지우기(자녀id: str, *, client: Any = None) -> int:
+    """자녀 삭제 때 되묻기 카운터를 함께 지운다 (E-4 · PRD E-4 「즉시 파기」).
+
+    **아이 원문은 여기 없다.** 남는 것은 「어느 카드에서 몇 번 되물었는지」이고 TTL 이
+    24시간이라 어차피 사라진다. 그래도 지우는 이유는 **「즉시 파기」라고 해 놓고 하루를
+    남기는 것이 그 말과 다르기 때문**이다.
+
+    **실패해도 예외를 밖으로 내지 않는다.** 이 함수가 죽어 삭제 요청이 500 이 되면
+    학부모는 **DB 에서 이미 지워진 데이터를 두고 「안 지워졌다」고 읽는다.** 그쪽이 더
+    나쁘다 — 대신 남았다는 사실을 로그에 남긴다. 지우는 쪽이 본체고 여기는 뒷정리다.
+    """
+    지운수 = 0
+    try:
+        redis = client or db.redis_client
+        async for 키 in redis.scan_iter(match=f"scaffold:{_아이키(자녀id)}:*"):
+            await redis.delete(키)
+            지운수 += 1
+    except Exception as 오류:  # 뒷정리가 본체를 죽이지 않는다
+        logger.warning(
+            "scaffold_purge_failed",
+            extra={"request_id": current_request_id(), "exc_type": type(오류).__name__},
+        )
+    return 지운수

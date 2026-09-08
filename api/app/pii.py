@@ -15,6 +15,7 @@
 """
 
 import re
+import unicodedata
 from typing import Literal, NamedTuple
 
 # `pii_masked` 이벤트의 `kind` 로 그대로 나간다 (`Stage0.md` 7절).
@@ -61,11 +62,29 @@ class 감지(NamedTuple):
     end: int
 
 
+def _눕힌것(text: str) -> str:
+    """**찾을 때만 쓰는 사본.** 전각(full-width) 숫자로 쓴 번호는 정규식을 그냥 지나간다.
+
+    **글자 수를 유지한다** — NFKC 가 한 글자를 여러 글자로 바꾸는 경우가 있어,
+    통째로 눕히면 **찾은 위치가 원문의 위치와 어긋난다.** 1:1 로 눕는 글자만 바꾸고
+    나머지는 원래 글자를 둔다. 그래서 아래 `가리기` 가 **원문에 그대로 자를 댈 수 있다.**
+
+    **원문 자체는 눕히지 않는다.** 전각으로 쓴 것도 아이가 고른 모양이고 그대로
+    책에 인쇄된다 (`Stage0.md` 4절).
+    """
+    글자들 = []
+    for 글자 in text:
+        누운 = unicodedata.normalize("NFKC", 글자)
+        글자들.append(누운 if len(누운) == 1 else 글자)
+    return "".join(글자들)
+
+
 def 찾기(text: str) -> list[감지]:
     """앞에서부터 훑어 감지 목록을 준다. **겹치면 먼저 나온 규칙이 이긴다.**"""
+    대상 = _눕힌것(text)
     찾은것: list[감지] = []
     for kind, 규칙 in _RULES:
-        for m in 규칙.finditer(text):
+        for m in 규칙.finditer(대상):
             if any(m.start() < 이미.end and 이미.start < m.end() for 이미 in 찾은것):
                 continue
             찾은것.append(감지(kind, m.start(), m.end()))

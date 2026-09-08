@@ -13,8 +13,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from app import db
 from app.config import get_settings
-from app.db import redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ async def record_usd(amount_usd: float, *, kind: str, client: Any = None) -> flo
     `kind` 는 `evaluator` · `image` 처럼 무엇에 쓴 돈인지. **원문이나 아이 식별자를 넣지 않는다.**
     돌려주는 값은 오늘 누적(USD). 기록에 실패하면 `None`.
     """
-    client = client or redis_client
+    client = client or db.redis_client
     날짜 = _today()
     한도 = get_settings().daily_cost_alert_usd
 
@@ -64,7 +64,7 @@ async def record_usd(amount_usd: float, *, kind: str, client: Any = None) -> flo
 
 async def today_usd(client: Any = None) -> float:
     """오늘 누적. 운영자가 들여다보는 용도."""
-    client = client or redis_client
+    client = client or db.redis_client
     try:
         값 = await client.get(_total_key(_today()))
     except Exception as exc:
