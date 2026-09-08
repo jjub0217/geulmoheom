@@ -207,7 +207,15 @@ test("나이 선택지는 셋뿐이다 — 계약이 닫아 둔 것이다", asyn
   await 관리화면(page, []);
 
   const 나이 = page.getByLabel(만들기.나이);
-  await expect(나이.locator("option")).toHaveCount(나이선택.length);
+  // **계약이 닫아 둔 값을 여기 다시 적는다** (`age_band ∈ {10, 11, 12}` — `types.gen.ts`).
+  // **`나이선택.length` 를 읽으면 안 된다**: 선택지를 넷으로 늘려도 검사가 따라가서
+  // **초록으로 지나간다** — 기대값의 출처가 대상이면 아무것도 안 재는 것이다 (축 ⑭).
+  await expect(나이.locator("option")).toHaveCount(3);
+  // `toHaveValues` 는 `<select>` 의 **선택된 값**을 보는 것이라 옵션 목록에는 안 맞다.
+  const 값들 = await 나이
+    .locator("option")
+    .evaluateAll((옵션들) => 옵션들.map((o) => (o as HTMLOptionElement).value));
+  expect(값들).toEqual(["10", "11", "12"]);
   // **「만」이 붙어야 한다** — 학부모는 학년으로 세는 습관이 있어 그냥 「11세」면 갈린다.
   for (const { 글자 } of 나이선택) {
     await expect(나이.locator("option", { hasText: 글자 })).toHaveCount(1);
