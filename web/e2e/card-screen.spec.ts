@@ -490,6 +490,7 @@ test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다
   await page.goto("/");
 
   await expect(page.getByText("오늘 모험은 여기까지! 내일 또 보자")).toBeVisible();
+  await expect(page.locator('img[src="/guide/session_end.png"]')).toBeVisible();
   await 가로스크롤없음(page);
 });
 
@@ -521,6 +522,32 @@ test("여섯 번째를 보내도 가이드가 말한다 — 두 목소리가 나
   // 여기가 빠져 있어 **보내는 쪽만 앱 목소리로 떨어졌다**: 가이드가 하던 말이 갑자기 존댓말이 된다.
   await expect(page.getByText(가이드대사)).toBeVisible();
   expect(await page.locator("main").innerText()).not.toContain(앱문구);
+  // **표정도 서버가 준 것 그대로다.** 대사만 꺼내 쓰면 `session_end` 얼굴이 영영 안 나온다.
+  await expect(page.locator('img[src="/guide/session_end.png"]')).toBeVisible();
+});
+
+test("종료 인사에 모르는 표정이 오면 캐릭터를 세우지 않는다 — 말은 그대로 전한다", async ({
+  page,
+}) => {
+  const 가이드대사 = "오늘 모험은 여기까지! 내일 또 보자";
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: errorBody("DAILY_CAP_REACHED", "오늘 카드를 다 썼어요", {
+        // 계약이 넓어지는 날 실제로 올 수 있는 값이다. **파일명이 곧 `expression`** 이라
+        // 그대로 넘기면 **없는 PNG 를 불러 그림이 깨진다.**
+        guide: { expression: "compass_spin", line: 가이드대사 },
+      }),
+    }),
+  );
+
+  await page.goto("/");
+
+  // 말은 잃지 않는다 — 아이가 왜 못 들어가는지 알아야 한다.
+  await expect(page.getByText(가이드대사)).toBeVisible();
+  // 깨진 그림을 세우느니 안 세운다.
+  await expect(page.locator("main img")).toHaveCount(0);
 });
 
 test("서버가 거절하면 빈 화면이 아니라 서버 문구가 뜬다", async ({ page }) => {

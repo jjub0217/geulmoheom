@@ -51,8 +51,15 @@ type Screen =
    * **아직 그리는 것은 삽화와 가이드뿐이다.** 등급·하이라이트는 다음 조각이다.
    */
   | { kind: "sent"; result: AttemptResult }
-  /** 오늘 카드를 다 썼다 (409 `DAILY_CAP_REACHED`). 서버가 함께 준 대사를 그대로 보여준다. */
-  | { kind: "done"; line: string }
+  /**
+   * 오늘 카드를 다 썼다 (409 `DAILY_CAP_REACHED`). 서버가 함께 준 **가이드 그대로** 보여준다 —
+   * 대사도 **표정도**다. 종료 인사는 `expression: "session_end"` 로 오고, 표정 4종 중
+   * **그 자리를 위해 만든 얼굴**이다 (`docs/캐릭터/표정/`).
+   *
+   * `guide` 가 없으면 서버가 대사를 안 준 것이라 **앱 목소리로 떨어진다** — 그때는
+   * 캐릭터를 세우지 않는다 (`문구.md` 0장, 못닿음 화면과 같다).
+   */
+  | { kind: "done"; guide: Guide | null; line: string }
   /** 서버가 형식을 갖춰 거절했다. `message` 가 아이가 읽을 문구다. */
   | { kind: "refused"; line: string }
   /**
@@ -63,11 +70,52 @@ type Screen =
    */
   | { kind: "unreachable"; hints: string[] };
 
-/** 409 의 `detail.guide` 에서 대사만 꺼낸다. 형태가 다르면 아무것도 꺼내지 않는다. */
+/** `guide.expression` 이 될 수 있는 값. **프론트가 고르지 않고 온 것을 확인만 한다.** */
+const 표정들: Guide["expression"][] = [
+  "default",
+  "compass_bright",
+  "compass_dim",
+  "session_end",
+];
+
+/**
+ * 409 의 `detail.guide` 에서 **가이드를 통째로** 꺼낸다. 형태가 다르면 아무것도 꺼내지 않는다.
+ *
+ * **대사만 꺼내던 자리다.** 그러면 종료 인사의 `session_end` 표정이 **말없이 버려진다** —
+ * 표정 4종 중 하나가 **그 자리를 위해 만들어졌는데** 화면에 한 번도 안 나오는 셈이다.
+ *
+ * **모르는 표정은 안 받는다.** 파일명이 곧 `expression` 이라 그대로 넘기면
+ * **없는 PNG 를 부르고 그림이 깨진다** — 계약이 넓어지는 날 조용히 그렇게 된다.
+ */
+function guideOf(detail: unknown): Guide | null {
+  const line = guideLineOf(detail);
+  if (line === null) return null;
+  const 온것 = (detail as { guide?: Partial<Guide> }).guide?.expression;
+  const 표정 = 표정들.find((e) => e === 온것);
+  return 표정 ? { expression: 표정, line } : null;
+}
+
+/**
+ * **대사만 따로 꺼낸다.** 표정을 못 알아봐도 **말은 잃지 않는다** —
+ * 얼굴이 낯선 것과 **아이가 왜 못 들어가는지 못 듣는 것**은 다르다.
+ * 그때는 캐릭터 없이 문장만 선다.
+ */
 function guideLineOf(detail: unknown): string | null {
   if (typeof detail !== "object" || detail === null) return null;
   const guide = (detail as { guide?: Partial<Guide> }).guide;
   return typeof guide?.line === "string" ? guide.line : null;
+}
+
+/**
+ * 서버가 형식을 갖춰 거절했다. **하루 상한만 가이드가 말하고 나머지는 앱 목소리다** —
+ * 한 화면에 둘이 같이 오면 **`guide.line` 만** 보여준다 (`문구.md` 0장).
+ */
+function 거절화면(e: ApiError): Screen {
+  const guide = guideOf(e.detail);
+  const line = guideLineOf(e.detail) ?? e.서버문구;
+  return e.code === "DAILY_CAP_REACHED"
+    ? { kind: "done", guide, line }
+    : { kind: "refused", line };
 }
 
 export default function Home() {
@@ -115,12 +163,7 @@ export default function Home() {
       .catch((e: unknown) => {
         if (!alive) return;
         if (e instanceof ApiError) {
-          const line = guideLineOf(e.detail) ?? e.서버문구;
-          setScreen(
-            e.code === "DAILY_CAP_REACHED"
-              ? { kind: "done", line }
-              : { kind: "refused", line },
-          );
+          setScreen(거절화면(e));
           return;
         }
         if (e instanceof NetworkError) {
@@ -160,17 +203,10 @@ export default function Home() {
       }
     } catch (e) {
       if (e instanceof ApiError) {
-        // **목소리 규칙** (`문구.md` 0장) — 같은 화면에 `error.message`(앱·존댓말)와
-        // `guide.line`(가이드·반말)이 같이 오면 **`guide.line` 만** 보여준다.
-        // 여기가 빠져 있었다: 카드 부르는 쪽에만 있었고 **보내는 쪽은 앱 목소리로 떨어졌다.**
-        // 하루 상한은 **여섯 번째 문장을 보낼 때도** 온다 (A0-5) — 그때 아이는
-        // 가이드가 하던 말이 갑자기 존댓말로 바뀌는 것을 본다.
-        const line = guideLineOf(e.detail) ?? e.서버문구;
-        setScreen(
-          e.code === "DAILY_CAP_REACHED"
-            ? { kind: "done", line }
-            : { kind: "refused", line },
-        );
+        // **카드를 부르는 쪽과 같은 함수를 쓴다.** 전에는 여기만 `e.서버문구` 라
+        // **보내는 쪽만 앱 목소리로 떨어졌다** — 하루 상한은 **여섯 번째 문장을 보낼 때도**
+        // 오고(A0-5), 그때 아이는 가이드가 하던 말이 갑자기 존댓말이 되는 것을 본다.
+        setScreen(거절화면(e));
         return;
       }
       if (e instanceof NetworkError) {
@@ -269,8 +305,18 @@ export default function Home() {
           </div>
         )}
 
-        {(screen.kind === "done" || screen.kind === "refused") && (
+        {screen.kind === "done" && screen.guide !== null && (
+          // **가이드가 배웅한다.** 표정도 서버가 준 것 그대로다 (`session_end`) —
+          // 표정 4종 중 **이 자리를 위해 만든 얼굴**이고, 대사만 꺼내 쓰면 영영 안 나온다.
+          <div className="flex justify-center">
+            <GuideFigure guide={screen.guide} />
+          </div>
+        )}
+
+        {((screen.kind === "done" && screen.guide === null) ||
+          screen.kind === "refused") && (
           // 서버가 준 문구를 그대로 보여준다. 프론트가 다듬거나 덧붙이지 않는다.
+          // **앱 목소리라 캐릭터를 세우지 않는다** — 못닿음 화면과 같은 이유다 (`문구.md` 0장).
           <p className="text-center text-2xl/relaxed">{screen.line}</p>
         )}
 
