@@ -9,6 +9,7 @@
 """
 
 import asyncio
+import io
 import logging
 
 import pytest
@@ -282,3 +283,43 @@ def test_그림이_안_와도_돈은_나갔다(monkeypatch):
 
     assert 결과.사유 == "empty"
     assert 쓴돈 == [(artwork.장당USD, "image")]
+
+
+# ── 레퍼런스는 정면 1면만 (2026-09-08) ─────────────────────
+
+
+def test_레퍼런스가_시트가_아니라_정면_한_면이다():
+    """**시트를 통째로 넣으면 글자와 턴어라운드 구도가 그림에 박힌다.**
+
+    기본 삽화 후보 10장에서 실측했다 — 1장에 스와치 라벨(`FUR MARKINGS VEST…`)이
+    그대로 그려졌고, 1장은 장면 대신 캐릭터 셋이 나란히 선 시트가 나왔다.
+    프롬프트의 `no text` 가 **안 막는다.**
+
+    **그리고 이 실패는 폴백이 못 막는다** — 생성은 성공했고 바이트도 왔다.
+    글자가 박힌 그림이 그대로 아이 책에 인쇄된다.
+    """
+    from PIL import Image
+
+    잘린바이트 = 레퍼런스바이트()
+    assert 잘린바이트 is not None
+
+    with Image.open(io.BytesIO(잘린바이트)) as 잘린, Image.open(artwork.레퍼런스) as 정본:
+        # 정면 1면이라 **세로가 가로보다 길다.** 3면 시트는 반대다.
+        assert 잘린.height > 잘린.width
+        # 정본의 절반도 안 되는 폭이어야 나머지 두 면이 안 들어온다.
+        assert 잘린.width < 정본.width * 0.5
+
+
+def test_레퍼런스를_못_읽으면_대신_시트를_쓰지_않는다(monkeypatch, caplog):
+    """**자르지 못했으면 `None` 이다.** 시트로 물러서면 위 실패가 그대로 돌아온다."""
+
+    def _못자름(원본: bytes) -> bytes:
+        raise ValueError("자르지 못했다")
+
+    레퍼런스바이트.cache_clear()
+    monkeypatch.setattr(artwork, "_정면만", _못자름)
+
+    with caplog.at_level(logging.ERROR):
+        assert 레퍼런스바이트() is None
+
+    레퍼런스바이트.cache_clear()

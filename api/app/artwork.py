@@ -23,6 +23,7 @@ W1 벤치에서 가이드 없이 생성한 c01(위기)은 뿔 달린 거대 실�
 """
 
 import asyncio
+import io
 import logging
 import time
 from dataclasses import dataclass
@@ -54,6 +55,24 @@ TIMEOUT_SECONDS: Final = 15.0
 # 가이드 캐릭터 정본 (`docs/캐릭터/`). 턴어라운드 3면이라 스카프·고글·가방이 모두 보인다 —
 # 표정 PNG 4종은 축약본이라 레퍼런스로 못 쓴다.
 레퍼런스 = REPO_ROOT / "docs" / "캐릭터" / "캐릭터색상코드.png"
+
+# **시트를 통째로 넣지 않는다. 정면 1면만 잘라 쓴다.** 문구로는 안 막히고
+# 레퍼런스에서 없애야 통한다 — 2026-09-07(캐릭터 생성)과 2026-09-08(기본 삽화)에
+# 두 번 실측했다.
+#
+# 1. **글자가 따라 그려진다.** 하단 스와치 라벨(`FUR MARKINGS VEST LEATHER…`)과
+#    상단 `SIDE` 가 그림 안에 그대로 박힌다. 프롬프트의 `no text, no watermark` 가
+#    **안 막는다** — 기본 삽화 후보 10장 중 1장에서 실제로 났다
+# 2. **턴어라운드 구도를 복제한다.** 3면이 보이니 장면 대신 **캐릭터 셋이 나란히 선
+#    시트**를 그린다. 10장 중 1장에서 났다. 꼬리가 둘이 되는 것도 같은 원인이다
+#
+# **둘 다 폴백이 못 막는다** — 생성은 성공했고 바이트도 왔다. **글자가 박힌 그림이
+# 그대로 아이 책에 인쇄된다.** 「플레이 중단 없음」이 오히려 망가진 그림을 통과시킨다.
+#
+# 이 크롭은 `scripts/gen_character.py` 가 먼저 알아낸 것인데 **그 쪽은 스크립트라
+# 제품을 짜는 사람이 열 이유가 없었다.** 그래서 이유를 여기 옮겨 적는다 —
+# 가리키면 안 읽힌다.
+_정면 = (0.0, 0.10, 0.40, 0.79)  # (좌, 상, 우, 하) 비율
 
 STYLE = (
     "2D cel-shaded webtoon illustration, bold dark outlines, flat shading, "
@@ -90,15 +109,44 @@ def 프롬프트(card_id: str, tier: Tier) -> str | None:
 
 @lru_cache
 def 레퍼런스바이트() -> bytes | None:
-    """없으면 `None` — **부르는 쪽이 생성을 접는다.**
+    """**정본에서 정면 1면만 잘라** 돌려준다. 없거나 못 자르면 `None`.
 
-    가이드 없는 삽화를 대신 만들지 않는다. 위 모듈 주석의 안전 사유다.
+    `None` 이면 **부르는 쪽이 생성을 접는다** — 가이드 없는 삽화를 대신 만들지
+    않는다 (위 모듈 주석의 안전 사유). **자르지 못한 시트를 대신 쓰지도 않는다** —
+    그러면 위 `_정면` 주석의 둘이 그대로 돌아온다.
+
+    **정본을 런타임에 읽고 여기서 자른다.** 잘린 사본을 저장소에 두면 대표 검수로
+    정본이 바뀔 때 갈라지고, **갈라진 쪽이 실제로 아이에게 나가는 그림을 정한다** —
+    장면 카드를 문서에서 뿌리는 것과 같은 이유다.
     """
     try:
-        return 레퍼런스.read_bytes()
+        원본 = 레퍼런스.read_bytes()
     except OSError:
         logger.error("가이드 레퍼런스 이미지를 읽지 못했다: %s", 레퍼런스.name)
         return None
+
+    try:
+        return _정면만(원본)
+    except Exception as exc:
+        logger.error(
+            "가이드 레퍼런스를 자르지 못했다",
+            extra={"exc_type": type(exc).__name__},
+        )
+        return None
+
+
+def _정면만(원본: bytes) -> bytes:
+    """턴어라운드 시트에서 정면 1면만. **정면에도 학사모·고글·스카프·조끼·크로스백·
+    나침반이 다 보이므로 잃는 것이 없다.**"""
+    from PIL import Image
+
+    with Image.open(io.BytesIO(원본)) as 그림:
+        너비, 높이 = 그림.size
+        좌, 상, 우, 하 = _정면
+        잘린 = 그림.crop((int(너비 * 좌), int(높이 * 상), int(너비 * 우), int(높이 * 하)))
+        통 = io.BytesIO()
+        잘린.save(통, format="PNG")
+    return 통.getvalue()
 
 
 async def 내보내도되나(프롬프트문: str) -> 검사결과:

@@ -264,3 +264,28 @@ async def test_아이_쿠키가_있으면_자기_것만_본다(
 
     assert client.cookies.get(CHILD_COOKIE)  # 아이 쿠키가 앉아 있다
     assert client.get(f"/api/v1/artworks/{삽화.id}/image").status_code == 404
+
+
+async def test_기본_에셋이_실물로_나간다(
+    client: TestClient, 자녀행: Child, monkeypatch: pytest.MonkeyPatch
+):
+    """**갈아끼우지 않고 저장소에 커밋된 파일을 그대로 태운다.**
+
+    앞의 폴백 테스트들은 `기본에셋바이트` 를 갈아끼우므로 **파일이 없어도 초록**이다.
+    파일이 빠지면 아동 3명이 **그림 자리가 빈 화면**을 보는데, 그걸 잡는 것은
+    이 테스트 하나뿐이다.
+    """
+
+    async def _못읽음(오브젝트키: str) -> None:
+        return None
+
+    monkeypatch.setattr(artwork_store, "읽기", _못읽음)
+    삽화 = await _삽화를_넣는다(자녀행.id, r2_key=None)
+
+    response = client.get(f"/api/v1/artworks/{삽화.id}/image")
+
+    assert response.status_code == 200
+    assert len(response.content) > 1000
+    # **mime 을 손으로 적지 않는다** — 확장자에서 되돌린다. 틀린 mime 은 브라우저가
+    # 다운로드로 처리해 그림이 조용히 안 뜬다.
+    assert response.headers["content-type"] == "image/webp"
