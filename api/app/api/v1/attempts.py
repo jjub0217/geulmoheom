@@ -263,7 +263,9 @@ async def create_attempt(
     #
     # **이벤트보다 먼저 저장한다.** `남기기()` 는 실패를 삼키는데(측정이 아이 요청을
     # 죽이면 안 된다), 저장이 그 뒤에 있으면 **삼킨 실패 다음에 아이 문장이 날아간다.**
-    시도 = await _이력남기기(session, 아이, payload, text=text, 평가=평가, 재시도=재시도)
+    시도 = await _이력남기기(
+        session, 아이, payload, text=text, 평가=평가, 재시도=재시도, 하이라이트=하이라이트
+    )
 
     # **행만 만들고 응답한다** (B-3 ①). 굽는 데 평균 6.2초가 드는데
     # (`benchmarks/W1-image-bench.md`) 그동안 아이를 세워 두지 않는다 — 프론트가
@@ -356,6 +358,7 @@ async def _이력남기기(
     text: str,
     평가: 평가결과,
     재시도: UUID | None,
+    하이라이트: list[Highlight],
 ) -> CardAttempt:
     """`card_attempts` 행 하나. **아이 원문이 들어가는 유일한 자리다** (PRD 1.1b).
 
@@ -380,6 +383,9 @@ async def _이력남기기(
         grade=평가.grade,
         tier=평가.tier,
         signals=평가.signals,
+        # **화면에 실제로 덧칠된 것을 그대로 남긴다.** `signals` 에서 다시 만들면
+        # 줄어들고(원형 vs 활용형), 첫 하이라이트에서 나오는 **가이드 대사까지 바뀐다.**
+        highlights=[h.model_dump() for h in 하이라이트],
         scaffold_count=await 되묻은횟수(str(아이.id), payload.card_id),
         char_len=len(text),
         text=text,
@@ -446,12 +452,15 @@ async def get_attempt(
     if 시도 is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    # **`descriptors` 는 저장하지 않는다** (`Stage0.md` 10절 열 목록). 그래서 여기
-    # 하이라이트는 `signals` 만으로 다시 만든다 — **처음 화면보다 적게 나올 수 있다.**
-    # `signals` 는 말을 원형으로 주는데(「캄캄한」) 문장에는 활용형이 있어(「캄캄했지만」)
-    # 원문 대조에서 걸러지기 때문이다. **덧칠이 사라져도 화면은 죽지 않는다** —
-    # 하이라이트는 보상이지 필수 정보가 아니다 (`Stage0.md` 4절).
-    하이라이트 = highlights(평가결과(grade=시도.grade, signals=시도.signals), 시도.text)
+    # **저장한 것을 그대로 돌려준다** (`Stage0.md` 10절, 2026-09-08). 다시 만들면
+    # 줄어든다 — `signals` 는 말을 원형으로 주는데(「캄캄한」) 문장에는 활용형이
+    # 있어(「캄캄했지만」) 원문 대조에서 걸러지고, **첫 하이라이트에서 나오는 가이드
+    # 대사까지 바뀐다.**
+    #
+    # **줄어드는 것이 문제다.** 프리테스트 관찰 신호 7번이 「자기 문장이 하이라이트된
+    # 것을 알아보는가」이고, 아이가 새로고침하면 그 관찰이 오염된다 — **원인이 제품인지
+    # 복구 결함인지 우리가 못 가른다.**
+    하이라이트 = [Highlight.model_validate(h) for h in 시도.highlights]
     티어: Tier = 시도.tier or "basic"
 
     return AttemptResult(

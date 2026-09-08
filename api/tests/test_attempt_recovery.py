@@ -23,7 +23,10 @@ from app.evaluator import 평가결과
 from app.models import Child, Parent
 from app.moderation import 검사결과
 
-문장 = "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
+# **활용형이 들어 있다.** `signals` 는 「캄캄한」을 원형으로 주는데 문장에는
+# 「캄캄했지만」이 있어, **다시 만들면 이 하이라이트가 사라진다.** 저장하지 않으면
+# 새로고침 한 번에 아이의 덧칠이 둘에서 하나로 준다 — 그 자리를 여기서 잡는다.
+문장 = "캄캄했지만 살금살금 걸어 들어갔다"
 
 
 @pytest.fixture(autouse=True)
@@ -31,8 +34,8 @@ def 판정_고정(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _판정(text: str, **_) -> 평가결과:
         return 평가결과(
             grade="G3",
-            signals=["adj:은빛", "adv:살금살금"],
-            descriptors=["은빛", "살금살금"],
+            signals=["adj:캄캄한", "adv:살금살금"],
+            descriptors=["캄캄했지만", "살금살금"],
         )
 
     async def _통과(text: str) -> 검사결과:
@@ -157,3 +160,21 @@ def test_UUID_가_아니면_404(client: TestClient):
     response = client.get("/api/v1/attempts/a1")
 
     assert response.status_code == 404
+
+
+def test_하이라이트가_처음과_같다(client: TestClient):
+    """**저장한 것을 그대로 돌려준다** (2026-09-08, `Stage0.md` 10절).
+
+    다시 만들면 줄어든다 — `signals` 는 말을 원형으로 주는데(「캄캄한」) 문장에는
+    활용형이 있어(「캄캄했지만」) 원문 대조에서 걸러진다.
+
+    **줄어드는 것이 문제다.** 프리테스트 관찰 신호 7번이 **「자기 문장이 하이라이트된
+    것을 알아보는가」**인데, 아이가 새로고침하면 그 관찰이 오염되고 **원인이 제품인지
+    복구 결함인지 우리가 못 가른다.** 아이 원문은 문서로 안 옮기므로 되짚을 수도 없다.
+    """
+    처음 = _풀기(client)
+    assert len(처음["highlights"]) == 2, "이 테스트가 서려면 처음에 둘이 있어야 한다"
+
+    다시 = client.get(f"/api/v1/attempts/{처음['attempt_id']}").json()
+
+    assert 다시["highlights"] == 처음["highlights"]

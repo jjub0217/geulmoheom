@@ -145,6 +145,16 @@ class CardAttempt(Base):
     # Evaluator 가 주는 `["adj:은빛", ...]` 그대로다 (`app/evaluator.py`). **`dict` 가
     # 아니다** — JSONB 는 어느 쪽도 받지만, 선언이 틀려 있으면 읽는 쪽이 `.get()` 을 쓴다
     signals: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    highlights: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        default=list,
+        server_default="[]",
+        comment=(
+            "화면에 실제로 덧칠된 묘사어 (2026-09-08, Stage0.md 10절). "
+            "signals 에서 다시 만들면 줄어든다 — 원형(「캄캄한」)과 활용형(「캄캄했지만」)이 "
+            "달라 원문 대조에서 걸러진다. 프리테스트 관찰 신호 7번이 이 값을 본다"
+        ),
+    )
     scaffold_count: Mapped[int] = mapped_column(Integer, default=0)
     char_len: Mapped[int] = mapped_column(
         Integer,
