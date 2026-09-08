@@ -143,11 +143,36 @@ async def test_시도가_turn_input_과_eval_result_를_남긴다(client, 자녀
     assert 남은것["turn_input"]["grade"] == "G2"
 
 
-async def test_재시도는_card_retry_로_남는다(client, 자녀행):
-    """H2 재시도율(합격선 20%)의 유일한 신호다 — **보상이 동기로 작동하는지**를 본다."""
+async def test_재시도는_card_retry_로_남는다(client, 자녀행, monkeypatch):
+    """H2 재시도율(합격선 20%)의 유일한 신호다 — **보상이 동기로 작동하는지**를 본다.
+
+    **`retry_of` 는 실제 시도를 가리켜야 한다** (2026-09-08, 소모 이력). 그래서 먼저
+    한 번 풀고 그 `attempt_id` 로 다시 푼다 — 가짜 id 는 이제 422 다.
+
+    판정을 갈아끼우는 이유는 **여기서 보는 것이 이벤트이지 판정이 아니기 때문**이다.
+    안 끼우면 이 테스트가 Gemini 를 두 번 부른다.
+    """
+    from app.api.v1 import attempts
+    from app.evaluator import 평가결과
+    from app.moderation import 검사결과
+
+    async def _판정(text: str, **_) -> 평가결과:
+        return 평가결과(grade="G2", signals=["adj:은빛"])
+
+    async def _통과(text: str) -> 검사결과:
+        return 검사결과(blocked=False)
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    monkeypatch.setattr(attempts, "검사하기", _통과)
+
+    첫번째 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": 아이문장})
     client.post(
         "/api/v1/attempts",
-        json={"card_id": "c01", "text": 아이문장, "retry_of": "att_1"},
+        json={
+            "card_id": "c01",
+            "text": 아이문장,
+            "retry_of": 첫번째.json()["attempt_id"],
+        },
     )
 
     (재시도,) = [행 for 행 in await _행들(자녀행.id) if 행.event == "card_retry"]

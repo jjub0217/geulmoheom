@@ -5,10 +5,12 @@
 
 **헤더가 없으면 실제 Evaluator 로 간다** (W2 2번). 아직 목인 것은 아래 셋이다.
 
-- `today` 카운트·`can_retry` — 일일 카운트는 DB 가 들어와야 센다
+- `today` 카운트·`can_retry` — 일일 카운트는 A0-5 가 센다
 - `artwork` — 이미지 큐(B-3)가 아직 없다. `pending` 고정
-- `today` 카운트가 목이라 **차단이 카드를 안 쓰는 것이 응답으로는 안 보인다** — DB 가
-  들어오면 드러난다
+
+**소모 이력은 실제로 저장된다** (A0-1 잔여). `outcome=result` 일 때만 `card_attempts`
+행이 하나 생기고, **되묻기·차단은 카드를 안 쓰므로 행을 만들지 않는다**
+(`Stage0.md` 4절 (b)·(c)). 저장되는 문장은 **가려진 뒤 문장**이다.
 
 **`outcome=blocked` 는 실제 검사에서 나온다** (E-1 · `adr/0009`). 입력 검사·평가·실명
 NER **셋을 동시에 던지고**, 검사가 차단하면 평가 결과를 버린다.
@@ -23,17 +25,26 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1 import _fixtures as fx
-from app.api.v1.deps import MockOutcome, mock_daily_cap_reached, mock_outcome, require_child
+from app.api.v1.deps import (
+    MockOutcome,
+    Session,
+    mock_daily_cap_reached,
+    mock_outcome,
+    require_child,
+)
 from app.errors import AppError, ErrorCode
-from app.evaluator import evaluate, highlights, 평가기록
+from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
 from app.middleware import current_request_id
+from app.models import Card, CardAttempt
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
 from app.pii import 가리기, 실명까지가리기
-from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 질문
+from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 되묻은횟수, 질문
 from app.schemas.stage0 import (
     AttemptBlocked,
     AttemptRequest,
@@ -147,6 +158,7 @@ def _guide(tier: Tier, 하이라이트: list[Highlight]) -> Guide:
 async def create_attempt(
     payload: AttemptRequest,
     아이: Child,
+    session: Session,
     outcome: Annotated[MockOutcome | None, Depends(mock_outcome)],
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> AttemptResponse:
@@ -158,6 +170,11 @@ async def create_attempt(
 
     if outcome is not None:  # 목 강제 (W3 화면 작업)
         return {"result": _result, "scaffold": _scaffold, "blocked": _blocked}[outcome]()
+
+    # **저장할 수 있는 요청인지 먼저 본다.** 뒤로 미루면 평가·검사 호출이 이미 나간
+    # 뒤에 FK 로 터져 500 이 되고, **돈은 나갔는데 아이는 오류를 본다.**
+    await _쓸수있는카드인가(session, payload.card_id)
+    재시도 = await _재시도확인(session, 아이, payload.retry_of)
 
     # **3. PII 2차 — 가린 뒤 진행한다. 막지 않는다** (`Stage0.md` 9절 3번,
     # 2026-09-08 대표 판정 · 미결 11-5). 막으면 아이에게 이유를 말해줄 수 없다 —
@@ -237,12 +254,19 @@ async def create_attempt(
     if payload.retry_of is not None:
         # H2 재시도율(합격선 20%) — **보상이 동기로 작동한다는 직접 신호**다.
         남길것.append(이벤트("card_retry", {"card_id": payload.card_id, "prompted": False}))
+    # **여기서 카드가 소모된다** (`Stage0.md` 9절 10번). 되묻기·차단은 위에서 돌아갔으므로
+    # 이 줄에 닿는 것은 **카드를 실제로 쓴 입력**뿐이다.
+    #
+    # **이벤트보다 먼저 저장한다.** `남기기()` 는 실패를 삼키는데(측정이 아이 요청을
+    # 죽이면 안 된다), 저장이 그 뒤에 있으면 **삼킨 실패 다음에 아이 문장이 날아간다.**
+    시도 = await _이력남기기(session, 아이, payload, text=text, 평가=평가, 재시도=재시도)
+
     await 남기기(아이.id, *남길것)
 
     # **등급은 여기서 끝난다.** 응답에 담기는 것은 티어뿐이다 (`Stage0.md` 4절).
     return AttemptResult(
         outcome="result",
-        attempt_id=fx.ATTEMPT_ID,
+        attempt_id=str(시도.id),
         tier=평가.tier,
         highlights=하이라이트,
         guide=_guide(평가.tier, 하이라이트),
@@ -255,6 +279,84 @@ async def create_attempt(
         today=TodayState(cards_done=3, cap=5, locked=False),
         can_retry=True,
     )
+
+
+async def _쓸수있는카드인가(session: AsyncSession, card_id: str) -> None:
+    """모르는 카드면 404. **FK 에 맡기지 않는다.**
+
+    맡기면 저장 시점에 터져 500 이 되는데, 그때는 평가·검사 호출이 이미 나간 뒤다 —
+    **돈은 나갔고 아이는 「잠깐 문제가 생겼어요」를 본다.**
+
+    **튜토리얼도 여기서는 통과시킨다.** 노출 경로가 열리면(Stage 1 A-6) 그 카드에도
+    입력이 오고, 막는 자리는 `/cards/{id}` 조회 쪽이다.
+    """
+    if await session.scalar(select(Card.id).where(Card.id == card_id)) is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+
+async def _재시도확인(session: AsyncSession, 아이: ChildRow, retry_of: str | None) -> UUID | None:
+    """`retry_of` 가 **이 아이의** 시도인지 본다. 아니면 422.
+
+    **404 로 가르지 않는다** — 남의 시도 id 를 넣었을 때 404 와 422 가 갈리면
+    「그 시도는 존재한다」가 샌다. `{child_id}` 규칙과 같은 자리다 (`Stage0.md` 5절).
+
+    **모양이 UUID 가 아닌 것도 여기서 걸러진다.** 계약은 `retry_of` 를 문자열로 두지만
+    「ID 는 전부 UUID」가 `공통규약.md` 규약이다. 안 거르면 SQL 층까지 내려가 500 이 된다 —
+    **잘못된 요청이 서버 오류로 보이면 프론트가 자기 잘못을 못 찾는다.**
+    """
+    if retry_of is None:
+        return None
+
+    try:
+        아이디 = UUID(retry_of)
+    except ValueError as 오류:
+        raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": ["retry_of"]}) from 오류
+
+    문 = select(CardAttempt.id).where(CardAttempt.id == 아이디, CardAttempt.child_id == 아이.id)
+    if await session.scalar(문) is None:
+        raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": ["retry_of"]})
+    return 아이디
+
+
+async def _이력남기기(
+    session: AsyncSession,
+    아이: ChildRow,
+    payload: AttemptRequest,
+    *,
+    text: str,
+    평가: 평가결과,
+    재시도: UUID | None,
+) -> CardAttempt:
+    """`card_attempts` 행 하나. **아이 원문이 들어가는 유일한 자리다** (PRD 1.1b).
+
+    **`text` 는 가려진 뒤 문장이다.** `payload.text` 를 여기서 다시 꺼내면 그 순간
+    원문 그대로가 책 콘텐츠로 굳는다 — 위 마스킹 단계가 통째로 무의미해진다.
+
+    `attempt` 는 **이 아이가 이 카드에 넣은 몇 번째 입력**인가다. 되묻기는 세지 않는다 —
+    행을 만들지 않으므로 자연히 빠진다.
+    """
+    회차 = await session.scalar(
+        select(func.count())
+        .select_from(CardAttempt)
+        .where(CardAttempt.child_id == 아이.id, CardAttempt.card_id == payload.card_id)
+    )
+
+    시도 = CardAttempt(
+        child_id=아이.id,
+        card_id=payload.card_id,
+        attempt=(회차 or 0) + 1,
+        retry_of=재시도,
+        prompted=payload.prompted,
+        grade=평가.grade,
+        tier=평가.tier,
+        signals=평가.signals,
+        scaffold_count=await 되묻은횟수(str(아이.id), payload.card_id),
+        char_len=len(text),
+        text=text,
+    )
+    session.add(시도)
+    await session.commit()
+    return 시도
 
 
 async def _되묻기(자녀id: str, card_id: str) -> AttemptScaffold | None:

@@ -570,11 +570,22 @@ def test_validation_error_422(client: TestClient):
 
 
 def test_재시도는_상한에_걸리지_않는다(client: TestClient):
-    """재시도(`retry_of`)는 일일 카운트를 쓰지 않는다."""
+    """재시도(`retry_of`)는 일일 카운트를 쓰지 않는다.
+
+    **`retry_of` 에 아무 문자열이나 넣지 않는다** (2026-09-08). 소모 이력이 들어오면서
+    이 값이 **실제 시도를 가리켜야** 한다 — 가짜 id 는 이제 422 다. 인증이 진짜가 됐을 때
+    `c1` 을 걷어낸 것과 같은 자리다.
+    """
+    첫번째 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": "처음 써본다"})
+
     response = client.post(
         "/api/v1/attempts",
         headers={"X-Mock-Error": "DAILY_CAP_REACHED"},
-        json={"card_id": "c01", "text": "다시 써본다", "retry_of": "a1"},
+        json={
+            "card_id": "c01",
+            "text": "다시 써본다",
+            "retry_of": 첫번째.json()["attempt_id"],
+        },
     )
 
     assert response.status_code == 200

@@ -165,6 +165,30 @@ async def 되묻기횟수(자녀id: str, card_id: str, *, client: Any = None) ->
     return 횟수
 
 
+async def 되묻은횟수(자녀id: str, card_id: str, *, client: Any = None) -> int:
+    """지금까지 되물은 횟수를 **읽기만 한다.** 못 읽으면 0.
+
+    `되묻기횟수()` 를 이 자리에 쓸 수 없다 — 그건 INCR 이라 **부르는 순간 값이 늘어난다.**
+    소모 이력에 남기는 값이라 세는 쪽과 읽는 쪽이 갈려 있어야 한다.
+
+    **상한을 잘라낸다.** 3회째 G0 는 되묻지 않고 G1 취급으로 지나가므로(위 `MAX_SCAFFOLD`)
+    카운터는 3 이 되지만 **아이가 실제로 되물음을 받은 것은 2번**이다. 이력에는 본 것을
+    남긴다.
+
+    **못 읽으면 0 이다.** Redis 가 죽었다고 아이 문장을 저장 못 하는 쪽이 훨씬 나쁘다.
+    """
+    try:
+        redis = client or db.redis_client
+        값 = await redis.get(f"scaffold:{_아이키(자녀id)}:{card_id}")
+    except Exception as exc:
+        logger.warning(
+            "되묻은 횟수를 읽지 못했다",
+            extra={"request_id": current_request_id(), "exc_type": type(exc).__name__},
+        )
+        return 0
+    return min(int(값 or 0), MAX_SCAFFOLD)
+
+
 async def 잔여지우기(자녀id: str, *, client: Any = None) -> int:
     """자녀 삭제 때 되묻기 카운터를 함께 지운다 (E-4 · PRD E-4 「즉시 파기」).
 

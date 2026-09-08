@@ -142,7 +142,9 @@ class CardAttempt(Base):
     prompted: Mapped[bool] = mapped_column(Boolean, default=False)
     grade: Mapped[str] = mapped_column(String(2))
     tier: Mapped[str | None] = mapped_column(String(16))
-    signals: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Evaluator 가 주는 `["adj:은빛", ...]` 그대로다 (`app/evaluator.py`). **`dict` 가
+    # 아니다** — JSONB 는 어느 쪽도 받지만, 선언이 틀려 있으면 읽는 쪽이 `.get()` 을 쓴다
+    signals: Mapped[list[str]] = mapped_column(JSONB, default=list)
     scaffold_count: Mapped[int] = mapped_column(Integer, default=0)
     char_len: Mapped[int] = mapped_column(
         Integer,
