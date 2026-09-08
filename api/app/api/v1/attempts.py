@@ -42,6 +42,7 @@ from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
+from app.guide_lines import 결과대사, 종료대사, 차단대사, 하나
 from app.middleware import current_request_id
 from app.models import Artwork, Card, CardAttempt
 from app.models import Child as ChildRow
@@ -101,9 +102,7 @@ def _scaffold(today: TodayState | None = None) -> AttemptScaffold:
     )
 
 
-# 차단 대사 둘. **일반 차단 문구는 아직 확정본이 아니다** — 결과 연출(A0-3)과 같이
-# W4 에서 만든다 (`docs/문구.md` 1.3). 지금 것은 `안전_어휘_기준.md` 1장이 적어 둔 문장이다.
-_차단대사 = "나침반이 그 말은 못 알아듣네. 다르게 말해줄래?"
+# **차단 대사는 `문구.md` 1.11 에서 읽는다** (2026-09-08 확정). 코드에 복사하지 않는다.
 
 # **자해·자살 신호만 문구가 확정돼 있다** (`docs/문구.md` 1.2, 2026-09-07 대표 판정).
 # 화면을 봐도 달라질 것이 없어 나머지 대사보다 먼저 닫혔다. **바꾸는 것은 「대표 몫」이다.**
@@ -113,16 +112,18 @@ _차단대사 = "나침반이 그 말은 못 알아듣네. 다르게 말해줄�
 # 「가상 페르소나 의존」(페르소나 4.4)이 정면으로 발생한다.
 _자해대사 = "지금 마음이 많이 힘들면, 옆에 있는 어른한테 꼭 말해줘."
 
-# 일일 상한 소진. **`문구.md` 1.3 의 「종료 인사」가 아직 없다** — 붙을 자리(A0-5)가
-# 없어서 못 썼고, 이제 그 자리가 생겼다. **여기 것은 잠정이고 확정본이 오면 갈아끼운다.**
-# `Stage0.md` 3절이 예시로 적어 둔 문장을 그대로 쓴다.
-_소진대사 = {"expression": "session_end", "line": "오늘 모험은 여기까지! 내일 또 보자"}
-
 
 def _소진() -> AppError:
     """**`guide.line` 을 같이 싣는다.** 화면은 `error.message`(존댓말) 대신 이것만
-    보여준다 (`문구.md` 0장) — 아이가 빈 화면을 보지 않게."""
-    return AppError(ErrorCode.DAILY_CAP_REACHED, detail={"guide": _소진대사})
+    보여준다 (`문구.md` 0장) — 아이가 빈 화면을 보지 않게.
+
+    문장은 `문구.md` 1.10 에서 읽는다. **다섯 다 「내일」이 들어간다** — 하드 피니시는
+    가드레일이지 차단이 아니고, 「그만해」로 읽히면 그 구분이 무너진다.
+    """
+    return AppError(
+        ErrorCode.DAILY_CAP_REACHED,
+        detail={"guide": {"expression": "session_end", "line": 하나(종료대사())}},
+    )
 
 
 def _blocked(*, 자해: bool = False, today: TodayState | None = None) -> AttemptBlocked:
@@ -135,32 +136,32 @@ def _blocked(*, 자해: bool = False, today: TodayState | None = None) -> Attemp
     return AttemptBlocked(
         outcome="blocked",
         reason="moderation",
-        guide=Guide(expression="compass_dim", line=_자해대사 if 자해 else _차단대사),
+        guide=Guide(expression="compass_dim", line=_자해대사 if 자해 else 하나(차단대사())),
         today=today or TodayState(cards_done=2, cap=5, locked=False),
     )
 
 
-# 결과 연출 대사 (PRD 4.0 — Stage 0 은 LLM 을 Evaluator 에만 쓰고 대사는 템플릿이다).
-# **부정어 금지** (PRD 4.4). 아이가 쓴 말은 조사 문제를 피해 「~에」로 받는다.
-_결과대사: dict[Tier, tuple[str, str]] = {
-    "legendary": ("compass_bright", "'{말}'에 나침반이 확 돌았어!"),
-    "rare": ("compass_bright", "'{말}'에 나침반이 움직였어!"),
-    "basic": ("default", "나침반이 움직였어. 다음 장면으로 가볼까?"),
-}
-_묘사어없을때: dict[Tier, str] = {
-    "legendary": "나침반이 환하게 돌았어!",
-    "rare": "나침반이 움직였어!",
-    "basic": "나침반이 움직였어. 다음 장면으로 가볼까?",
+# 표정만 코드에 있다. **문장은 `문구.md` 1.6 이 SSOT** 이고 그 표에는 표정이 없다 —
+# 가이드 에셋 파일명과 짝이라(`docs/캐릭터/표정/`) 문구가 정할 값이 아니다.
+_결과표정: dict[Tier, str] = {
+    "legendary": "compass_bright",
+    "rare": "compass_bright",
+    "basic": "default",
 }
 
 
-def _guide(tier: Tier, 하이라이트: list[Highlight]) -> Guide:
-    표정, 틀 = _결과대사[tier]
-    말 = 하이라이트[0].text if 하이라이트 else None
-    return Guide(
-        expression=표정,
-        line=틀.format(말=말) if 말 else _묘사어없을때[tier],
-    )
+def _guide(tier: Tier, 시도id: UUID) -> Guide:
+    """결과 대사 (`문구.md` 1.6). 티어별 다섯 중 하나를 **시도 id 로 고정해** 고른다.
+
+    **새로고침해도 같은 말이 나와야 한다.** 무작위로 두면 아이가 결과 화면을 다시
+    열었을 때 **나침반이 다른 말을 한다** — 하이라이트를 저장한 것과 같은 자리이고,
+    여기서는 **열을 늘리지 않고 되풀이할 수 있어** 씨앗으로 고정한다.
+
+    **하이라이트를 문장에 끼우지 않는다.** 확정본 열다섯에는 `{말}` 자리가 없다 —
+    **아이가 쓴 말을 되읽어 주는 대신 일어난 일을 말한다**(「따라 그렸어」·「길이
+    생겼어」). 기본 등급에도 「부족하다」가 없게 만든 구조가 그것이다.
+    """
+    return Guide(expression=_결과표정[tier], line=하나(결과대사()[tier], 시도id))
 
 
 @router.post("")
@@ -295,7 +296,7 @@ async def create_attempt(
         attempt_id=str(시도.id),
         tier=평가.tier,
         highlights=하이라이트,
-        guide=_guide(평가.tier, 하이라이트),
+        guide=_guide(평가.tier, 시도.id),
         artwork={
             "artwork_id": str(삽화.id),
             "status": "pending",
@@ -486,7 +487,7 @@ async def get_attempt(
         attempt_id=str(시도.id),
         tier=티어,
         highlights=하이라이트,
-        guide=_guide(티어, 하이라이트),
+        guide=_guide(티어, 시도.id),
         artwork=await _삽화참조(session, 시도.id, request),
         today=TodayState(cards_done=3, cap=5, locked=False),
         can_retry=True,
