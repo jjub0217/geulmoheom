@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
-import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
+import { ApiError, NetworkError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { 학부모오류문구 } from "@/app/parents/signup/copy";
 
 import {
@@ -14,6 +14,7 @@ import {
   별명이걸렸다,
   재발급,
   접속코드,
+  지우기,
   하루상한,
 } from "./children-copy";
 
@@ -35,9 +36,10 @@ type AccessCode = components["schemas"]["AccessCode"];
  * **가입 화면의 「가입됨」 안에 붙는다. 라우트를 새로 만들지 않았다** —
  * 새 화면으로 빼면 **거기로 가는 링크 글자**가 필요한데 `문구.md` 에 그 자리가 없다.
  *
- * **자녀 삭제는 여기 없다.** 서버는 `DELETE /parents/children/{id}` 로 즉시 파기까지 돌지만
- * **W4 완료 조건이 ①만들기 ②접속 코드 ③목록 셋뿐**이라 **계획이 안 시킨 것**이다
- * (`문구.md` 4장에 W5 로 기록됐다). **범위를 진척에서 늘리지 않는다.**
+ * **자녀 삭제가 W5 에서 붙었다** (`web/tasks/W5.md` 2번 · COPPA). 서버는 W4 때부터
+ * `DELETE /parents/children/{id}` 로 즉시 파기까지 돌고 있었고 **화면만 없었다** —
+ * 보호자가 지울 경로가 화면에 없으면 **파일럿 중 삭제 요구에 손으로 DB 를 만지게 된다.**
+ * 문구는 `문구.md` **3.9** 다.
  */
 
 /** 방금 발급된 평문 코드. **서버는 해시만 저장하므로 이 값은 다시 못 받는다.** */
@@ -52,6 +54,10 @@ export function ChildrenPanel() {
   const [ageBand, setAgeBand] = useState<CreateChildRequest["age_band"]>(11);
   const [보내는중, set보내는중] = useState(false);
   const [만들기실패, set만들기실패] = useState<string | null>(null);
+
+  /** 되묻는 창을 띄울 대상. **`null` 이면 창이 아예 DOM 에 없다** — 아래 `DeleteChildDialog` 참고. */
+  const [지울아이, set지울아이] = useState<ChildSummary | null>(null);
+  const [지웠다, set지웠다] = useState<string | null>(null);
 
   const [코드, set코드] = useState<발급된코드 | null>(null);
   const [재발급중, set재발급중] = useState<string | null>(null);
@@ -149,6 +155,18 @@ export function ChildrenPanel() {
     }
   };
 
+  /**
+   * 지워진 뒤. **여기서 서버를 부르지 않는다** — 부른 것은 창 안이고 여기는 뒷정리다.
+   */
+  const 지워졌다 = async (지운아이: ChildSummary) => {
+    set지웠다(지우기.지웠다(지운아이.nickname));
+    // **방금 발급된 코드가 그 아이 것이면 같이 지운다.** 아래 「목록에 안 붙은 코드」 자리는
+    // **목록에 없는 것**을 조건으로 뜨는데, 지워진 아이가 정확히 그 조건에 걸린다 —
+    // 놔두면 **이미 파기된 아이의 접속 코드를 화면이 계속 띄운다.**
+    set코드((지금) => (지금?.childId === 지운아이.child_id ? null : 지금));
+    await 목록불러오기();
+  };
+
   return (
     <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
@@ -182,7 +200,8 @@ export function ChildrenPanel() {
 
                 {/* **경고가 버튼 옆이다. 누른 뒤가 아니다** (`문구.md` 3.4) —
                     재발급이 `token_version` 을 올려 **아이가 쓰던 태블릿이 끊긴다.**
-                    이 화면이 만드는 **유일한 되돌릴 수 없는 실수**다. */}
+                    **되돌릴 수 없는 실수가 이제 둘이고 장치가 다르다**(3.9) — 이건 버튼 옆
+                    한 줄이고 아래 지우기는 창이다. **끊기는 것이 기기냐 책이냐**로 갈렸다. */}
                 <div className="flex flex-col gap-2">
                   <p className="opacity-80">{재발급.경고}</p>
                   <button
@@ -199,12 +218,36 @@ export function ChildrenPanel() {
                 {코드 !== null && 코드.childId === 아이.child_id && (
                   <AccessCodePanel 코드={코드} />
                 )}
+
+                {/* **여기는 경고를 안 적는다. 되묻는 창이 그 몫을 한다** (`문구.md` 3.9) —
+                    위 재발급과 굵기가 갈리는 자리다. 재발급은 끊기는 것이 **기기**라
+                    버튼 옆 한 줄로 됐고, 이것은 **책이 사라져서** 창을 띄운다.
+                    **둘을 같은 굵기로 두면 무거운 쪽이 가벼워 보인다.**
+                    버튼이 맨 글자인 것은 나가기(2.3)와 같은 이유다 — 자리로 조용하게 두되
+                    **글자를 작게 만들지 않는다**(본문 16px 이상이 MUST). */}
+                <button
+                  type="button"
+                  data-지우기
+                  onClick={() => {
+                    // 지난번 「지웠어요」가 남아 있으면 지운다 — 다음 아이를 지우려는데
+                    // 앞 아이의 완료 문장이 떠 있으면 **무엇이 방금 일어난 것인지 갈린다.**
+                    set지웠다(null);
+                    set지울아이(아이);
+                  }}
+                  className="self-start underline underline-offset-4 opacity-70"
+                >
+                  {지우기.버튼}
+                </button>
               </li>
             ))}
           </ul>
         )}
 
         {재발급실패 !== null && <p data-재발급실패>{재발급실패}</p>}
+
+        {/* **지운 뒤에 한 줄 말한다.** 목록에서 사라지는 것만으로는 성공과 실패가
+            구분되지 않는다 — 못 닿아서 안 지워진 것도 화면에서는 비슷하게 보인다. */}
+        {지웠다 !== null && <p data-지웠다>{지웠다}</p>}
       </div>
 
       <form
@@ -265,6 +308,17 @@ export function ChildrenPanel() {
         </button>
       </form>
 
+      {/* **창은 열릴 때 새로 만들어진다.** 상태를 바꾸고 곧바로 `showModal()` 을 부르면
+          **한 프레임 동안 앞 아이의 별명이 제목에 뜬다** — 되돌릴 수 없는 것에서
+          대상이 잠깐이라도 다른 아이로 보이면 안 된다. 마운트 뒤에 여는 이유다. */}
+      {지울아이 !== null && (
+        <DeleteChildDialog
+          아이={지울아이}
+          닫기={() => set지울아이(null)}
+          지워졌다={지워졌다}
+        />
+      )}
+
       {/* 아직 목록에 안 붙은 코드(방금 만든 아이). 목록 갱신이 늦어도 **코드를 잃지 않는다.** */}
       {코드 !== null &&
         !(children ?? []).some((아이) => 아이.child_id === 코드.childId) && (
@@ -289,5 +343,113 @@ function AccessCodePanel({ 코드 }: { 코드: 발급된코드 }) {
       {/* 아이 화면(3.2)이 막아주지만 **먼저 알면 아이가 그 벽을 안 만난다.** */}
       <p>{접속코드.홈화면앱}</p>
     </div>
+  );
+}
+
+/**
+ * 자녀 지우기 되묻는 창 (`문구.md` **3.9** · COPPA).
+ *
+ * **이름이 영문인 것은 훅 이름과 같은 제약이다** (`web/CLAUDE.md` 「이 패키지의 관례」) —
+ * `react-hooks/rules-of-hooks` 가 **컴포넌트 이름을 대문자로 검사하는데 한글에는 대문자가 없어**
+ * 한글 이름의 컴포넌트 안에서는 훅을 아예 못 쓴다. **규칙의 예외가 아니라 도구의 제약이다.**
+ *
+ * **`LeaveButton`(2.3)과 같은 네이티브 `<dialog>` 다** — 포커스 가둠·`Esc`·배경 비활성이
+ * 공짜로 따라오고, **`Esc` 로 닫히는 것이 안전한 방향**이다.
+ * **여기서는 그 규칙이 더 세다**: 나가기는 다시 들어오면 되고 **이것은 아무것도 안 돌아온다.**
+ *
+ * **열릴 때마다 새로 마운트된다.** 부모가 `지울아이 !== null` 일 때만 그리므로
+ * 지난번 실패·진행 상태가 딸려오지 않고, **제목의 별명이 항상 이번 아이 것**이다.
+ */
+function DeleteChildDialog({
+  아이,
+  닫기,
+  지워졌다,
+}: {
+  아이: ChildSummary;
+  닫기: () => void;
+  지워졌다: (아이: ChildSummary) => Promise<void>;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [지우는중, set지우는중] = useState(false);
+  const [실패, set실패] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 마운트된 뒤에 연다. **내용이 먼저 그려져 있다.**
+    dialog.current?.showModal();
+  }, []);
+
+  const 지운다 = async () => {
+    set지우는중(true);
+    set실패(null);
+    try {
+      await apiDelete(`/parents/children/${아이.child_id}`);
+    } catch (e) {
+      // **닿지 못하면 아이 데이터가 그대로 남아 있다. 지운 척하지 않는다** —
+      // 창도 안 닫는다. 닫으면 목록이 그대로인 것을 보고 **왜 안 지워졌는지 모른다.**
+      if (e instanceof ApiError) {
+        // **`message` 를 쓰지 않는다** — 아이 목소리다. `code` 로 3.8 표에서 고른다.
+        set실패(학부모오류문구(e.code));
+        return;
+      }
+      if (e instanceof NetworkError) {
+        set실패(못닿음.삭제);
+        return;
+      }
+      throw e;
+    } finally {
+      set지우는중(false);
+    }
+
+    // **뒷정리를 먼저 하고 닫는다.** 닫으면 이 컴포넌트가 사라진다.
+    await 지워졌다(아이);
+    닫기();
+  };
+
+  return (
+    <dialog
+      ref={dialog}
+      data-삭제확인
+      // `Esc` 와 「그대로 두기」가 둘 다 여기로 온다. **닫히는 방향이 안전한 쪽**이다.
+      onClose={닫기}
+      className="m-auto max-w-md rounded-2xl border-2 border-brass/40 bg-background
+        p-7 text-foreground backdrop:bg-scarf-deep/50"
+    >
+      <div className="flex flex-col gap-5">
+        {/* **별명을 제목에 넣는다** — 자녀가 여럿일 때 목록 위치로만 구분되면 잘못 누른다. */}
+        <h2 className="text-2xl font-semibold">{지우기.제목(아이.nickname)}</h2>
+
+        <div className="flex flex-col gap-2">
+          {/* **무엇이 사라지는지 세어서 말한다** — 서버가 문장·그림·책·기록을 함께 지운다. */}
+          <p>{지우기.사라진다}</p>
+          <p className="font-semibold">{지우기.되돌릴수없다}</p>
+          <p className="opacity-80">{지우기.기기도}</p>
+        </div>
+
+        {실패 !== null && <p data-삭제실패>{실패}</p>}
+
+        {/* **머무는 쪽이 DOM 에서 먼저다.** `<dialog>` 가 첫 포커스 가능 요소에 포커스를 주므로
+            **되돌릴 수 없는 쪽에 포커스가 앉지 않는다.** */}
+        <div className="flex justify-end gap-3">
+          <form method="dialog">
+            {/* `method="dialog"` 라 **서버를 부르지 않고 창만 닫는다.** */}
+            <button type="submit" className="rounded-full px-6 py-3 underline underline-offset-4">
+              {지우기.그대로둔다}
+            </button>
+          </form>
+
+          {/* **`type="button"` 이어야 한다.** 기본 `submit` 로 두면 나중에 폼 안으로 옮겨졌을 때
+              **아무 말 없이 창만 닫는다.** */}
+          <button
+            type="button"
+            data-지운다
+            disabled={지우는중}
+            onClick={() => void 지운다()}
+            className="rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
+          >
+            {지우기.지운다}
+          </button>
+        </div>
+      </div>
+    </dialog>
   );
 }

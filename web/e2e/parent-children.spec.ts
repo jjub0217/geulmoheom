@@ -9,6 +9,7 @@ import {
   못닿음,
   재발급,
   접속코드,
+  지우기,
   하루상한,
 } from "../src/components/children-copy";
 import { 학부모오류문구, 폼 } from "../src/app/parents/signup/copy";
@@ -26,6 +27,8 @@ type ChildSummary = components["schemas"]["ChildSummary"];
 const ME = "**/api/v1/parents/me";
 const CHILDREN = "**/api/v1/parents/children";
 const ACCESS_CODE = "**/api/v1/parents/children/*/access-code";
+/** **`access-code` 와 겹치지 않게 끝을 못 박는다** — `*` 하나면 그쪽까지 잡는다. */
+const 자녀하나 = (childId: string) => `**/api/v1/parents/children/${childId}`;
 
 const 아이: ChildSummary = {
   child_id: "c-1111",
@@ -110,7 +113,7 @@ test("아이를 추가하면 접속 코드가 그 자리에서 뜬다", async ({
   await expect(코드칸(page)).toContainText(접속코드.홈화면앱);
 });
 
-test("재발급 경고는 누르기 전에 보인다 — 이 화면의 유일한 되돌릴 수 없는 실수다", async ({
+test("재발급 경고는 누르기 전에 보인다 — 끊기는 것이 기기라 버튼 옆 한 줄이다", async ({
   page,
 }) => {
   let 불렀나 = false;
@@ -228,4 +231,163 @@ test("동의 시각을 기계 말로 내지 않는다", async ({ page }) => {
 
   // **초를 안 보여준다.** 화면은 사람이 확인하는 자리다.
   expect(화면).not.toMatch(/\d+초/);
+});
+
+/**
+ * 자녀 지우기 (E-4 후속 · COPPA · `문구.md` 3.9).
+ *
+ * **이 화면의 두 번째 되돌릴 수 없는 실수다.** 재발급은 기기가 끊기고 **이건 책이 사라진다** —
+ * 검사의 무게가 **「지운 척하지 않는다」·「엉뚱한 아이를 안 지운다」**에 있다.
+ */
+
+const 둘 = [아이, { ...아이, child_id: "c-2222", nickname: "달빛나비" }];
+const 확인창 = (page: Page) => page.locator("[data-삭제확인]");
+
+test("지우기는 되묻는다 — 누르는 것만으로 안 지워진다", async ({ page }) => {
+  let 불렀나 = false;
+  await page.route(자녀하나(아이.child_id), (route) => {
+    불렀나 = true;
+    return route.fulfill({ status: 204, body: "" });
+  });
+  await 관리화면(page, [아이]);
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+
+  // **누른 것만으로는 서버를 안 부른다.** 재발급(3.4)은 버튼 옆 경고로 됐지만
+  // 여기는 **책이 사라져서** 창이 그 몫을 한다.
+  expect(불렀나).toBe(false);
+  await expect(확인창(page)).toBeVisible();
+
+  // **무엇이 사라지는지 세어서 말한다** — 서버가 문장·그림·책·기록을 함께 지운다.
+  // 「아이를 지웁니다」로 끝나면 학부모는 **책도 사라진다는 것을 지운 뒤에 안다.**
+  await expect(확인창(page)).toContainText(지우기.사라진다);
+  await expect(확인창(page)).toContainText(지우기.되돌릴수없다);
+  await expect(확인창(page)).toContainText(지우기.기기도);
+});
+
+test("제목에 별명이 들어간다 — 목록 위치로만 구분되면 잘못 누른다", async ({ page }) => {
+  await 관리화면(page, 둘);
+
+  await page.locator("[data-자녀]").nth(1).locator("[data-지우기]").click();
+
+  // **둘째 아이를 눌렀으면 둘째 별명이 떠야 한다.** 되돌릴 수 없는 것에는
+  // **대상을 글자로 다시 쓴다.**
+  await expect(확인창(page)).toContainText(지우기.제목("달빛나비"));
+  await expect(확인창(page)).not.toContainText(아이.nickname);
+
+  // **받침 없는 별명에 「을」이 붙으면 안 된다** (`문구.md` 6장 — 값이 문장에 들어가는 모양).
+  expect(지우기.제목("달빛나비")).toContain("나비를");
+  expect(지우기.제목(아이.nickname)).toContain("나침반을");
+});
+
+test("첫 포커스와 Esc 가 둘 다 「그대로 두기」다", async ({ page }) => {
+  let 불렀나 = false;
+  await page.route(자녀하나(아이.child_id), (route) => {
+    불렀나 = true;
+    return route.fulfill({ status: 204, body: "" });
+  });
+  await 관리화면(page, [아이]);
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+
+  // **되돌릴 수 없는 쪽에 포커스가 앉지 않는다** — 엔터를 누르는 습관이 그대로 파기가 된다.
+  await expect(page.getByRole("button", { name: 지우기.그대로둔다 })).toBeFocused();
+
+  await page.keyboard.press("Escape");
+
+  // **닫히는 방향이 안전한 쪽이다.** 나가기(2.3)와 같은 규칙인데 여기서 더 세다 —
+  // 나가기는 다시 들어오면 되고 이것은 아무것도 안 돌아온다.
+  await expect(확인창(page)).toHaveCount(0);
+  expect(불렀나).toBe(false);
+});
+
+test("지운 뒤에 지웠다고 말한다 — 목록에서 사라지는 것으로 대신하지 않는다", async ({ page }) => {
+  let 지워진뒤 = false;
+  await page.route(자녀하나(아이.child_id), (route) => {
+    지워진뒤 = true;
+    return route.fulfill({ status: 204, body: "" });
+  });
+  // 목록은 두 번 불린다 — 처음과 지운 뒤. 지운 뒤에는 비어 있다.
+  await page.route(ME, (route) =>
+    route.fulfill({ status: 200, json: 가입됨(지워진뒤 ? [] : [아이]) }),
+  );
+  await page.goto("/parents/signup");
+  await expect(page.getByText(폼.가입됨)).toBeVisible();
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+  await page.locator("[data-지운다]").click();
+
+  // **성공과 실패가 화면에서 구분돼야 한다** — 못 닿아서 안 지워진 것도 비슷하게 보인다.
+  await expect(page.locator("[data-지웠다]")).toHaveText(지우기.지웠다(아이.nickname));
+  await expect(확인창(page)).toHaveCount(0);
+  await expect(page.locator("[data-자녀]")).toHaveCount(0);
+});
+
+test("못 닿으면 지운 척하지 않는다 — 창도 안 닫는다", async ({ page }) => {
+  await page.route(자녀하나(아이.child_id), (route) => route.abort("failed"));
+  await 관리화면(page, [아이]);
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+  await page.locator("[data-지운다]").click();
+
+  await expect(page.locator("[data-삭제실패]")).toHaveText(못닿음.삭제);
+  // **아이 데이터가 그대로 남아 있다.** 창을 닫으면 목록이 그대로인 것을 보고
+  // **왜 안 지워졌는지 모른다.**
+  await expect(확인창(page)).toBeVisible();
+  await expect(page.locator("[data-자녀]")).toHaveCount(1);
+  await expect(page.locator("[data-지웠다]")).toHaveCount(0);
+  // **「서버」가 화면에 없다** (`용어사전.md` 9장).
+  expect(await page.locator("body").innerText()).not.toContain("서버");
+});
+
+test("형식 갖춘 거절은 code 로 고른다 — 아이 목소리가 새지 않는다", async ({ page }) => {
+  await page.route(자녀하나(아이.child_id), (route) =>
+    route.fulfill({
+      status: 404,
+      json: { error: { code: "NOT_FOUND", message: "찾을 수 없어요" } },
+    }),
+  );
+  await 관리화면(page, [아이]);
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+  await page.locator("[data-지운다]").click();
+
+  await expect(page.locator("[data-삭제실패]")).toHaveText(학부모오류문구("NOT_FOUND"));
+  expect(await page.locator("body").innerText()).not.toContain("찾을 수 없어요");
+});
+
+test("지운 아이의 접속 코드가 화면에 남지 않는다", async ({ page }) => {
+  let 지워진뒤 = false;
+  await page.route(CHILDREN, (route) =>
+    route.fulfill({
+      status: 201,
+      json: {
+        child_id: 아이.child_id,
+        nickname: 아이.nickname,
+        access_code: "482913",
+        access_code_expires_at: "2026-09-09T01:00:00Z",
+      },
+    }),
+  );
+  await page.route(자녀하나(아이.child_id), (route) => {
+    지워진뒤 = true;
+    return route.fulfill({ status: 204, body: "" });
+  });
+  await page.route(ME, (route) =>
+    route.fulfill({ status: 200, json: 가입됨(지워진뒤 ? [] : [아이]) }),
+  );
+  await page.goto("/parents/signup");
+  await expect(page.getByText(폼.가입됨)).toBeVisible();
+
+  await page.getByLabel(만들기.별명).fill(아이.nickname);
+  await page.getByRole("button", { name: 만들기.버튼 }).click();
+  await expect(코드칸(page)).toContainText("482913");
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+  await page.locator("[data-지운다]").click();
+
+  // **파기된 아이의 접속 코드를 계속 띄우면 안 된다.** 「목록에 없는 코드」 자리는
+  // 목록에 안 붙은 것을 조건으로 뜨는데 **지워진 아이가 정확히 그 조건에 걸린다.**
+  await expect(page.locator("[data-지웠다]")).toBeVisible();
+  await expect(코드칸(page)).toHaveCount(0);
 });

@@ -137,6 +137,19 @@ export async function apiPostNoBody(path: string): Promise<void> {
   await request<void>(path, { method: "POST" });
 }
 
+/**
+ * 본문 없이 부르는 DELETE. **지금은 자녀 파기 하나뿐이다** (`DELETE /parents/children/{id}`).
+ *
+ * **204 라 본문이 없다** — `request` 가 그 자리를 이미 안다. 파싱하려 들면
+ * **성공이 실패로 둔갑한다.**
+ *
+ * **`apiPostNoBody` 와 달리 401 을 삼키지 않는다.** 로그아웃은 「쿠키가 없어도 성공」이지만
+ * 파기는 아니다 — **인증이 풀린 채로 지운 척하면 아이 데이터가 남는다.**
+ */
+export async function apiDelete(path: string): Promise<void> {
+  await request<void>(path, { method: "DELETE" });
+}
+
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   // **try 밖에서 만든다.** 안에서 던지면 아래 catch 가 NetworkError 로 덮어써서
   // 「설정이 없다」가 「서버에 못 닿음」으로 둔갑한다 — 원인을 삼키는 그 모양 그대로다.
