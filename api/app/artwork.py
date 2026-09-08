@@ -22,16 +22,34 @@ W1 벤치에서 가이드 없이 생성한 c01(위기)은 뿔 달린 거대 실�
 (PRD B-5 · `안전_어휘_기준.md` 5장). W4 는 아동 3명이 실제로 보는 주차다.
 """
 
+import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from functools import lru_cache
+from typing import Final
 
-from app.config import REPO_ROOT
+from google.genai import types
+
+from app.config import REPO_ROOT, get_settings
+from app.cost import record_usd
+from app.llm import get_client
 from app.middleware import current_request_id
 from app.moderation import 검사결과, 검사하기
 from app.scene_cards import 카드
 from app.schemas.stage0 import Tier
 
 logger = logging.getLogger(__name__)
+
+# `Stage0.md` 5절이 **15초**를 상한으로 못 박았다 — 넘으면 프론트가 폴링을 끊고
+# 서버도 기본 에셋으로 확정한다. 그래서 생성 호출이 그보다 오래 살아 있을 이유가 없다.
+# **재시도를 두지 않는다.** 실측 평균 6.2초라 한 번 더 던지면 상한을 넘는다
+# (`benchmarks/W1-image-bench.md`).
+TIMEOUT_SECONDS: Final = 15.0
+
+# `adr/0006` 확정 모델의 장당 단가 (2026-09-01 확인). **비용 알람용 근사치다** —
+# 청구서가 아니라 F-3 한도를 재는 눈금이고, 모델이 바뀌면 여기도 바뀐다.
+장당USD: Final = 0.0336
 
 # 가이드 캐릭터 정본 (`docs/캐릭터/`). 턴어라운드 3면이라 스카프·고글·가방이 모두 보인다 —
 # 표정 PNG 4종은 축약본이라 레퍼런스로 못 쓴다.
@@ -107,3 +125,99 @@ async def 내보내도되나(프롬프트문: str) -> 검사결과:
             },
         )
     return 결과
+
+
+def _설정된모델() -> str:
+    return get_settings().image_model.strip()
+
+
+@dataclass(frozen=True)
+class 생성결과:
+    """`image` 가 `None` 이면 **기본 에셋으로 간다** — 부르는 쪽이 그렇게 읽는다.
+
+    `사유` 는 왜 못 만들었나다 — `unconfigured`·`no_prompt`·`no_reference`·
+    `blocked`·`timeout`·`error`·`empty`. **아이에게 나가지 않고 우리 눈금이다.**
+    """
+
+    image: bytes | None = None
+    # 프로바이더가 준 그대로다. **확장자를 우리가 짐작하지 않는다** — 목 픽스처가
+    # `.webp` 라고 해서 실제로 webp 가 오는 것은 아니다.
+    mime: str = ""
+    사유: str = ""
+    latency_ms: float = 0.0
+
+
+async def _한번(모델: str, 프롬프트문: str, 레퍼런스: bytes) -> tuple[bytes, str] | None:
+    """단발 호출. 타임아웃은 부르는 쪽이 건다 (`evaluator._한번` 과 같은 꼴)."""
+    응답 = await get_client().aio.models.generate_content(
+        model=모델,
+        contents=[
+            types.Part.from_bytes(data=레퍼런스, mime_type="image/png"),
+            프롬프트문,
+        ],
+        # 시드를 고정한다 — 같은 카드·같은 티어는 같은 그림이 나와야 재생성이
+        # 「다른 그림」이 되지 않는다 (`adr/0006` · B-5 가 W5 에서 이어받는다).
+        config=types.GenerateContentConfig(response_modalities=["IMAGE"], seed=12345),
+    )
+    파트 = [p for p in 응답.candidates[0].content.parts if p.inline_data]
+    if not 파트:
+        return None
+    안 = 파트[0].inline_data
+    return 안.data, 안.mime_type or ""
+
+
+async def 생성(card_id: str, tier: Tier) -> 생성결과:
+    """카드 한 장의 삽화를 만든다. **예외를 밖으로 내지 않는다.**
+
+    막히거나 실패하면 `image=None` 이고, 그건 **기본 에셋으로 간다**는 뜻이다 —
+    아이의 플레이는 어느 쪽이든 멈추지 않는다 (PRD B-3).
+
+    순서가 정해져 있다. **출력 검사가 생성보다 먼저다** — 뒤에 두면 막을 그림을
+    이미 만든 뒤라 돈이 나가고, 무엇보다 **만들어진 것이 어딘가에 남는다.**
+    """
+    시작 = time.perf_counter()
+
+    def _끝(사유: str, image: bytes | None = None, mime: str = "") -> 생성결과:
+        return 생성결과(
+            image=image, mime=mime, 사유=사유, latency_ms=(time.perf_counter() - 시작) * 1000
+        )
+
+    프롬프트문 = 프롬프트(card_id, tier)
+    if not 프롬프트문:
+        return _끝("no_prompt")
+
+    레퍼런스 = 레퍼런스바이트()
+    if 레퍼런스 is None:
+        # **가이드 없이 대신 만들지 않는다.** 모듈 주석의 안전 사유다.
+        return _끝("no_reference")
+
+    if (await 내보내도되나(프롬프트문)).blocked:
+        return _끝("blocked")
+
+    모델 = _설정된모델()
+    if not 모델:
+        # dev 목 서버는 모델명 없이 돈다. pilot 은 기동 자체가 막힌다 (`config.PILOT_REQUIRED`).
+        return _끝("unconfigured")
+
+    try:
+        받은것 = await asyncio.wait_for(
+            _한번(모델, 프롬프트문, 레퍼런스), timeout=TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        return _끝("timeout")
+    except Exception as exc:
+        # **예외 메시지를 싣지 않는다.** 프로바이더가 프롬프트를 되울려 주는 일이 있고,
+        # Stage 1 에서는 그 프롬프트에 GM 서사가 들어온다.
+        logger.warning(
+            "삽화 생성 실패",
+            extra={"request_id": current_request_id(), "exc_type": type(exc).__name__},
+        )
+        return _끝("error")
+
+    # **호출이 실제로 나갔으면 기록한다** — 그림이 안 왔어도 돈은 나갔다.
+    await record_usd(장당USD, kind="image")
+
+    if not 받은것:
+        return _끝("empty")
+    이미지, mime = 받은것
+    return _끝("", 이미지, mime)

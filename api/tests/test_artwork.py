@@ -14,7 +14,7 @@ import logging
 import pytest
 
 from app import artwork, moderation
-from app.artwork import GUIDE, STYLE, 내보내도되나, 레퍼런스바이트, 접미어, 프롬프트
+from app.artwork import GUIDE, STYLE, 내보내도되나, 레퍼런스바이트, 생성, 접미어, 프롬프트
 from app.evaluator import TIER_BY_GRADE
 from app.logging_config import SAFE_EXTRA_KEYS
 from app.moderation import 검사
@@ -137,3 +137,148 @@ def test_막혀도_프롬프트_문장을_로그에_안_남긴다(monkeypatch, c
         실은것 = set(r.__dict__) - set(logging.makeLogRecord({}).__dict__) - {"taskName", "message"}
         assert 실은것 <= set(SAFE_EXTRA_KEYS), 실은것 - set(SAFE_EXTRA_KEYS)
         assert artwork.STYLE not in str(r.__dict__)
+
+
+# ── 생성 호출 ────────────────────────────────────────────
+
+
+def _생성고정(monkeypatch, 결과, *, 모델="test-image-model"):
+    """이미지 호출을 갈아끼운다. **네트워크를 타지 않는다.**"""
+
+    async def _한번(모델명, 프롬프트문, 레퍼런스):
+        if isinstance(결과, Exception):
+            raise 결과
+        return 결과
+
+    monkeypatch.setattr(artwork, "_한번", _한번)
+    monkeypatch.setattr(artwork, "_설정된모델", lambda: 모델)
+    # 비용 기록은 Redis 를 탄다. 생성 경로를 재는 자리라 여기서는 끊는다.
+    쓴돈 = []
+
+    async def _기록(amount, *, kind):
+        쓴돈.append((amount, kind))
+
+    monkeypatch.setattr(artwork, "record_usd", _기록)
+    return 쓴돈
+
+
+def test_생성되면_이미지와_mime_이_온다(monkeypatch):
+    _고정(monkeypatch, 검사(block=False))
+    쓴돈 = _생성고정(monkeypatch, (b"PNGBYTES", "image/png"))
+
+    결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.image == b"PNGBYTES"
+    assert 결과.mime == "image/png"
+    assert not 결과.사유
+    assert 쓴돈 == [(artwork.장당USD, "image")]
+
+
+def test_출력_검사에_막히면_생성_호출이_안_나간다(monkeypatch):
+    """**검사가 생성보다 먼저다.** 뒤에 두면 막을 그림을 이미 만든 뒤라 돈이 나가고,
+    무엇보다 **만들어진 것이 어딘가에 남는다.**"""
+    _고정(monkeypatch, 검사(block=True, category="유혈·신체 훼손"))
+    불렸나 = []
+
+    async def _한번(모델명, 프롬프트문, 레퍼런스):
+        불렸나.append(1)
+        return (b"SHOULD_NOT_APPEAR", "image/png")
+
+    monkeypatch.setattr(artwork, "_한번", _한번)
+    monkeypatch.setattr(artwork, "_설정된모델", lambda: "test-image-model")
+
+    결과 = asyncio.run(생성("c01", "legendary"))
+
+    assert 결과.image is None
+    assert 결과.사유 == "blocked"
+    assert not 불렸나
+
+
+def test_판정을_못_받아도_생성_호출이_안_나간다(monkeypatch):
+    """검사와 같은 방향이다 — **못 받으면 막는다.**"""
+    _고정(monkeypatch, RuntimeError("프로바이더 장애"))
+    쓴돈 = _생성고정(monkeypatch, (b"SHOULD_NOT_APPEAR", "image/png"))
+
+    결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.사유 == "blocked"
+    assert not 쓴돈
+
+
+def test_모르는_카드는_검사도_안_탄다(monkeypatch):
+    """프롬프트가 없으면 검사할 것도 없다. **기본 에셋으로 간다.**"""
+    쓴돈 = _생성고정(monkeypatch, (b"x", "image/png"))
+
+    결과 = asyncio.run(생성("c99", "rare"))
+
+    assert 결과.사유 == "no_prompt"
+    assert not 쓴돈
+
+
+def test_레퍼런스가_없으면_생성하지_않는다(monkeypatch):
+    """**가이드 없이 대신 만들지 않는다 — 안전 사유다** (PRD B-5)."""
+    _고정(monkeypatch, 검사(block=False))
+    쓴돈 = _생성고정(monkeypatch, (b"x", "image/png"))
+    monkeypatch.setattr(artwork, "레퍼런스바이트", lambda: None)
+
+    결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.사유 == "no_reference"
+    assert not 쓴돈
+
+
+def test_모델이_없으면_unconfigured(monkeypatch):
+    """dev 목 서버는 모델명 없이 돈다. pilot 은 기동 자체가 막힌다."""
+    _고정(monkeypatch, 검사(block=False))
+    쓴돈 = _생성고정(monkeypatch, (b"x", "image/png"), 모델="")
+
+    결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.사유 == "unconfigured"
+    assert not 쓴돈
+
+
+def test_타임아웃이면_사유가_남는다(monkeypatch):
+    """15초는 `Stage0.md` 5절 상한 그대로다 — **재시도를 두지 않는다.**"""
+    _고정(monkeypatch, 검사(block=False))
+    _생성고정(monkeypatch, (b"x", "image/png"))
+    monkeypatch.setattr(artwork, "TIMEOUT_SECONDS", 0.01)
+
+    async def _느리게(모델명, 프롬프트문, 레퍼런스):
+        await asyncio.sleep(1)
+        return (b"x", "image/png")
+
+    monkeypatch.setattr(artwork, "_한번", _느리게)
+
+    결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.image is None
+    assert 결과.사유 == "timeout"
+
+
+def test_실패해도_예외가_안_새고_프롬프트도_안_샌다(monkeypatch, caplog):
+    """프로바이더가 프롬프트를 되울려 주는 일이 있다. **타입만 남긴다.**"""
+    _고정(monkeypatch, 검사(block=False))
+    문장 = 프롬프트("c01", "rare")
+    _생성고정(monkeypatch, RuntimeError(f"생성 거부: {문장}"))
+
+    with caplog.at_level(logging.WARNING, logger="app.artwork"):
+        결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.사유 == "error"
+    기록 = [r for r in caplog.records if r.name == "app.artwork"]
+    assert 기록
+    for r in 기록:
+        assert 문장 not in r.getMessage()
+        assert 문장 not in str(r.__dict__)
+
+
+def test_그림이_안_와도_돈은_나갔다(monkeypatch):
+    """**호출이 실제로 나갔으면 기록한다.** 안 세면 F-3 한도가 실제보다 낮게 보인다."""
+    _고정(monkeypatch, 검사(block=False))
+    쓴돈 = _생성고정(monkeypatch, None)
+
+    결과 = asyncio.run(생성("c01", "rare"))
+
+    assert 결과.사유 == "empty"
+    assert 쓴돈 == [(artwork.장당USD, "image")]

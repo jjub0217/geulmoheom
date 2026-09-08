@@ -33,7 +33,20 @@ _APP_ENV: str = os.getenv("APP_ENV", "dev")
 # `image_api_key` 를 뺐다 (2026-09-07). `adr/0006` 이 이미지 생성을 Gemini 네이티브로
 # 통합해 **LLM 과 같은 키**를 쓴다. 따로 두면 늘 `gemini_api_key` 와 같은 값이 되고,
 # 필수 목록에 둘 다 있는 것이 「둘이 다를 수 있다」는 오해를 만든다.
-PILOT_REQUIRED = ("gemini_api_key", "jwt_secret", "evaluator_model", "image_model")
+# R2 넷이 2026-09-08 에 들어왔다. **파일럿에 반드시 필요한데 검사에 없었다** —
+# 비어 있어도 서버가 아무 소리 없이 떴고, 그래서 안 채워진 것을 아무도 몰랐다.
+# 로컬 디스크 폴백(`app/storage.py`)은 **개발·프리테스트용**이다. 파일럿에서 그리로
+# 떨어지면 삽화가 그 컨테이너와 함께 사라진다.
+PILOT_REQUIRED = (
+    "gemini_api_key",
+    "jwt_secret",
+    "evaluator_model",
+    "image_model",
+    "r2_account_id",
+    "r2_access_key_id",
+    "r2_secret_access_key",
+    "r2_public_base_url",
+)
 
 
 class Settings(BaseSettings):

@@ -18,6 +18,9 @@ dependencies = [
     "pyjwt>=2.10",
     # 학부모 비밀번호 해시. bcrypt 의 72바이트 조용한 잘림이 없다.
     "argon2-cffi>=23.1",
+    # 삽화 저장 (Cloudflare R2, S3 호환). **SigV4 를 손으로 짜지 않는다** —
+    # `pyjwt` 를 넣은 것과 같은 이유로, 조용히 틀리는 자리다.
+    "boto3>=1.43.89",
 ]
 
 # LLM 프로바이더는 Google Gemini (docs/adr/0005). 모델명은 미정이라 코드에 기본값을
