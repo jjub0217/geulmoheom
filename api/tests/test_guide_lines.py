@@ -9,7 +9,7 @@
 
 import pytest
 
-from app.guide_lines import 결과대사, 종료대사, 차단대사
+from app.guide_lines import 결과대사, 결과한줄, 종료대사, 차단대사
 
 
 def test_세_묶음이_다_읽힌다():
@@ -70,3 +70,40 @@ def test_자해_대사는_이_묶음에_없다():
     from app.api.v1.attempts import _자해대사
 
     assert _자해대사 not in 차단대사()
+
+
+# ── `{말}` 은 첫 하이라이트로 채운다 (1.6) ─────────────────
+
+
+def test_말자리가_하이라이트로_채워진다():
+    """**어느 말이 통했는지를 말하는 자리가 여기뿐이다** (PRD A0-3 MUST).
+    하이라이트 옆에 설명을 안 두는 근거가 이 줄이라(1.9), 빠지면 그 근거가 거짓이 된다.
+    """
+    나온것 = {결과한줄("rare", 씨앗, "살금살금") for 씨앗 in range(60)}
+
+    assert 나온것
+    assert not [줄 for 줄 in 나온것 if "{말}" in 줄]
+    assert [줄 for 줄 in 나온것 if "살금살금" in 줄], "채워지는 문장이 하나도 안 나왔다"
+
+
+def test_하이라이트가_없으면_말자리를_안_고른다():
+    """**없는 말을 지어내지 않는다.** 티어마다 셋이 그 폴백이다."""
+    for tier in ("basic", "rare", "legendary"):
+        나온것 = {결과한줄(tier, 씨앗, None) for 씨앗 in range(60)}
+
+        assert 나온것
+        assert not [줄 for 줄 in 나온것 if "{말}" in 줄]
+
+
+def test_같은_시도는_같은_문장이다():
+    """**새로고침해도 나침반이 다른 말을 하지 않는다** (`문구.md` 1.6 지킬 것)."""
+    셋 = {결과한줄("legendary", "같은-시도-id", "은빛") for _ in range(20)}
+
+    assert len(셋) == 1
+
+
+def test_중괄호가_든_말도_안_터진다():
+    """`str.format` 을 쓰면 여기서 터진다. 아이가 쓴 말에 무엇이 있을지 모른다."""
+    줄 = 결과한줄("rare", "씨앗", "{이상한}")
+
+    assert "{이상한}" in 줄

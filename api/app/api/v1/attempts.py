@@ -42,7 +42,7 @@ from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
-from app.guide_lines import 결과대사, 종료대사, 차단대사, 하나
+from app.guide_lines import 결과한줄, 종료대사, 차단대사, 하나
 from app.middleware import current_request_id
 from app.models import Artwork, Card, CardAttempt
 from app.models import Child as ChildRow
@@ -150,18 +150,18 @@ _결과표정: dict[Tier, str] = {
 }
 
 
-def _guide(tier: Tier, 시도id: UUID) -> Guide:
+def _guide(tier: Tier, 시도id: UUID, 하이라이트: list[Highlight]) -> Guide:
     """결과 대사 (`문구.md` 1.6). 티어별 다섯 중 하나를 **시도 id 로 고정해** 고른다.
 
     **새로고침해도 같은 말이 나와야 한다.** 무작위로 두면 아이가 결과 화면을 다시
     열었을 때 **나침반이 다른 말을 한다** — 하이라이트를 저장한 것과 같은 자리이고,
     여기서는 **열을 늘리지 않고 되풀이할 수 있어** 씨앗으로 고정한다.
 
-    **하이라이트를 문장에 끼우지 않는다.** 확정본 열다섯에는 `{말}` 자리가 없다 —
-    **아이가 쓴 말을 되읽어 주는 대신 일어난 일을 말한다**(「따라 그렸어」·「길이
-    생겼어」). 기본 등급에도 「부족하다」가 없게 만든 구조가 그것이다.
+    **`{말}` 은 첫 하이라이트로 채운다.** 어느 말이 통했는지를 말하는 자리가 여기뿐이다
+    (PRD A0-3 MUST). 하이라이트가 없으면 `{말}` 없는 문장만 고른다.
     """
-    return Guide(expression=_결과표정[tier], line=하나(결과대사()[tier], 시도id))
+    말 = 하이라이트[0].text if 하이라이트 else None
+    return Guide(expression=_결과표정[tier], line=결과한줄(tier, 시도id, 말))
 
 
 @router.post("")
@@ -296,7 +296,7 @@ async def create_attempt(
         attempt_id=str(시도.id),
         tier=평가.tier,
         highlights=하이라이트,
-        guide=_guide(평가.tier, 시도.id),
+        guide=_guide(평가.tier, 시도.id, 하이라이트),
         artwork={
             "artwork_id": str(삽화.id),
             "status": "pending",
@@ -487,7 +487,7 @@ async def get_attempt(
         attempt_id=str(시도.id),
         tier=티어,
         highlights=하이라이트,
-        guide=_guide(티어, 시도.id),
+        guide=_guide(티어, 시도.id, 하이라이트),
         artwork=await _삽화참조(session, 시도.id, request),
         today=TodayState(cards_done=3, cap=5, locked=False),
         can_retry=True,
