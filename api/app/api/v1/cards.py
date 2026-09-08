@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
-from app.card_store import 모험카드들, 오늘쓴카드들
+from app.card_store import 모험카드들, 오늘상태, 오늘쓴카드들
 from app.card_store import 카드 as 카드읽기
 from app.errors import AppError, ErrorCode
 from app.models import TUTORIAL_TYPE
@@ -68,7 +68,10 @@ async def next_card(
 
     **아이별 순서는 아직 없다.** 남은 것 중 무작위다.
     """
-    if 소진:
+    # **하루 5장에서 멈춘다** (A0-5 · PRD 하드 피니시). 상한은 자녀 행에서 읽는다 —
+    # 학부모가 바꿀 수 있는 값이다.
+    쓴수, 상한 = await 오늘상태(session, 아이)
+    if 소진 or 쓴수 >= 상한:
         raise _오늘은끝()
 
     후보 = await 모험카드들(session)

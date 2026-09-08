@@ -138,3 +138,16 @@ async def 오늘쓴카드들(session: AsyncSession, child_id: uuid.UUID) -> set[
         .distinct()
     )
     return set(await session.scalars(문))
+
+
+async def 오늘상태(session: AsyncSession, 아이) -> tuple[int, int]:
+    """`(오늘 쓴 카드 수, 상한)`. **상한은 자녀 행에서 읽는다.**
+
+    코드에 5 를 박아 두면 학부모 화면의 `daily_cap` 이 아무것도 안 바꾼다
+    (`PATCH /parents/children/{id}`).
+
+    **되묻기·차단은 안 세인다** — 행을 안 만들기 때문이다 (`Stage0.md` 4절).
+    **재시도도 안 는다** — 같은 카드라 distinct 에 안 들어온다. 「재시도는 일일 카운트
+    미소모」가 별도 장치 없이 이 셈에서 자연히 지켜진다.
+    """
+    return len(await 오늘쓴카드들(session, 아이.id)), 아이.daily_cap

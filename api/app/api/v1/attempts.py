@@ -38,7 +38,7 @@ from app.api.v1.deps import (
 )
 from app.artwork_store import 굽기
 from app.artwork_store import 만들기 as 삽화만들기
-from app.card_store import 오늘쓴카드들
+from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
@@ -64,10 +64,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/attempts", tags=["attempts"])
 
-# 일일 상한. **A0-5(W4)가 진짜 값을 자녀 행에서 읽어 온다** — 지금은 응답 픽스처와
-# 같은 수를 이벤트에도 실어, 둘이 갈린 채로 지표가 잡히는 것을 막는다.
-_CAP = 5
-
 # `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
 Child = Annotated[ChildRow, Depends(require_child)]
 
@@ -92,7 +88,7 @@ def _result() -> AttemptResult:
     )
 
 
-def _scaffold() -> AttemptScaffold:
+def _scaffold(today: TodayState | None = None) -> AttemptScaffold:
     return AttemptScaffold(
         outcome="scaffold",
         attempt_id=fx.ATTEMPT_ID,
@@ -101,7 +97,7 @@ def _scaffold() -> AttemptScaffold:
             line="나침반이 안 움직이네. 그림자를 어떻게 할 건지 조금만 더 말해줄래?",
         ),
         scaffold_count=1,
-        today=TodayState(cards_done=2, cap=5, locked=False),
+        today=today or TodayState(cards_done=2, cap=5, locked=False),
     )
 
 
@@ -117,8 +113,19 @@ _차단대사 = "나침반이 그 말은 못 알아듣네. 다르게 말해줄�
 # 「가상 페르소나 의존」(페르소나 4.4)이 정면으로 발생한다.
 _자해대사 = "지금 마음이 많이 힘들면, 옆에 있는 어른한테 꼭 말해줘."
 
+# 일일 상한 소진. **`문구.md` 1.3 의 「종료 인사」가 아직 없다** — 붙을 자리(A0-5)가
+# 없어서 못 썼고, 이제 그 자리가 생겼다. **여기 것은 잠정이고 확정본이 오면 갈아끼운다.**
+# `Stage0.md` 3절이 예시로 적어 둔 문장을 그대로 쓴다.
+_소진대사 = {"expression": "session_end", "line": "오늘 모험은 여기까지! 내일 또 보자"}
 
-def _blocked(*, 자해: bool = False) -> AttemptBlocked:
+
+def _소진() -> AppError:
+    """**`guide.line` 을 같이 싣는다.** 화면은 `error.message`(존댓말) 대신 이것만
+    보여준다 (`문구.md` 0장) — 아이가 빈 화면을 보지 않게."""
+    return AppError(ErrorCode.DAILY_CAP_REACHED, detail={"guide": _소진대사})
+
+
+def _blocked(*, 자해: bool = False, today: TodayState | None = None) -> AttemptBlocked:
     """카테고리·사유는 응답에 넣지 않는다 — 아이에게 "나쁜 말" 피드백을 주지 않는다.
 
     **자해 분기도 겉모양이 같다.** 표정은 일반 차단과 같은 것을 쓰고 `reason` 도
@@ -129,7 +136,7 @@ def _blocked(*, 자해: bool = False) -> AttemptBlocked:
         outcome="blocked",
         reason="moderation",
         guide=Guide(expression="compass_dim", line=_자해대사 if 자해 else _차단대사),
-        today=TodayState(cards_done=2, cap=5, locked=False),
+        today=today or TodayState(cards_done=2, cap=5, locked=False),
     )
 
 
@@ -166,13 +173,20 @@ async def create_attempt(
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> AttemptResponse:
     """`text` 1~500자. 재시도(`retry_of`)와 되묻기는 일일 카운트를 쓰지 않는다."""
-    if 소진 and payload.retry_of is None:
-        # **상한 도달률이 H2 지표다** (합격선 40%). 409 로 나가는 길에도 남겨야 센다.
-        await 남기기(아이.id, 이벤트("daily_cap_reached", {"cap": _CAP}))
-        raise AppError(ErrorCode.DAILY_CAP_REACHED)
-
     if outcome is not None:  # 목 강제 (W3 화면 작업)
         return {"result": _result, "scaffold": _scaffold, "blocked": _blocked}[outcome]()
+
+    # **하루 5장에서 멈추는 것이 MVP 필수 가드레일이다** (PRD 하드 피니시). 상한은
+    # 자녀 행에서 읽는다 — 학부모가 바꿀 수 있는 값이다.
+    #
+    # **재시도는 안 걸린다** (`Stage0.md` 4절). 되묻기 뒤 재입력은 `retry_of` 가
+    # 비어 있는데(같은 시도의 연장이라 그렇게 정했다), 그건 카드를 아직 안 쓴 상태라
+    # 아래 셈에서 자연히 통과한다.
+    쓴수, 상한 = await 오늘상태(session, 아이)
+    if (소진 or 쓴수 >= 상한) and payload.retry_of is None:
+        # **상한 도달률이 H2 지표다** (합격선 40%). 409 로 나가는 길에도 남겨야 센다.
+        await 남기기(아이.id, 이벤트("daily_cap_reached", {"cap": 상한}))
+        raise _소진()
 
     # **저장할 수 있는 요청인지 먼저 본다.** 뒤로 미루면 평가·검사 호출이 이미 나간
     # 뒤에 FK 로 터져 500 이 되고, **돈은 나갔는데 아이는 오류를 본다.**
@@ -220,12 +234,12 @@ async def create_attempt(
     # 우리 검사와 내장 필터는 축이 다르지만(`adr/0009`), **막았다는 사실은 양쪽 다 신호다.**
     if 검사.blocked or 평가.차단됨:
         # 평가 결과를 버린다. 차단 건의 평가 비용은 수용한다 (`adr/0009` 대가).
-        return _blocked(자해=검사.self_harm)
+        return _blocked(자해=검사.self_harm, today=_오늘(쓴수, 상한))
 
     평가기록(평가)
 
     if 평가.grade == "G0":
-        되물음 = await _되묻기(str(아이.id), payload.card_id)
+        되물음 = await _되묻기(str(아이.id), payload.card_id, _오늘(쓴수, 상한))
         if 되물음 is not None:
             return 되물음
 
@@ -287,7 +301,7 @@ async def create_attempt(
             "status": "pending",
             "url": None,
         },
-        today=TodayState(cards_done=3, cap=5, locked=False),
+        today=_오늘(쓴수 + 1, 상한),
         can_retry=True,
     )
 
@@ -395,7 +409,11 @@ async def _이력남기기(
     return 시도
 
 
-async def _되묻기(자녀id: str, card_id: str) -> AttemptScaffold | None:
+def _오늘(쓴수: int, 상한: int) -> TodayState:
+    return TodayState(cards_done=쓴수, cap=상한, locked=쓴수 >= 상한)
+
+
+async def _되묻기(자녀id: str, card_id: str, today: TodayState) -> AttemptScaffold | None:
     """G0 되묻기 (`Stage0.md` 9절 6번). 되묻지 않을 상황이면 `None` — 결과로 진행한다.
 
     **카드를 소모하지 않는다.** 프론트는 입력창과 쓰던 글을 그대로 둔다.
@@ -429,7 +447,7 @@ async def _되묻기(자녀id: str, card_id: str) -> AttemptScaffold | None:
         attempt_id=fx.ATTEMPT_ID,
         guide=Guide(expression="compass_dim", line=질문(card_id, 횟수)),
         scaffold_count=횟수,
-        today=TodayState(cards_done=2, cap=5, locked=False),
+        today=today,
     )
 
 
