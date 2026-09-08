@@ -134,3 +134,28 @@ test("여는 동안 무엇을 하고 있는지 말한다 — 「확인하는 중
   await expect(page.getByText(상태표시.책펼치는중)).toBeVisible();
   expect(상태표시.책펼치는중).not.toBe(상태표시.확인중);
 });
+
+/**
+ * **계약이 적은 실측값을 여기 다시 적는다** (`docs/api/Stage0.md` 5절 — 20/20 장 `784×1353`).
+ *
+ * **`lib/artwork-frame.ts` 의 상수를 읽어오지 않는다.** 읽어오면 그 상수를 4:3 으로 바꿔도
+ * 검사가 같이 따라가서 **초록으로 지나간다** — 2026-09-08 에 실제로 그랬다.
+ * **검사가 자기가 재려는 것을 자기한테서 가져오면 아무것도 안 재는 것이다.**
+ */
+const 계약비율 = 784 / 1353;
+
+test("책 액자도 그림 비율이다 — 한 번 잘리면 잘린 채로 쌓인다", async ({ page }) => {
+  await page.route(BOOK, (route) =>
+    route.fulfill({ status: 200, json: 책([페이지({})]) }),
+  );
+  await page.goto("/book");
+
+  const 삽화 = page.locator(`main img[src="${그림}"]`).first();
+  await expect(삽화).toBeVisible();
+
+  // **결과 화면과 같은 액자다** (`lib/artwork-frame.ts`). 한때 여기도 `aspect-4/3` 에
+  // `object-cover` 라 **위아래 각 28% 가 잘렸다** — 책은 아이 창작물을 두는 자리다.
+  const 액자 = (await 삽화.locator("..").boundingBox())!;
+  expect(액자.width / 액자.height).toBeCloseTo(계약비율, 2);
+  await expect(삽화).toHaveCSS("object-fit", "contain");
+});

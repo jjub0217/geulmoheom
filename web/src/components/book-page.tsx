@@ -2,6 +2,7 @@ import Image from "next/image";
 
 import type { components } from "@/api/types.gen";
 import { TierBadge } from "@/components/tier-badge";
+import { 액자자리 } from "@/lib/artwork-frame";
 
 type BookPage = components["schemas"]["BookPage"];
 
@@ -24,7 +25,12 @@ export function BookPageFrame({ page }: { page: BookPage }) {
           그때는 **자리를 비운다**: 깨진 그림을 세우면 아이는 자기 그림이 사라진 줄 안다.
           결과 화면에서 못 받았을 때 액자를 통째로 빼는 것과 같은 판단이다 (`문구.md` 1.7). */}
       {page.artwork_url !== null && (
-        <div className="relative aspect-4/3 w-full overflow-hidden rounded-2xl bg-vest/10">
+        // **결과 화면과 같은 액자다** (`lib/artwork-frame.ts`). 높이 상한은 안 건다 —
+        // 여기는 세로로 넘기는 목록이라 **한 화면에 다 들어와야 하는 자리가 아니다.**
+        <div
+          style={액자자리()}
+          className="relative w-full overflow-hidden rounded-2xl bg-vest/10"
+        >
           <Image
             // 서버가 준 절대 주소 그대로다. **`crossOrigin` 을 붙이지 않는다**
             // (`Stage0.md` 5절 ⚠) — 붙는 순간 쿠키가 안 실려 그림이 통째로 안 뜬다.
@@ -32,7 +38,9 @@ export function BookPageFrame({ page }: { page: BookPage }) {
             // 그림의 내용은 **바로 아래 아이 문장이 말한다.**
             alt=""
             fill
-            className="object-cover"
+            // **자르지 않는다.** 결과 화면과 같은 판단이다 — 책은 아이 창작물을 두는 자리라
+            // **한 번 잘린 그림이 계속 잘린 채로 쌓인다.**
+            className="object-contain"
             sizes="(min-width: 64rem) 33vw, 100vw"
           />
         </div>

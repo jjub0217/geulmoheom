@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+
+import { 결과액자최대높이, 액자자리 } from "@/lib/artwork-frame";
 import { useState } from "react";
 
 import { 대기대사하나 } from "@/components/artwork-copy";
@@ -48,7 +50,11 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
       // **자리가 있는지 없는지가 곧 상태다.** 「못받음」이면 이 요소가 통째로 사라진다 —
       // E2E 가 그 사라짐을 기다려 **상한을 실제로 넘겨보고 확인한다.**
       data-삽화자리
-      className="relative aspect-4/3 w-full overflow-hidden rounded-3xl bg-vest/10"
+      // **상자를 그림에 맞춘다** (`lib/artwork-frame.ts` · `Stage0.md` 5절).
+      // 전에는 `aspect-4/3` 가로 상자였고 **위아래 각 28% 가 잘려 나갔다.**
+      style={액자자리(결과액자최대높이)}
+      // **`mx-auto` 가 필요하다** — 폭 상한이 걸리면 flex 열에서 왼쪽으로 붙는다.
+      className="relative mx-auto w-full overflow-hidden rounded-3xl bg-vest/10"
     >
       {상태.kind === "기다림" && (
         // **액자 안이다** (`문구.md` 1.5). 그림이 뜨면 그 자리를 그림이 그대로 덮는다 —
@@ -70,7 +76,12 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
           // 여기에 설명을 지어 넣으면 **프론트가 그림을 해석하는 것**이 된다.
           alt=""
           fill
-          className="object-cover"
+          // **`cover` 가 아니다. 자르지 않는다** — 보상의 순간에 아이 그림의 일부를 버리는 것이다.
+          // 상자가 그림 비율이라 지금은 `contain` 과 `cover` 가 같은 그림을 그리지만,
+          // **계약이 비율을 강제하지는 않는다**(`Stage0.md` 5절). 다른 비율이 오는 날
+          // `cover` 는 **말없이 자르고** `contain` 은 **작아진 채로 다 보여준다** —
+          // 틀렸을 때 **눈에 보이는 쪽**을 고른다.
+          className="object-contain"
           sizes="(min-width: 64rem) 50vw, 100vw"
           priority
         />

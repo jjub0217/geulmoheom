@@ -770,3 +770,106 @@ test("보내기가 못 닿으면 쓴 문장을 지킨다 — 화면을 넘기지
   await expect(입력창).toHaveValue(문장);
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
 });
+
+/**
+ * **계약이 적은 실측값을 여기 다시 적는다** (`docs/api/Stage0.md` 5절 — 20/20 장 `784×1353`).
+ *
+ * **`lib/artwork-frame.ts` 의 상수를 읽어오지 않는다.** 읽어오면 그 상수를 4:3 으로 바꿔도
+ * 검사가 같이 따라가서 **초록으로 지나간다** — 2026-09-08 에 실제로 그랬다.
+ * **검사가 자기가 재려는 것을 자기한테서 가져오면 아무것도 안 재는 것이다.**
+ */
+const 계약비율 = 784 / 1353;
+
+/**
+ * 액자 비율 (2026-09-08 · W4).
+ *
+ * **한때 `aspect-4/3` 가로 상자에 `object-cover` 였다** — 오는 그림이 세로 0.58 이라
+ * **세로로 43%만 보이고 위아래 각 28% 가 잘려 나갔다.** 결과 연출과 내 책 **둘 다** 그랬다.
+ * **레이아웃이 튀는 문제가 아니라 아이 그림의 절반 넘게가 이미 안 보이고 있었다.**
+ */
+test("액자가 그림 비율이다 — 아이 그림을 자르지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  const 액자 = page.locator("main [data-삽화자리]");
+  await expect(액자).toBeVisible();
+
+  // **상자가 그림 비율이어야 한다.** 계약이 준 값이고(`Stage0.md` 5절) 코드에는
+  // `lib/artwork-frame.ts` 한 자리에만 있다.
+  const 자리 = await 액자.boundingBox();
+  expect(자리).not.toBeNull();
+  expect(자리!.width / 자리!.height).toBeCloseTo(계약비율, 2);
+
+  // **`cover` 면 안 된다.** 상자가 그림 비율이라 지금은 결과가 같지만,
+  // **계약이 비율을 강제하지 않으므로** 다른 비율이 오는 날 `cover` 는 말없이 자른다.
+  const 그림 = 액자.locator("img");
+  await expect(그림).toHaveCSS("object-fit", "contain");
+});
+
+test("그림이 화면을 다 먹지 않는다 — 아래 것들이 접히면 보상이 아니다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  const 액자 = page.locator("main [data-삽화자리]");
+  await expect(액자).toBeVisible();
+  const 자리 = (await 액자.boundingBox())!;
+  const 화면높이 = page.viewportSize()!.height;
+
+  // **모바일 세로(390×844)에서 폭을 다 쓰면 액자가 672px 다** — 그러면 바로 아래
+  // 배지·가이드·아이 문장·「내 책」이 통째로 접힌다. 높이 상한이 그것을 막는다.
+  expect(자리.height).toBeLessThan(화면높이 * 0.7);
+
+  // **비율은 그대로다.** 높이를 `max-height` 로 자르면 상자가 옆으로 퍼져
+  // 그림이 레터박스로 앉는다 — 그래서 폭 상한으로 환산해서 건다.
+  expect(자리.width / 자리.height).toBeCloseTo(계약비율, 2);
+
+  // 액자 바로 아래 등급 배지가 **스크롤 없이 보인다.**
+  const 배지 = (await page.locator("main [data-티어배지]").boundingBox())!;
+  expect(배지.y + 배지.height).toBeLessThan(화면높이);
+});
