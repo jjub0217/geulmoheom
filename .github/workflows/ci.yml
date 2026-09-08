@@ -83,6 +83,14 @@ jobs:
       - if: steps.init.outputs.ready == 'true'
         run: cd api && uv sync && uv run ruff check . && uv run pytest
 
+  # web 의 **빠른 갈래**다 — lint · 단위 · **목을 태우는 E2E**. 셋 다 서버가 필요 없다.
+  #
+  # **서버까지 붙는 갈래는 여기 넣지 않는다** (`주차계획/W5.md` 1번). 그쪽은 Postgres·Redis 와
+  # 진짜 api 가 필요해서 느리고, **섞으면 매 push 가 느려진다. 느려지면 다음에 또 미루는 이유가 된다** —
+  # W3·W4 에서 두 번 미룬 방식이 정확히 그것이었다. **잡을 갈라 두면 느린 쪽이 빠른 쪽을 안 끈다.**
+  #
+  # **E2E 142개는 브라우저에서 응답을 가로채므로 api 가 죽어 있어도 돈다** (`playwright.config.ts` 머리말).
+  # 그게 약점이자 여기 들어올 수 있는 이유다 — **이 잡이 재는 것은 화면이지 서버가 아니다.**
   web:
     needs: changes
     if: needs.changes.outputs.web == 'true'
@@ -105,6 +113,14 @@ jobs:
         with: { node-version-file: web/.nvmrc, cache: pnpm }
       - if: steps.init.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile && cd web && pnpm lint && pnpm test
+      # 브라우저는 러너에 없다. **버전을 여기 적지 않는다** — 설치되는 것은
+      # `@playwright/test` 가 정하는 짝이라, 여기 숫자를 박으면 **둘이 갈리는 날 조용히 어긋난다.**
+      - if: steps.init.outputs.ready == 'true'
+        run: cd web && pnpm exec playwright install --with-deps chromium
+      # 로컬에서 돌리는 것과 **같은 명령**이다. CI 에서만 다르게 돌리면
+      # **CI 가 재는 것이 개발자가 보는 것과 달라진다.**
+      - if: steps.init.outputs.ready == 'true'
+        run: cd web && pnpm e2e
 
   # 계약 드리프트: api 의 OpenAPI 와 커밋된 web/src/api/types.gen.ts 가 갈라지면 빨개진다.
   # 완료 조건은 "명세를 바꾸고 make contracts 를 안 돌리면 CI 가 빨개진다" 하나다.
@@ -116,7 +132,7 @@ jobs:
   #
   # **서버를 띄우지 않는다.** app.openapi() 를 직접 뽑는다 (api/scripts/dump_openapi.py).
   # postgres·redis·인증서를 세우면 계약 검사가 인프라 상태를 따라 빨개진다.
-  # 서버까지 붙는 E2E 는 W4 몫이다.
+  # 서버까지 붙는 E2E 는 **W5** 몫이다 — W3·W4 에서 두 번 미뤄졌다.
   #
   # 다른 잡과 달리 "패키지 미초기화면 건너뛴다" 가드를 두지 않는다.
   # 못 돌 때 조용히 통과하는 드리프트 검사는 없느니만 못하다 — 없으면 그냥 죽어야 한다.
