@@ -1,23 +1,24 @@
 """5. 삽화 (`docs/api/Stage0.md` 5절).
 
-**행이 말하는 그대로 돌려준다** (B-3 ②). 목이던 동안에는 무엇을 물어도 `ready` 라
-폴링이 도는지조차 확인할 수 없었다.
+**행이 말하는 그대로 돌려준다** (B-3 ②) 그리고 **api 가 그림을 프록시한다** (B-3 ③).
 
-**`url` 은 아직 비어 있다.** 그림 주소를 만드는 것은 프록시(`/artworks/{id}/image`,
-B-3 ③)의 일이고 그건 다음 조각이다. **저장소 주소를 대신 내보내지 않는다** —
-버킷은 공개하지 않기로 판정났고(미결 11-7), 임시로라도 내보내면 그 주소가 프론트에
-남는다.
+**버킷은 공개하지 않는다** (2026-09-08 대표 판정, 미결 11-7). 「내 책」의 `visibility`
+가 Stage 0 에서 항상 `private` 인데, 공개 버킷이면 **URL 하나로 그 `private` 이
+무너진다.** 난수 키는 「아무도 URL 을 모른다」에 기대는데, **이 제품에서 링크 공유는
+사고가 아니라 설계된 사용 방식**이다 (비전 2장 「가족 공유」) — 반드시 샌다.
 
 **`status` 는 `pending | ready` 둘뿐이다.** `failed` 는 2026-09-08 계약에서 빠졌다 —
 생성 실패도 저장 실패도 15초 초과도 전부 `ready` + `fallback` 으로 수렴한다.
 """
 
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import Response
 
-from app.api.v1.deps import Session, require_child
-from app.artwork_store import 내것읽기, 오래_기다렸으면_확정
+from app.api.v1.deps import Session, require_child, 볼수있는아이들
+from app.artwork_store import 내것읽기, 바이트읽기, 오래_기다렸으면_확정
 from app.errors import AppError, ErrorCode
 from app.models import Child as ChildRow
 from app.schemas.stage0 import Artwork
@@ -26,26 +27,18 @@ router = APIRouter(prefix="/artworks", tags=["artworks"])
 
 # `require_child` 는 검증된 `children` 행을 준다 (E-3). 예전에는 토큰 문자열이었다.
 Child = Annotated[ChildRow, Depends(require_child)]
+볼수있는것 = Annotated[set[uuid.UUID], Depends(볼수있는아이들)]
+
+# 하루. **`private` 이 핵심이다** — Cloudflare 가 앞단이라 `private` 이 아니면
+# **공유 캐시에 아이 창작물이 남고, 그 사고는 화면에 아무 증상이 없다.**
+캐시규칙 = "private, max-age=86400"
 
 
 @router.get("/{artwork_id}")
-async def get_artwork(
-    artwork_id: str,
-    아이: Child,
-    session: Session,
-    x_mock_status: Annotated[
-        str | None,
-        Header(description="**목 서버 전용.** pending | ready 를 강제한다"),
-    ] = None,
-) -> Artwork:
+async def get_artwork(artwork_id: str, 아이: Child, session: Session, request: Request) -> Artwork:
     """프론트: 3초 뒤 첫 폴링, 이후 2초 간격, 15초 초과 시 중단 (`Stage0.md` 5절).
 
     **남의 삽화는 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
-
-    **`X-Mock-Status` 는 응답의 `status` 만 덮는다.** 행은 안 건드린다 —
-    화면 작업이 「굽는 중」 연출을 붙잡아 두려고 쓰는 값이고, 그것 때문에 DB 가
-    바뀌면 그 뒤 폴링이 뭘 보는지 알 수 없어진다.
-    **`placeholder_url` 폐기와 함께 B-3 ③ 에서 걷어낸다** — 프론트가 안 쓴다.
     """
     삽화 = await 내것읽기(session, artwork_id, 아이.id)
     if 삽화 is None:
@@ -55,9 +48,57 @@ async def get_artwork(
 
     return Artwork(
         artwork_id=str(삽화.id),
-        status=x_mock_status if x_mock_status in {"pending", "ready"} else 삽화.status,
-        # **프록시가 들어오면 여기가 채워진다** (B-3 ③ — 계약이 바뀌는 커밋).
-        url=None,
+        status=삽화.status,
+        # **저장소 주소가 아니라 우리 주소다.** 굽는 중이면 아직 안 준다 —
+        # 프론트가 `status` 로 가르는데 주소까지 미리 주면 그 분기가 흐려진다.
+        #
+        # **절대 주소여야 한다.** web 은 `app.` 이고 api 는 `api.` 라(`adr/0007`),
+        # 상대 경로면 `<img src>` 가 web 오리진에 붙어 **그림이 통째로 안 뜬다.**
+        # 뒤에 프록시가 있으면 `--proxy-headers` 로 scheme 이 https 로 잡혀야 한다.
+        url=str(request.url_for("get_artwork_image", artwork_id=str(삽화.id)))
+        if 삽화.status == "ready"
+        else None,
         tier=삽화.tier,
         fallback=삽화.fallback,
     )
+
+
+@router.get(
+    "/{artwork_id}/image",
+    response_class=Response,
+    responses={200: {"content": {"image/*": {}}, "description": "삽화 바이트"}},
+)
+async def get_artwork_image(
+    artwork_id: str, 볼수있는아이: 볼수있는것, session: Session
+) -> Response:
+    """그림 바이트. **버킷을 공개하는 대신 여기서 낸다** (미결 11-7).
+
+    **`<img>` 서브리소스로 불린다.** 쿠키가 자동으로 실리려면 api 와 web 이
+    same-site 여야 하고 `adr/0007` 이 그렇게 잡아 뒀다 — **`crossOrigin` 속성을
+    붙이면 그 자동이 꺼져 그림이 통째로 안 뜬다** (프론트 몫, `Stage0.md` 5절).
+
+    **남의 것은 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
+    **기본 에셋도 같은 주소로 나간다** — 주소가 갈리면 「`fallback` 을 아이에게
+    알리지 않는다」가 네트워크 탭에서 무너진다.
+    """
+    삽화 = await _아무_아이의것(session, artwork_id, 볼수있는아이)
+    if 삽화 is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    받은것 = await 바이트읽기(삽화)
+    if 받은것 is None:
+        # 저장소도 못 읽고 기본 에셋도 없다. **기본 에셋은 아직 안 만들었다** —
+        # 프리테스트 전에 반드시 채운다 (`장면카드_초안.md` 「기본 삽화 1장」).
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    바이트, mime = 받은것
+    return Response(content=바이트, media_type=mime, headers={"Cache-Control": 캐시규칙})
+
+
+async def _아무_아이의것(session: Session, artwork_id: str, 아이들: set[uuid.UUID]):
+    """볼 수 있는 아이들 중 하나의 것이면 그 행. 아니면 `None`."""
+    for child_id in 아이들:
+        삽화 = await 내것읽기(session, artwork_id, child_id)
+        if 삽화 is not None:
+            return 삽화
+    return None

@@ -413,13 +413,36 @@ export interface paths {
          * @description 프론트: 3초 뒤 첫 폴링, 이후 2초 간격, 15초 초과 시 중단 (`Stage0.md` 5절).
          *
          *     **남의 삽화는 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
-         *
-         *     **`X-Mock-Status` 는 응답의 `status` 만 덮는다.** 행은 안 건드린다 —
-         *     화면 작업이 「굽는 중」 연출을 붙잡아 두려고 쓰는 값이고, 그것 때문에 DB 가
-         *     바뀌면 그 뒤 폴링이 뭘 보는지 알 수 없어진다.
-         *     **`placeholder_url` 폐기와 함께 B-3 ③ 에서 걷어낸다** — 프론트가 안 쓴다.
          */
         get: operations["get_artwork_api_v1_artworks__artwork_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artworks/{artwork_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artwork Image
+         * @description 그림 바이트. **버킷을 공개하는 대신 여기서 낸다** (미결 11-7).
+         *
+         *     **`<img>` 서브리소스로 불린다.** 쿠키가 자동으로 실리려면 api 와 web 이
+         *     same-site 여야 하고 `adr/0007` 이 그렇게 잡아 뒀다 — **`crossOrigin` 속성을
+         *     붙이면 그 자동이 꺼져 그림이 통째로 안 뜬다** (프론트 몫, `Stage0.md` 5절).
+         *
+         *     **남의 것은 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
+         *     **기본 에셋도 같은 주소로 나간다** — 주소가 갈리면 「`fallback` 을 아이에게
+         *     알리지 않는다」가 네트워크 탭에서 무너진다.
+         */
+        get: operations["get_artwork_image_api_v1_artworks__artwork_id__image_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -528,7 +551,14 @@ export interface components {
              */
             fallback: boolean;
         };
-        /** ArtworkRef */
+        /**
+         * ArtworkRef
+         * @description **`placeholder_url` 은 2026-09-08 계약에서 빠졌다.**
+         *
+         *     성공이든 폴백이든 그림은 **`/artworks/{id}/image` 한 주소**로 나간다
+         *     (미결 11-7 · PM 판정). 별도 주소를 두면 **주소만 보고 「기본 그림인가」를 알 수
+         *     있게 되고**, 그건 「`fallback` 을 아이에게 알리지 않는다」와 정면으로 어긋난다.
+         */
         ArtworkRef: {
             /** Artwork Id */
             artwork_id: string;
@@ -539,8 +569,6 @@ export interface components {
             status: "pending" | "ready";
             /** Url */
             url: string | null;
-            /** Placeholder Url */
-            placeholder_url: string;
         };
         /**
          * AttemptBlocked
@@ -1519,10 +1547,7 @@ export interface operations {
     get_artwork_api_v1_artworks__artwork_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description **목 서버 전용.** pending | ready 를 강제한다 */
-                "x-mock-status"?: string | null;
-            };
+            header?: never;
             path: {
                 artwork_id: string;
             };
@@ -1537,6 +1562,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Artwork"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artwork_image_api_v1_artworks__artwork_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artwork_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 삽화 바이트 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
                 };
             };
             /** @description Validation Error */

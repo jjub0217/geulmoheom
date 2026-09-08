@@ -45,13 +45,6 @@ CARD_GUIDE = {
 TODAY = {"cards_done": 2, "cap": 5}
 
 
-def sketch_url(card_id: str) -> str:
-    """스케치 에셋은 아직 없다 (W3 A0-3). **주소 모양만** 카드마다 맞춰 둔다."""
-    return f"{R2}/cards/{card_id}_sketch.webp"
-
-
-SKETCH_URL = sketch_url(CARD_ID)
-
 PAGE = {
     "page_no": 1,
     "source": "card",

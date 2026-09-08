@@ -18,16 +18,18 @@
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import db
 from app.artwork import TIMEOUT_SECONDS, 생성
+from app.config import REPO_ROOT
 from app.middleware import current_request_id
 from app.models import Artwork, CardAttempt
 from app.schemas.stage0 import Tier
-from app.storage import 올리기
+from app.storage import mime추측, 올리기, 읽기
 
 logger = logging.getLogger(__name__)
 
@@ -146,3 +148,44 @@ async def 오래_기다렸으면_확정(session: AsyncSession, 삽화: Artwork) 
     삽화.ready_at = datetime.now(UTC)
     await session.commit()
     return 삽화
+
+
+# 생성이 실패했을 때 아이에게 나가는 그림. **「실패한 그림」으로 보이면 안 된다** —
+# 어둡거나 비었거나 물음표·자물쇠 같은 기호가 들어가면 **아이가 자기 문장이 부족했다고
+# 읽는다** (`장면카드_초안.md` 「기본 삽화 1장」 사양).
+기본에셋 = REPO_ROOT / "api" / "app" / "assets" / "기본삽화.png"
+
+
+@lru_cache
+def 기본에셋바이트() -> bytes | None:
+    """없으면 `None`. **아직 안 만들었다** — 사양은 섰고 뽑는 것이 남았다.
+
+    없는 동안 폴백 경로는 404 를 낸다. **프리테스트 전에 반드시 채워야 하는 자리**이고,
+    비어 있으면 아동 3명이 **그림 자리가 빈 화면**을 본다.
+    """
+    try:
+        return 기본에셋.read_bytes()
+    except OSError:
+        logger.error("기본 삽화 에셋이 없다: %s", 기본에셋.name)
+        return None
+
+
+async def 바이트읽기(삽화: Artwork) -> tuple[bytes, str] | None:
+    """프록시가 내보낼 바이트와 mime. **없으면 `None`.**
+
+    **기본 에셋도 같은 주소로 나간다** (2026-09-08 PM 판정). 주소가 갈리면
+    「`fallback` 을 아이에게 알리지 않는다」가 **네트워크 탭에서 무너진다** —
+    아이는 그냥 그림이 나온 것이어야 한다.
+
+    `r2_key` 가 없을 때뿐 아니라 **저장소를 못 읽을 때도** 기본으로 간다. R2 가 잠깐
+    죽었다고 아이가 빈 그림 자리를 보게 두지 않는다.
+    """
+    if 삽화.r2_key:
+        바이트 = await 읽기(삽화.r2_key)
+        if 바이트 is not None:
+            return 바이트, mime추측(삽화.r2_key)
+
+    기본 = 기본에셋바이트()
+    if 기본 is None:
+        return None
+    return 기본, "image/png"

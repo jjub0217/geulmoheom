@@ -301,7 +301,11 @@ def test_헤더가_없으면_판정_결과가_나온다(client: TestClient):
     assert [h["text"] for h in body["highlights"]] == ["은빛", "살금살금"]
     assert body["outcome"] == "result"
     assert body["artwork"]["status"] == "pending"
-    assert body["artwork"]["placeholder_url"]
+    # **`placeholder_url` 은 2026-09-08 계약에서 빠졌다.** 성공이든 폴백이든 그림은
+    # `/artworks/{id}/image` 한 주소로 나간다 — 별도 주소를 두면 **주소만 보고
+    # 「기본 그림인가」를 알 수 있게 된다.**
+    assert "placeholder_url" not in body["artwork"]
+    assert body["artwork"]["url"] is None
 
 
 def test_scaffold_를_헤더로_강제한다(client: TestClient):

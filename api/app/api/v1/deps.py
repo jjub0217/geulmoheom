@@ -13,6 +13,7 @@ DB 와 대조한다. 어디서 읽는지는 미결 11-2 확정본 그대로다 �
    **JWT `exp` 는 안 늘린다** — 늘리는 것은 쿠키 `Max-Age` 뿐이다
 """
 
+import uuid
 from typing import Annotated, Literal
 
 from fastapi import Depends, Header, Request, Response
@@ -130,3 +131,26 @@ async def mock_daily_cap_reached(
     ] = None,
 ) -> bool:
     return x_mock_error == "DAILY_CAP_REACHED"
+
+
+async def 볼수있는아이들(request: Request, response: Response, session: Session) -> set[uuid.UUID]:
+    """이 요청이 삽화를 볼 수 있는 자녀들 (`Stage0.md` 5절 프록시).
+
+    **아이 쿠키가 있으면 그 아이 하나뿐이다.** 가족 태블릿에는 두 쿠키가 같이 앉아
+    있는데(`tests/conftest.py`), 거기서 둘을 합치면 **아이가 형제자매의 그림을 볼 수
+    있게 된다.** 넓히는 쪽이 아니라 **좁히는 쪽이 기본값**이다.
+
+    학부모 쿠키만 있으면 자기 자녀 전부 — 학부모 화면이 아이 책을 볼 자리다.
+    **어느 쿠키도 없으면 401.** `<img>` 서브리소스에 쿠키가 안 실리면 여기로 떨어진다
+    (`adr/0007` same-site 가 그것을 막아 준다).
+    """
+    if request.cookies.get(CHILD_COOKIE):
+        아이 = await require_child(request, response, session)
+        return {아이.id}
+
+    if request.cookies.get(PARENT_COOKIE):
+        학부모 = await require_parent(request, response, session)
+        문 = select(Child.id).where(Child.parent_id == 학부모.id)
+        return set(await session.scalars(문))
+
+    raise AppError(ErrorCode.UNAUTHORIZED)

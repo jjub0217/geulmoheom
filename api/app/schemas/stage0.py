@@ -197,10 +197,16 @@ class Highlight(BaseModel):
 
 
 class ArtworkRef(BaseModel):
+    """**`placeholder_url` 은 2026-09-08 계약에서 빠졌다.**
+
+    성공이든 폴백이든 그림은 **`/artworks/{id}/image` 한 주소**로 나간다
+    (미결 11-7 · PM 판정). 별도 주소를 두면 **주소만 보고 「기본 그림인가」를 알 수
+    있게 되고**, 그건 「`fallback` 을 아이에게 알리지 않는다」와 정면으로 어긋난다.
+    """
+
     artwork_id: str
     status: ArtworkStatus
     url: str | None
-    placeholder_url: str
 
 
 class AttemptResult(BaseModel):
