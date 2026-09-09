@@ -7,12 +7,13 @@
 """
 
 import pytest
+from google.genai import errors
 
 from app import llm
 from app.artwork import 생성
 from app.config import get_settings
 from app.evaluator import evaluate
-from tests.fake_gemini import 가짜앞단
+from tests.fake_gemini import 가짜앞단, 못쓰는키
 
 
 @pytest.fixture(autouse=True)
@@ -27,9 +28,12 @@ def _캐시비우기() -> None:
 
 @pytest.fixture(autouse=True)
 def _키와모델(monkeypatch: pytest.MonkeyPatch) -> None:
-    # **ASCII 여야 한다.** 키는 헤더로 나가고, 한글을 넣으면 401 이 아니라
-    # `UnicodeEncodeError` 로 죽어 「어디로 갔는가」가 안 보인다 (2026-09-09 실측).
-    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-not-valid-anywhere")
+    """**`.env` 의 진짜 키를 덮는다.** 환경 변수가 `.env` 를 이긴다 (`app/config.py`).
+
+    값의 근거는 `tests/fake_gemini.못쓰는키` 주석에 있고, **그 값이 정말 못 쓰는
+    값인지는 아래 `실물` 테스트가 잰다.**
+    """
+    monkeypatch.setenv("GEMINI_API_KEY", 못쓰는키)
     monkeypatch.setenv("EVALUATOR_MODEL", "gemini-3.1-flash-lite")
 
 
@@ -72,3 +76,45 @@ async def test_이미지_생성도_그리로_간다(monkeypatch: pytest.MonkeyPa
         assert 결과.mime == "image/png"
         assert any("image" in 길 for 길 in 앞단.받은경로), "이미지 갈래로 안 갔다"
         assert any("image" not in 길 for 길 in 앞단.받은경로), "출력 검사가 안 돌았다"
+
+
+@pytest.mark.실물
+async def test_못쓰는_키는_과금이_아니라_거절로_죽는다(monkeypatch: pytest.MonkeyPatch):
+    """**뒤집기다 — 이 테스트가 없으면 1번 항목이 안 선 것이다** (완료 판정 1).
+
+    위 셋은 「가짜 앞단으로 갔다」를 잰다. **못 잰 것이 하나 남는다** — **가짜 앞단을
+    안 지난 호출이 어떻게 되는가.** 진짜 키가 걸려 있으면 그 호출은 **응답이 오므로
+    초록으로 지나가고 청구서로만 보인다.** 틀렸을 때 빨간불이 아니라 돈이 나가는
+    자리라, 재는 방법도 뒤집는 것뿐이다.
+
+    **⚠ 「401」이 아니다 — 실측은 `400 INVALID_ARGUMENT · "API key not valid"` 다**
+    (2026-09-09). 계획 문서의 「401 로 죽는다」는 줄임말이고, 그대로 단언하면
+    **검사가 틀린 것을 문다.**
+
+    **코드만 보면 안 된다** — `400` 은 **요청이 잘못됐을 때도** 온다. 그 둘을 구분하지
+    않으면 「키가 거절됐다」와 「우리 본문이 깨졌다」가 같은 초록이 된다 (축 ⑰).
+    그래서 **거절 사유가 키를 가리키는지까지 본다.**
+
+    사유는 사람이 읽는 문장(`"API key not valid…"`)이 아니라 **`google.rpc.ErrorInfo`
+    의 `reason`** 을 본다. 같은 뜻인데 **영어 문장은 Google 이 언제든 다듬는 것**이고
+    `reason` 은 **기계가 읽으라고 있는 값**이다.
+
+    **SDK 를 직접 부른다** — `evaluate()` 는 실패를 삼켜 `fallback` 으로 돌리므로
+    거절인지 타임아웃인지가 안 남는다.
+
+    **기본 실행에서는 빠진다** (`pyproject.toml` `addopts`). 진짜 Google 로 나가서
+    빠른 잡이 남의 가용성에 묶이면 안 된다. **도는 자리는 느린 잡이다** —
+    `uv run pytest -m 실물`.
+    """
+    monkeypatch.setenv("GEMINI_BASE_URL", "")  # 가짜 앞단을 지나지 않는다
+
+    with pytest.raises(errors.ClientError) as 잡힌:
+        await llm.get_client().aio.models.generate_content(
+            model=get_settings().evaluator_model, contents="ping"
+        )
+
+    사유 = str(잡힌.value)
+    assert 잡힌.value.code in (400, 401, 403), f"인증 거절이 아니다 — {사유}"
+    assert "API_KEY_INVALID" in 사유, (
+        f"거절은 됐는데 키 때문이 아니다. 이 검사는 아무것도 안 잰 것이다 — {사유}"
+    )

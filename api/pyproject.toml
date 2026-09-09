@@ -86,4 +86,11 @@ asyncio_mode = "auto"
 # 있지만, 그러면 `app/api/system.py` 처럼 이름으로 import 한 쪽이 옛 엔진을 계속 쓴다.
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-addopts = "-q"
+# **`실물` 은 기본 실행에서 뺀다.** 진짜 Google 로 나가는 검사라, 넣으면 이 잡이
+# 남의 가용성에 묶이고 **네트워크가 흔들린 것과 코드가 깨진 것이 같은 빨간불**이 된다.
+# 도는 자리는 **느린 잡**이다 — `uv run pytest -m 실물` (`주차계획/W5.md` 백엔드 1번).
+# 명령줄에서 준 `-m` 이 여기 값을 덮는다.
+addopts = "-q -m 'not 실물'"
+markers = [
+    "실물: 진짜 Gemini 로 나간다. 뒤집기 전용이고 기본 실행에서 빠진다",
+]
