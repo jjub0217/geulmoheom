@@ -21,6 +21,7 @@
 
 import functools
 import http.server
+import re
 import socketserver
 import ssl
 import sys
@@ -72,6 +73,41 @@ def 낡았나(out: Path, src: Path) -> str | None:
     )
 
 
+# 번들 안의 api 주소. **번들러가 백틱 템플릿으로 인라인한다** — `` `/api/v1${경로}` `` —
+# 그래서 `"/api/v1"` 큰따옴표로만 찾으면 **진짜 빌드에서 못 찾는다.** 프론트가 자기
+# 가드에서 실제로 물렸고(2026-09-09), 이쪽도 PM 의 빌드를 의심할 때 같은 자리를 밟았다.
+# **두 세션이 따로 밟았으면 우연이 아니라 이 저장소의 성질이다.**
+_절대주소 = re.compile(r"https?://[^\s\"'`]+/api/v1")
+_상대경로 = "/api/v1"
+
+
+def 대상이맞나(out: Path) -> str | None:
+    """번들이 **절대 주소**로 구워졌으면 `None`, 아니면 사유 (2026-09-09 프론트 지적).
+
+    **낡음 검사와 정반대 방향이다.** e2e 하네스(`playwright.static.config.ts`)는
+    **상대 경로여야** 하고 — 정적 서버와 api 를 같은 오리진으로 두고 가로챈다 —
+    **여기는 절대 주소여야** 한다. 이 서버는 **프록시가 아니라 순수 정적 서버**라
+    `/api/v1` 을 받아 줄 곳이 없다.
+
+    **상대 경로 빌드를 여기에 올리면 전부 404 다.** 화면은 뜨는데 아무것도 안 되고,
+    그건 **「JS 가 안 산다」와 증상이 겹친다** — 2026-09-08 리허설에서 세 시간을 쓴 자리다.
+
+    **못 찾으면 막는다.** 조용히 통과시키면 빌드 모양이 바뀐 날부터 아무것도 안 잰다.
+    """
+    글자 = ""
+    for 파일 in out.rglob("*.js"):
+        글자 += 파일.read_text(errors="ignore")
+
+    if _절대주소.search(글자):
+        return None
+    if _상대경로 in 글자:
+        return (
+            "`web/out` 이 **상대 경로**(`/api/v1`)로 구워졌다 — e2e 하네스용이다. "
+            "이 서버에는 api 가 없어 전부 404 가 난다"
+        )
+    return "`web/out` 에서 api 주소를 못 찾았다. 빌드 모양이 바뀌었는지 본다"
+
+
 class 핸들러(http.server.SimpleHTTPRequestHandler):
     """정적 export 를 브라우저가 기대하는 대로 돌려준다."""
 
@@ -105,6 +141,8 @@ def main() -> None:
     if not CERT.exists():
         raise SystemExit("인증서가 없다. 먼저 `make certs-lan`")
     if 사유 := 낡았나(OUT, SRC):
+        raise SystemExit(f"{사유}\n→ 먼저 `make build-out`")
+    if 사유 := 대상이맞나(OUT):
         raise SystemExit(f"{사유}\n→ 먼저 `make build-out`")
 
     맥락 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
