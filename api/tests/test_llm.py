@@ -9,6 +9,7 @@
 import pytest
 
 from app import llm
+from app.artwork import 생성
 from app.config import get_settings
 from app.evaluator import evaluate
 from tests.fake_gemini import 가짜앞단
@@ -52,3 +53,22 @@ async def test_base_url_을_넣으면_평가가_그리로_간다(monkeypatch: py
         assert 결과.grade == "G3"
         assert 결과.fallback is None
         assert 앞단.받은경로, "가짜 앞단에 요청이 안 왔다 — 진짜 Gemini 로 나갔다는 뜻이다"
+
+
+async def test_이미지_생성도_그리로_간다(monkeypatch: pytest.MonkeyPatch):
+    """**갈래는 주소로 나뉜다** — 이미지 모델 이름에 `image` 가 들어간다 (`adr/0006`).
+
+    삽화 경로는 굽기 전에 **출력 검사**(글 모델)를 먼저 부르므로, 이 하나가 **두 갈래를
+    다 지난다** — 둘 중 하나라도 진짜로 나가면 여기서 안 끝난다.
+    """
+    monkeypatch.setenv("IMAGE_MODEL", "gemini-3.1-flash-lite-image")
+
+    with 가짜앞단() as 앞단:
+        monkeypatch.setenv("GEMINI_BASE_URL", 앞단.base_url)
+
+        결과 = await 생성("c01", "legendary")
+
+        assert 결과.image, f"그림이 안 왔다 (사유={결과.사유})"
+        assert 결과.mime == "image/png"
+        assert any("image" in 길 for 길 in 앞단.받은경로), "이미지 갈래로 안 갔다"
+        assert any("image" not in 길 for 길 in 앞단.받은경로), "출력 검사가 안 돌았다"
