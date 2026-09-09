@@ -111,6 +111,11 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.init.outputs.ready == 'true'
         with: { node-version-file: web/.nvmrc, cache: pnpm }
+      # **`pnpm typecheck` 은 `next typegen` 을 먼저 돌린다.** `layout.tsx` 가 쓰는 `LayoutProps` 는
+      # **Next 가 만들어 주는 전역 타입**이라 `.next/` 가 없으면 없다 — 로컬은 dev 를 띄운 적이 있어
+      # 통과하고 **CI 는 죽는다.** 2026-09-09 에 이 단계를 붙이자마자 그게 나왔다.
+      # **로컬과 CI 가 갈리는 자리를 이 검사가 첫 커밋에서 잡은 셈**이다.
+      #
       # **타입 검사가 먼저다.** `eslint` 는 **깨진 import 를 못 잡는다** — 2026-09-09 에
       # 헬퍼 파일 이름을 바꾸고 한 곳이 옛 이름을 가리키는 채로 **lint 가 초록이었다.**
       # e2e 가 결국 잡았지만 **원인에서 먼 자리에서** 잡았고, **파일럿 9일은 매일 핫픽스를 치는
