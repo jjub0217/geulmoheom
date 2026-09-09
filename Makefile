@@ -101,7 +101,19 @@ dev-lan:
 	@$(MAKE) -j2 dev-api dev-web \
 		DEV_BIND=0.0.0.0 WEB_BIND=0.0.0.0 \
 		API_BASE_URL_OVERRIDE=https://$(LAN_HOST):8000/api/v1 \
-		CORS_OVERRIDE='["https://$(LAN_HOST):3000","https://$(LAN_IP):3000"]'
+		CORS_OVERRIDE='["https://$(LAN_HOST):3000","https://$(LAN_IP):3000","https://$(LAN_HOST):3001","https://$(LAN_IP):3001"]'
+
+# 정적 빌드(`output: "export"`)를 LAN 에 연다 — 사무실 실행 진단용.
+# **`next dev` 를 안 내리고 3001 에 나란히 세운다** — 같은 iPad 에서 둘을 번갈아 열어
+# **「dev 번들에만 있는 문제인가」**를 가른다. 그래서 `dev-lan` 의 CORS 에 3001 도 들어간다.
+# 이유·배경은 `api/scripts/serve_web_out.py` 와 `api/notes/사무실실행_iPad.md`.
+build-out:
+	@test -n "$(LAN_IP)" || { echo "LAN IP 를 못 찾았다"; exit 1; }
+	cd web && NEXT_PUBLIC_API_BASE_URL="https://$(LAN_HOST):8000/api/v1" $(PNPM) build
+
+serve-out:
+	@echo "iPad 에서 열 주소 →  https://$(LAN_HOST):3001   (정적 빌드)"
+	cd api && uv run python scripts/serve_web_out.py
 
 # ── 개발 서버 (web + api 동시) ───────────────────────────
 dev:
