@@ -29,6 +29,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1 import _fixtures as fx
+from app.api.v1.artworks import 삽화주소
 from app.api.v1.deps import (
     MockOutcome,
     Session,
@@ -51,6 +52,7 @@ from app.moderation import 검사하기
 from app.pii import 가리기, 실명까지가리기
 from app.scaffold import MAX_SCAFFOLD, 되묻기횟수, 되묻은횟수, 질문
 from app.schemas.stage0 import (
+    ArtworkRef,
     AttemptBlocked,
     AttemptRequest,
     AttemptResponse,
@@ -174,6 +176,7 @@ def _guide(tier: Tier, 시도id: UUID, 하이라이트: list[Highlight]) -> Guid
 
 @router.post("")
 async def create_attempt(
+    request: Request,
     payload: AttemptRequest,
     아이: Child,
     session: Session,
@@ -293,8 +296,11 @@ async def create_attempt(
     # **행만 만들고 응답한다** (B-3 ①). 굽는 데 평균 6.2초가 드는데
     # (`benchmarks/W1-image-bench.md`) 그동안 아이를 세워 두지 않는다 — 프론트가
     # 3초 뒤부터 폴링한다 (`Stage0.md` 5절).
-    삽화 = await 삽화만들기(session, 시도.id, 평가.tier)
-    뒤에서.add_task(굽기, 삽화.id, payload.card_id, 평가.tier)
+    삽화 = await 삽화만들기(session, 시도.id, 평가.tier, payload.card_id)
+    # **이미 구워 둔 조합이면 안 굽는다** (W5 7번 ①). 굽으면 같은 파일을 덮어쓰면서
+    # 돈만 나가고, 아이는 이미 `ready` 를 받았다.
+    if 삽화.status != "ready":
+        뒤에서.add_task(굽기, 삽화.id, payload.card_id, 평가.tier)
 
     # **책이 여기서 쌓인다** (`Stage0.md` 9절 10b). 카드별 **최고 티어 1건**이 한
     # 페이지이고, 티어가 올랐을 때만 교체된다 — 같은 티어로 다시 쓰면 **처음 해낸
@@ -310,11 +316,11 @@ async def create_attempt(
         tier=평가.tier,
         highlights=하이라이트,
         guide=_guide(평가.tier, 시도.id, 하이라이트),
-        artwork={
-            "artwork_id": str(삽화.id),
-            "status": "pending",
-            "url": None,
-        },
+        # **`status` 를 박아 두지 않는다** (2026-09-09). 캐시 히트면 이 자리가 이미
+        # `ready` 다 — 박아 두면 **이미 있는 그림을 두고 아이가 폴링을 돈다.**
+        artwork=ArtworkRef(
+            artwork_id=str(삽화.id), status=삽화.status, url=삽화주소(request, 삽화)
+        ),
         today=_오늘(쓴수 + 1, 상한),
         can_retry=True,
     )

@@ -20,6 +20,7 @@ from fastapi.responses import Response
 from app.api.v1.deps import Session, require_child, 볼수있는아이들
 from app.artwork_store import 내것읽기, 바이트읽기, 오래_기다렸으면_확정
 from app.errors import AppError, ErrorCode
+from app.models import Artwork as ArtworkRow
 from app.models import Child as ChildRow
 from app.schemas.stage0 import Artwork
 
@@ -49,18 +50,30 @@ async def get_artwork(artwork_id: str, 아이: Child, session: Session, request:
     return Artwork(
         artwork_id=str(삽화.id),
         status=삽화.status,
-        # **저장소 주소가 아니라 우리 주소다.** 굽는 중이면 아직 안 준다 —
-        # 프론트가 `status` 로 가르는데 주소까지 미리 주면 그 분기가 흐려진다.
-        #
-        # **절대 주소여야 한다.** web 은 `app.` 이고 api 는 `api.` 라(`adr/0007`),
-        # 상대 경로면 `<img src>` 가 web 오리진에 붙어 **그림이 통째로 안 뜬다.**
-        # 뒤에 프록시가 있으면 `--proxy-headers` 로 scheme 이 https 로 잡혀야 한다.
-        url=str(request.url_for("get_artwork_image", artwork_id=str(삽화.id)))
-        if 삽화.status == "ready"
-        else None,
+        url=삽화주소(request, 삽화),
         tier=삽화.tier,
         fallback=삽화.fallback,
     )
+
+
+def 삽화주소(request: Request, 삽화: ArtworkRow) -> str | None:
+    """그림 주소. **굽는 중이면 `None`.** `POST /attempts` 도 이것을 쓴다 (2026-09-09).
+
+    **저장소 주소가 아니라 우리 주소다.** 프론트가 `status` 로 가르는데 주소까지
+    미리 주면 그 분기가 흐려진다.
+
+    **절대 주소여야 한다.** web 은 `app.` 이고 api 는 `api.` 라(`adr/0007`), 상대
+    경로면 `<img src>` 가 web 오리진에 붙어 **그림이 통째로 안 뜬다.** 뒤에 프록시가
+    있으면 `--proxy-headers` 로 scheme 이 https 로 잡혀야 한다.
+
+    **두 곳이 이 규칙을 따로 갖지 않는다.** 시도 응답과 폴링 응답은 **스키마가 달라
+    (`ArtworkRef` · `Artwork`) 모델은 각자 만들지만**, 갈리면 아픈 것은 이 한 줄이다 —
+    실제로 시도 응답은 `status` 를 `"pending"` 으로 **박아 두고** 있었고, 그래서
+    **캐시 히트로 이미 `ready` 인 삽화도 `pending` 으로 나갔다.**
+    """
+    if 삽화.status != "ready":
+        return None
+    return str(request.url_for("get_artwork_image", artwork_id=str(삽화.id)))
 
 
 @router.get(

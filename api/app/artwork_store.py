@@ -29,16 +29,33 @@ from app.config import REPO_ROOT
 from app.middleware import current_request_id
 from app.models import Artwork, CardAttempt
 from app.schemas.stage0 import Tier
-from app.storage import mime추측, 올리기, 읽기
+from app.storage import mime추측, 올리기, 읽기, 조합찾기, 조합키
 
 logger = logging.getLogger(__name__)
 
 
-async def 만들기(session: AsyncSession, card_attempt_id: uuid.UUID, tier: Tier) -> Artwork:
-    """`pending` 행 하나. **커밋까지 한다** — 뒤에서 굽는 쪽이 다른 세션으로 이 행을
-    찾아야 하므로, 안 커밋하면 백그라운드가 없는 행을 본다.
+async def 만들기(
+    session: AsyncSession, card_attempt_id: uuid.UUID, tier: Tier, card_id: str
+) -> Artwork:
+    """행 하나. **커밋까지 한다** — 뒤에서 굽는 쪽이 다른 세션으로 이 행을 찾아야
+    하므로, 안 커밋하면 백그라운드가 없는 행을 본다.
+
+    **같은 조합이 이미 있으면 굽지 않고 그것을 가리킨다** (W5 7번 ①). 조합은
+    **20 카드 x 3 티어 = 60가지로 유한**하다 — Stage 0 삽화에 **아이 입력이 안
+    들어가기 때문**이다(PRD B-5). 안 그러면 같은 그림을 100명에게 100번 굽는다.
+
+    **행은 시도마다 새로 생긴다.** 계약이 안 바뀐다 — `artwork_id` 는 이 시도의 것이고,
+    달라지는 것은 **처음부터 `ready` 냐**뿐이다.
     """
-    삽화 = Artwork(card_attempt_id=card_attempt_id, tier=tier, status="pending")
+    캐시된 = await 조합찾기(card_id, tier)
+    삽화 = Artwork(
+        card_attempt_id=card_attempt_id,
+        tier=tier,
+        status="ready" if 캐시된 else "pending",
+        r2_key=캐시된,
+        fallback=False,
+        ready_at=datetime.now(UTC) if 캐시된 else None,
+    )
     session.add(삽화)
     await session.commit()
     return 삽화
@@ -57,8 +74,9 @@ async def 굽기(artwork_id: uuid.UUID, card_id: str, tier: Tier) -> None:
     try:
         결과 = await 생성(card_id, tier)
         키 = None
-        if 결과.image:
-            키 = await 올리기(str(artwork_id), 결과.image, 결과.mime)
+        if 결과.image and (오브젝트키 := 조합키(card_id, tier, 결과.mime)):
+            # **조합 키로 올린다** — 다음에 같은 카드·같은 등급이 오면 이 파일을 가리킨다.
+            키 = await 올리기(오브젝트키, 결과.image, 결과.mime)
         if 키 is None:
             # **사유는 우리 눈금이다** (`artwork.생성결과`). 아이에게 안 나간다 —
             # 나가면 「기본 그림이야」가 되고, 그건 아이가 자기 문장이 부족했다고 읽는다.

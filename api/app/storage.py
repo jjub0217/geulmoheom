@@ -25,8 +25,9 @@ R2 는 S3 호환이라 **서명을 직접 짜지 않고 클라이언트를 쓴�
 """
 
 import asyncio
+import hashlib
+import hmac
 import logging
-import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -59,19 +60,70 @@ def 설정됐나() -> bool:
     )
 
 
-def 키(artwork_id: str, mime: str) -> str | None:
-    """R2 오브젝트 키. **`artwork_id` 뒤에 난수를 붙인다.**
+def 조합키(card_id: str, tier: str, mime: str) -> str | None:
+    """**카드+티어 하나에 파일 하나.** 같은 조합이면 늘 같은 키다 (W5 7번 ①).
 
-    `artwork_id` 는 API 응답에 실려 나가는 값이라, 그것만으로 키가 되면 **id 를 아는
-    사람이 곧 그림을 볼 수 있는 사람**이 된다. 난수 한 조각이 그 둘을 끊는다.
-    접근 정책이 서명 URL 로 정해지면 이 난수는 필요 없어지지만, **정해질 때까지의
-    기본값은 열어 두는 쪽이 아니라 닫는 쪽이다.**
+    **결정론적이어야 캐시가 성립한다** — 난수를 붙이면 다음에 못 찾아 또 굽는다.
+    Stage 0 삽화에 **아이 입력이 안 들어가서** 가능한 일이다(PRD B-5): 프롬프트
+    재료가 카드+티어+화풍+가이드뿐이라 **조합이 60가지로 유한**하다.
+
+    **그러면서 추측 가능해지지는 않는다.** 예전 `키()` 가 `artwork_id` 뒤에 난수를
+    붙인 이유가 **「id 를 아는 사람이 곧 그림을 볼 수 있는 사람이 되지 않게」**였는데,
+    카드 id·티어는 사실상 공개값이라 그대로 쓰면 그 이유가 깨진다. 그래서 **난수 대신
+    비밀에서 유도한 조각**을 붙인다 — 같은 조합이면 같고, 비밀 없이는 못 만든다.
+
+    **비밀이 바뀌면 키가 전부 바뀐다** — 캐시가 비고 다시 굽는다. 틀리는 방향이
+    「못 찾아서 다시 굽는다」라 안전한 쪽이다.
     """
     확 = 확장자.get(mime)
     if not 확:
         logger.warning("모르는 이미지 형식이라 저장하지 않는다: %s", mime)
         return None
-    return f"artworks/{artwork_id}-{uuid.uuid4().hex[:16]}.{확}"
+    return f"artworks/{card_id}_{tier}-{_조각(card_id, tier)}.{확}"
+
+
+def _조각(card_id: str, tier: str) -> str:
+    """조합에서 유도한 16자. **비밀이 없으면 고정 문자열로 떨어진다** — 개발·테스트가
+    그 상태이고, 그때는 그냥 「추측 가능한 키」가 된다. 비공개 버킷 + 프록시라
+    거기서 새는 것은 없다."""
+    비밀 = get_settings().jwt_secret.get_secret_value().encode()
+    return hmac.new(비밀, f"{card_id}/{tier}".encode(), hashlib.sha256).hexdigest()[:16]
+
+
+async def 조합찾기(card_id: str, tier: str) -> str | None:
+    """이미 구워 둔 것이 있으면 그 키, 없으면 `None`.
+
+    **확장자를 훑는다.** 프로바이더가 무엇을 줄지 우리가 짐작하지 않는다는 규칙이
+    그대로라(`확장자` 주석), 어느 확장자로 저장됐는지는 **찾아봐야 안다.**
+
+    **DB 를 안 본다 — 파일을 본다.** 미리 뽑아 둔 60장은 **행 없이 파일만** 올라오므로
+    (`scripts/` 로 굽는다), 행으로 찾으면 그것들이 통째로 안 걸린다.
+    """
+    for 확 in dict.fromkeys(확장자.values()):
+        키 = f"artworks/{card_id}_{tier}-{_조각(card_id, tier)}.{확}"
+        if await 있나(키):
+            return 키
+    return None
+
+
+async def 있나(오브젝트키: str) -> bool:
+    """그 키에 파일이 있나. **없거나 못 물어보면 `False`** — 예외를 밖으로 내지 않는다.
+
+    **틀리는 방향이 정해져 있다**: 모르면 「없다」이고, 그러면 **한 번 더 굽는다.**
+    반대로 틀리면 **없는 파일을 가리키는 `ready` 행**이 생기고 아이 화면에 빈 액자가 뜬다.
+    """
+    if not 설정됐나():
+        return 로컬경로(오브젝트키) is not None
+    try:
+        await asyncio.to_thread(
+            _클라이언트().head_object, Bucket=get_settings().r2_bucket, Key=오브젝트키
+        )
+        return True
+    except Exception:
+        # **예외 메시지를 안 싣는다** — botocore 는 요청 정보를 통째로 문자열에 담는다.
+        # 「없음(404)」과 「못 물어봄」을 여기서 안 가른다. 둘 다 「없다」로 다뤄야
+        # 위 주석의 틀리는 방향이 지켜진다.
+        return False
 
 
 @lru_cache
@@ -89,8 +141,11 @@ def _클라이언트() -> Any:
     )
 
 
-async def 올리기(artwork_id: str, image: bytes, mime: str) -> str | None:
+async def 올리기(오브젝트키: str, image: bytes, mime: str) -> str | None:
     """올리고 **오브젝트 키**를 돌려준다. **실패하면 `None`** — 예외를 밖으로 내지 않는다.
+
+    **키를 여기서 만들지 않는다** (2026-09-09). 부르는 쪽이 `조합키()` 로 만들어 넘긴다 —
+    같은 조합이면 같은 키여야 캐시가 성립하고, 그 판단은 **무엇을 굽는지 아는 쪽**에 있다.
 
     **URL 이 아니다.** 저장소가 R2 든 로컬이든 같은 키가 나오고, 그 키가
     `artworks.r2_key` 에 들어간다. 클라이언트가 보는 주소는 프록시가 만든다.
@@ -98,10 +153,6 @@ async def 올리기(artwork_id: str, image: bytes, mime: str) -> str | None:
     boto3 는 동기라 스레드로 넘긴다. 여기서 이벤트 루프를 잡으면 **같은 워커의 다른
     아이들이 함께 멈춘다** — 업로드는 네트워크 왕복이라 짧지 않다.
     """
-    오브젝트키 = 키(artwork_id, mime)
-    if not 오브젝트키:
-        return None
-
     if not 설정됐나():
         # **오류가 아니다.** R2 자격증명이 아직 안 채워졌다 (2026-09-08 대표 몫으로 올림).
         return await _로컬에(오브젝트키, image)

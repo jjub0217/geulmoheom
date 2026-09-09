@@ -18,7 +18,7 @@ from pydantic import SecretStr
 
 from app import storage
 from app.config import get_settings
-from app.storage import mime추측, 설정됐나, 올리기, 읽기, 키
+from app.storage import mime추측, 설정됐나, 올리기, 읽기, 조합키
 
 이미지 = b"\x89PNG\r\n\x1a\n" + b"0" * 64
 
@@ -71,13 +71,20 @@ def test_하나라도_비면_안_켜진_것이다(설정됨, monkeypatch, 빈칸
 # ── 키 ──────────────────────────────────────────────────
 
 
-def test_키가_artwork_id_만으로_안_만들어진다():
-    """`artwork_id` 는 API 응답에 실려 나간다. 그것만으로 키가 되면 **id 를 아는
-    사람이 곧 그림을 볼 수 있는 사람**이 된다 (접근 정책 미정, PM 확인 중)."""
-    첫, 둘 = 키("a1", "image/png"), 키("a1", "image/png")
+def test_조합_키는_결정론적이되_추측할_수_없다():
+    """**2026-09-09 에 `키(artwork_id, mime)` 를 대체했다** (W5 7번 ① lazy 캐시).
 
-    assert 첫 != 둘
-    assert 첫.startswith("artworks/a1-") and 첫.endswith(".png")
+    종전 키는 `artwork_id` 뒤에 **난수**를 붙였다 — 이유는 「id 를 아는 사람이 곧
+    그림을 볼 수 있는 사람이 되지 않게」였다. 캐시는 **같은 조합이면 같은 키**를
+    요구하므로 난수를 못 쓴다. **그 대신 비밀에서 유도한 조각**을 붙여 **두 성질을
+    같이 지킨다** — 결정론적이고, 조합만 알아서는 못 만든다.
+    """
+    첫, 둘 = 조합키("c01", "basic", "image/png"), 조합키("c01", "basic", "image/png")
+
+    assert 첫 == 둘
+    assert 첫.startswith("artworks/c01_basic-") and 첫.endswith(".png")
+    # **조합만으로 맞출 수 있으면 안 된다.**
+    assert 첫 != "artworks/c01_basic.png"
 
 
 @pytest.mark.parametrize(
@@ -85,13 +92,13 @@ def test_키가_artwork_id_만으로_안_만들어진다():
 )
 def test_확장자는_프로바이더가_준_mime_에서_온다(mime, 확):
     """**짐작하지 않는다.** 목 픽스처가 `.webp` 라고 실제로 webp 가 오는 것은 아니다."""
-    assert 키("a1", mime).endswith(f".{확}")
+    assert 조합키("c01", "basic", mime).endswith(f".{확}")
 
 
 def test_모르는_형식은_저장하지_않는다():
     """확장자가 틀리면 브라우저가 다운로드로 처리해 그림이 안 뜨고, **그 실패는 조용하다.**"""
-    assert 키("a1", "image/heic") is None
-    assert 키("a1", "") is None
+    assert 조합키("c01", "basic", "image/heic") is None
+    assert 조합키("c01", "basic", "") is None
 
 
 # ── 올리기 ──────────────────────────────────────────────
@@ -102,7 +109,7 @@ def test_올리면_오브젝트_키를_돌려준다(설정됨, monkeypatch):
     **저장소 주소가 클라이언트로 안 나간다.**"""
     받은 = _올림(monkeypatch)
 
-    키값 = asyncio.run(올리기("a1", 이미지, "image/png"))
+    키값 = asyncio.run(올리기("artworks/그림.png", 이미지, "image/png"))
 
     assert len(받은) == 1
     보낸 = 받은[0]
@@ -113,11 +120,10 @@ def test_올리면_오브젝트_키를_돌려준다(설정됨, monkeypatch):
     assert "http" not in 키값
 
 
-def test_모르는_형식이면_올리지_않는다(설정됨, monkeypatch):
-    받은 = _올림(monkeypatch)
-
-    assert asyncio.run(올리기("a1", 이미지, "image/heic")) is None
-    assert not 받은
+def test_모르는_형식이면_키가_안_나온다():
+    """**막는 자리가 `올리기` 에서 `조합키` 로 옮겨졌다** (2026-09-09). 키를 못 만들면
+    부르는 쪽이 올리지 않는다 (`artwork_store.굽기`)."""
+    assert 조합키("c01", "basic", "image/heic") is None
 
 
 def test_실패하면_None_이고_예외가_안_샌다(설정됨, monkeypatch, caplog):
@@ -126,7 +132,7 @@ def test_실패하면_None_이고_예외가_안_샌다(설정됨, monkeypatch, c
     _올림(monkeypatch, 예외=RuntimeError(비밀))
 
     with caplog.at_level(logging.WARNING, logger="app.storage"):
-        assert asyncio.run(올리기("a1", 이미지, "image/png")) is None
+        assert asyncio.run(올리기("artworks/그림.png", 이미지, "image/png")) is None
 
     기록 = [r for r in caplog.records if r.name == "app.storage"]
     assert 기록
@@ -151,7 +157,7 @@ def test_R2_가_비면_로컬에_저장한다(보관함, monkeypatch):
     자격증명이 오면 이 경로를 안 탄다."""
     받은 = _올림(monkeypatch)
 
-    키값 = asyncio.run(올리기("a1", 이미지, "image/png"))
+    키값 = asyncio.run(올리기("artworks/그림.png", 이미지, "image/png"))
 
     assert not 받은, "R2 로 올리려 들면 안 된다"
     저장된 = list(보관함.rglob("*.png"))
@@ -163,14 +169,19 @@ def test_R2_가_비면_로컬에_저장한다(보관함, monkeypatch):
 def test_R2_가_있으면_로컬을_안_쓴다(설정됨, 보관함, monkeypatch):
     _올림(monkeypatch)
 
-    asyncio.run(올리기("a1", 이미지, "image/png"))
+    asyncio.run(올리기("artworks/그림.png", 이미지, "image/png"))
 
     assert not 보관함.exists()
 
 
-def test_모르는_형식은_로컬에도_안_남는다(보관함):
-    """형식 검사가 두 경로 **앞**에 있다 — 갈라지면 로컬에서만 되는 코드가 생긴다."""
-    assert asyncio.run(올리기("a1", 이미지, "image/heic")) is None
+def test_모르는_형식은_R2_든_로컬이든_키가_없다(보관함):
+    """형식 검사가 **두 경로 앞**에 있다 — 갈라지면 로컬에서만 되는 코드가 생긴다.
+
+    **검사 자리가 옮겨졌다** (2026-09-09). 예전에는 `올리기` 안이었고 지금은 `조합키`다 —
+    키가 안 나오면 부르는 쪽이 아예 안 올린다. **앞에 있다는 성질은 그대로**이고,
+    오히려 R2·로컬 갈래보다 더 앞이다.
+    """
+    assert 조합키("c01", "basic", "image/heic") is None
     assert not 보관함.exists()
 
 
@@ -186,7 +197,7 @@ def test_보관함_밖을_가리키는_키를_거부한다(보관함):
 
 def test_로컬경로가_저장한_파일을_찾는다(보관함, monkeypatch):
     _올림(monkeypatch)
-    오브젝트키 = asyncio.run(올리기("a1", 이미지, "image/png"))
+    오브젝트키 = asyncio.run(올리기("artworks/그림.png", 이미지, "image/png"))
 
     assert storage.로컬경로(오브젝트키).read_bytes() == 이미지
 
@@ -198,7 +209,7 @@ def test_로컬에_저장한_것을_되읽는다(보관함, monkeypatch):
     """**저장한 곳에서 읽는다.** 여기서 갈라지면 자격증명이 온 날 예전 삽화가
     통째로 안 보인다."""
     _올림(monkeypatch)
-    오브젝트키 = asyncio.run(올리기("a1", 이미지, "image/png"))
+    오브젝트키 = asyncio.run(올리기("artworks/그림.png", 이미지, "image/png"))
 
     assert asyncio.run(읽기(오브젝트키)) == 이미지
 
