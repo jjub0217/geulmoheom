@@ -19,6 +19,7 @@ from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
 from app.card_store import 모험카드들, 오늘상태, 오늘쓴카드들
 from app.card_store import 카드 as 카드읽기
 from app.errors import AppError, ErrorCode
+from app.guide_lines import 카드첫말
 from app.models import TUTORIAL_TYPE
 from app.models import Card as CardRow
 from app.models import Child as ChildRow
@@ -37,7 +38,7 @@ def _응답(행: CardRow) -> Card:
             "type": 행.type,
             "situation": 행.situation_text,
             "prompt_label": 행.prompt_label,
-            "guide": fx.CARD_GUIDE,
+            "guide": {"expression": "default", "line": 카드첫말()},
             "today": fx.TODAY,
         }
     )

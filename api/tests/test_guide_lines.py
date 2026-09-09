@@ -10,11 +10,21 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.v1 import _fixtures as fx
 from app.api.v1 import attempts
+from app.docs_md import 민
 from app.evaluator import 평가결과
-from app.guide_lines import 결과대사, 결과한줄, 종료대사, 차단대사
+from app.guide_lines import 결과대사, 결과한줄, 종료대사, 차단대사, 카드첫말
 from app.moderation import 검사결과
+
+
+def _한줄(제목: str) -> str:
+    """그 절의 첫 인용 줄. **검사가 기대값을 코드에서 가져오지 않게** 문서를 직접 읽는다."""
+    from app.guide_lines import _절
+
+    for 줄 in _절(제목):
+        if 줄.startswith(">"):
+            return 줄.lstrip("> ")
+    raise AssertionError(f"{제목} 에 인용 줄이 없다")
 
 
 def test_세_묶음이_다_읽힌다():
@@ -168,7 +178,7 @@ async def test_결과_대사는_카드_대사가_아니다(client: TestClient, m
         json={"card_id": "c01", "text": "그림자 뒤로 살금살금 돌아간다"},
     ).json()
 
-    assert 몸["guide"]["line"] != fx.CARD_GUIDE["line"]
+    assert 몸["guide"]["line"] != 카드첫말()
 
 
 async def test_목_강제_결과_대사도_1_6_에서_온다(client: TestClient):
@@ -200,3 +210,22 @@ async def test_목_결과_대사는_두_번_불러도_같다(client: TestClient)
     두번 = client.post("/api/v1/attempts", **보냄).json()
 
     assert 첫번["guide"]["line"] == 두번["guide"]["line"]
+
+
+# ── 1.4b 카드 화면 첫 말 ─────────────────────────────────
+#
+# 2026-09-09 신설. **이 자리가 `문구.md` 에 없었다** — 화면에 그대로 나가는 문장인데
+# 픽스처와 `Stage0.md` 예시에만 살아 있었다. **오늘 오후 목 결과 대사와 같은 부류이고
+# 하루에 둘째**다 (`문구.md` 0장 「목·픽스처도 이 문서를 읽는다」).
+
+
+def test_카드첫말이_1_4b_에서_온다():
+    """하나뿐이라 고르지 않는다. **비어 있으면 죽는다** — 빈 말풍선이 아이에게 간다."""
+    assert 카드첫말() == 민(_한줄("### 1.4b"))
+
+
+async def test_카드_응답의_대사가_1_4b_에서_온다(client: TestClient):
+    """`GET /cards/next`. **픽스처에 박아 두면 문서를 고쳐도 화면이 안 따라온다.**"""
+    몸 = client.get("/api/v1/cards/next").json()
+
+    assert 몸["guide"]["line"] == 카드첫말()
