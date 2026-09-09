@@ -8,8 +8,13 @@
 """
 
 import pytest
+from fastapi.testclient import TestClient
 
+from app.api.v1 import _fixtures as fx
+from app.api.v1 import attempts
+from app.evaluator import 평가결과
 from app.guide_lines import 결과대사, 결과한줄, 종료대사, 차단대사
+from app.moderation import 검사결과
 
 
 def test_세_묶음이_다_읽힌다():
@@ -107,3 +112,60 @@ def test_중괄호가_든_말도_안_터진다():
     줄 = 결과한줄("rare", "씨앗", "{이상한}")
 
     assert "{이상한}" in 줄
+
+
+# ── 라우트까지 — 「값이 왔다」와 「맞는 값이 왔다」는 다르다 ──────────────
+#
+# 2026-09-09 PM 이 프론트 스샷을 보고 물었다: 결과 화면 대사가 **카드 화면 대사와
+# 글자 하나까지 같다.** 위 테스트들은 `결과한줄()` 만 보므로 **라우트가 그 함수를
+# 실제로 부르는지는 아무도 안 봤다.** `guide.line` 은 문자열이라 계약 검사도 통과한다.
+
+
+async def test_결과_응답의_대사가_1_6_에서_오고_말자리가_채워진다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    """`POST /attempts` 가 `outcome=result` 로 답할 때. **카드 대사가 아니어야 한다.**"""
+
+    async def _판정(text: str, **_) -> 평가결과:
+        return 평가결과(grade="G2", signals=["adv:살금살금"])
+
+    async def _통과(text: str) -> 검사결과:
+        return 검사결과(blocked=False)
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    monkeypatch.setattr(attempts, "검사하기", _통과)
+
+    몸 = client.post(
+        "/api/v1/attempts",
+        json={"card_id": "c01", "text": "그림자 뒤로 살금살금 돌아간다"},
+    ).json()
+
+    assert 몸["outcome"] == "result"
+    assert 몸["tier"] == "rare"
+    # **문서를 읽어서 대조한다** — 이 파일 머리말 그대로. 문자열을 박지 않는다.
+    후보 = [줄.replace("{말}", "살금살금") for 줄 in 결과대사()["rare"]]
+    assert 몸["guide"]["line"] in 후보
+    # 하이라이트가 있으면 **`{말}` 자리가 든 문장 중에서 골라야** 어느 말이 통했는지
+    # 말해 준다 (PRD A0-3 MUST). 씨앗이 시도 id 라 어느 문장인지는 고정 못 한다.
+    assert "살금살금" in 몸["guide"]["line"] or 몸["guide"]["line"] in 결과대사()["rare"]
+
+
+async def test_결과_대사는_카드_대사가_아니다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """**프론트 스샷에서 나온 그 자리다** (2026-09-09). 카드 대사가 결과 화면에 그대로
+    떴는데, 서버가 그것을 내려줄 수 있는 경로가 있는지 여기서 못 박는다."""
+
+    async def _판정(text: str, **_) -> 평가결과:
+        return 평가결과(grade="G2", signals=["adv:살금살금"])
+
+    async def _통과(text: str) -> 검사결과:
+        return 검사결과(blocked=False)
+
+    monkeypatch.setattr(attempts, "evaluate", _판정)
+    monkeypatch.setattr(attempts, "검사하기", _통과)
+
+    몸 = client.post(
+        "/api/v1/attempts",
+        json={"card_id": "c01", "text": "그림자 뒤로 살금살금 돌아간다"},
+    ).json()
+
+    assert 몸["guide"]["line"] != fx.CARD_GUIDE["line"]
