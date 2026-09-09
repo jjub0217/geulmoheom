@@ -6,7 +6,8 @@
 `text` 는 항상 반환한다 — **아이의 책 콘텐츠**다 (PRD 1.1b). 맞춤법·AI 보정 없음.
 **등급이 낮아도 똑같이 쌓인다** — 「기본」도 페이지가 된다.
 
-**아직 목인 것**: `PATCH /book` 의 제목 저장(SHOULD · PII 검사가 함께 붙는 자리다).
+**제목도 아이가 쓰는 문장이다** — `PATCH /book` 은 `POST /attempts` 와 **같은 마스킹을
+지난다**. 실명이 들어오면 본문보다 눈에 더 잘 띄는 **표지**에 박힌다.
 """
 
 from typing import Annotated
@@ -15,8 +16,11 @@ from fastapi import APIRouter, Depends, Request
 
 from app.api.v1.deps import Session, require_child
 from app.book_store import 삽화주소들, 세어보기, 책, 페이지들
+from app.events import 남기기, 이벤트
+from app.models import Book as BookRow
 from app.models import BookPage as PageRow
 from app.models import Child as ChildRow
+from app.pii import 실명까지가리기
 from app.schemas.stage0 import (
     Book,
     BookCounts,
@@ -88,8 +92,50 @@ async def get_today(아이: Child, session: Session, request: Request) -> BookTo
     return BookToday(pages=페이지)
 
 
+# **열에서 읽어 온다** (`books.title` = `String(120)`). 숫자를 여기 손으로 적으면
+# 한쪽만 바뀌고, 그때 **DB 가 거절해 500** 이 난다 — 아이는 제목을 못 고친 채 오류만 본다.
+제목상한: int = BookRow.title.type.length
+
+
 @router.patch("")
-async def update_book(payload: UpdateBookRequest, _: Child) -> UpdateBookResponse:
-    """**아직 저장하지 않는다.** 제목은 아이가 쓰는 문장이라 **PII 검사가 함께 붙어야**
-    하고(`Stage0.md` 6절 SHOULD), 그 자리를 따로 세운다."""
-    return UpdateBookResponse(title=payload.title)
+async def update_book(
+    payload: UpdateBookRequest, 아이: Child, session: Session
+) -> UpdateBookResponse:
+    """제목을 저장한다 (`Stage0.md` 6절 SHOULD · PII 검사).
+
+    앞뒤 공백을 다듬고 120자에서 자른다. 빈 제목으로는 바뀌지 않고 지금 제목이
+    그대로 돌아온다. 응답의 `title` 은 **실제로 저장된 값**이다.
+    """
+    # **이 함수의 설명은 짧게 둔다.** docstring 이 `/openapi.json` 의 `description` 으로
+    # 나가고 프론트 타입까지 따라 바뀐다 — 이유는 아래 주석에 적고, 나가는 문장에는
+    # **클라이언트가 알아야 할 동작만** 둔다.
+    #
+    # **제목도 아이가 쓰는 문장이다.** 본문과 같은 마스킹을 지난다 — 실명이 들어오면
+    # **표지**에 박히고, 그 자리는 본문보다 눈에 더 잘 띈다.
+    #
+    # **빈 제목으로 바꾸지 않는다.** 책에서 제목을 없애는 길을 만들지 않는다. 아이가
+    # 지우고 저장하면 화면에서 **되돌아간 것이 보인다.**
+    #
+    # **길이는 열 너비에서 자른다.** 계약에 상한이 없어 스키마로 막으면 명세가 바뀌는데
+    # (`adr/0011` 잠금), 안 자르면 긴 제목이 **DB 에서 500 으로 터진다.**
+    # **화면이 몇 자까지 받게 할지는 프론트·`문구.md` 몫**이고, 여기는 그 아래의 바닥이다.
+    그책 = await 책(session, 아이)
+
+    다듬은 = payload.title.strip()[:제목상한]
+    if not 다듬은:
+        return UpdateBookResponse(title=그책.title)
+
+    # **본문과 같은 자리, 같은 인자다** (`app/api/v1/attempts.py`). 자녀 닉네임과 가이드
+    # 이름은 서버가 아는 값이라 호출 없이 빼 준다 — 아이가 자기 이름을 제목에 써도
+    # 안 가려진다.
+    가려진, 가린종류 = await 실명까지가리기(다듬은, 제외=(아이.nickname, 아이.guide_name or ""))
+    if 가린종류:
+        # **종류만 남긴다.** 가린 값도, 몇 개였는지도 싣지 않는다 (PRD 1.1b).
+        await 남기기(
+            아이.id,
+            *(이벤트("pii_masked", {"layer": "server", "kind": 종류}) for 종류 in 가린종류),
+        )
+
+    그책.title = 가려진
+    await session.commit()
+    return UpdateBookResponse(title=그책.title)

@@ -484,8 +484,10 @@ export interface paths {
         head?: never;
         /**
          * Update Book
-         * @description **아직 저장하지 않는다.** 제목은 아이가 쓰는 문장이라 **PII 검사가 함께 붙어야**
-         *     하고(`Stage0.md` 6절 SHOULD), 그 자리를 따로 세운다.
+         * @description 제목을 저장한다 (`Stage0.md` 6절 SHOULD · PII 검사).
+         *
+         *     앞뒤 공백을 다듬고 120자에서 자른다. 빈 제목으로는 바뀌지 않고 지금 제목이
+         *     그대로 돌아온다. 응답의 `title` 은 **실제로 저장된 값**이다.
          */
         patch: operations["update_book_api_v1_book_patch"];
         trace?: never;
