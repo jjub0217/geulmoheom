@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
@@ -11,7 +12,7 @@ import { LeaveButton } from "@/components/leave";
 import { SceneCard } from "@/components/scene-card";
 import { TierBadge } from "@/components/tier-badge";
 import { WrittenLine } from "@/components/written-line";
-import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
+import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
 import { useArtwork } from "@/lib/artwork";
 import type { PiiKind } from "@/lib/pii";
 
@@ -120,7 +121,25 @@ function 거절화면(e: ApiError): Screen {
     : { kind: "refused", line };
 }
 
+/**
+ * **인증이 확인된 상태인가.** 서버가 자녀 쿠키를 보고 답을 준 상태들이다 —
+ * 카드가 왔거나(`card`·`sending`·`sent`) 하루 상한을 알려줬거나(`done`).
+ *
+ * **「모르는 상태」는 전부 거짓이다** — 아직 안 물어본 `loading`, 형식을 갖춰 거절당한
+ * `refused`(401 은 위에서 보내 버리므로 여기 오는 것은 403·5xx 다), 못 닿은 `unreachable`.
+ * **모르면 안 그리는 쪽으로 접는다** — `실행형태판정` 이 「확신이 없으면 브라우저탭」인 것과 같다.
+ */
+function 인증확인됨(screen: Screen): boolean {
+  return (
+    screen.kind === "card" ||
+    screen.kind === "sending" ||
+    screen.kind === "sent" ||
+    screen.kind === "done"
+  );
+}
+
 export default function Home() {
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   // 아이가 쓰는 중인 문장. **여기서 나가는 곳은 화면뿐이다** — 로그·리포터로 흘리지 않는다 (PRD 1.1b).
   const [text, setText] = useState("");
@@ -164,6 +183,17 @@ export default function Home() {
       })
       .catch((e: unknown) => {
         if (!alive) return;
+        // **401 은 화면이 아니라 자리 문제다** (2026-09-08 실기기, PM 판정).
+        // 매니페스트 `start_url` 이 `/` 라 **아이가 홈 화면 아이콘을 처음 누르면 여기로 온다.**
+        // 문구만 띄우면 **들어갈 문이 없는 화면**이 된다 — 버튼도 없었다.
+        // **`문구.md` 2.1 의 문장을 고치지 않는다.** 문장이 틀린 게 아니라 **보여주는 자리가 틀렸다** —
+        // 고치면 자리 문제가 문장 문제로 위장된다.
+        if (인증이풀렸다(e)) {
+          // 인증 화면이 나머지를 안다 — 홈 화면 앱이면 코드 입력, 브라우저 탭이면 설치 안내.
+          // **둘 다 이미 서 있는 화면이라 새로 만들 것이 없다.**
+          router.replace("/child/auth");
+          return;
+        }
         if (e instanceof ApiError) {
           setScreen(거절화면(e));
           return;
@@ -178,7 +208,7 @@ export default function Home() {
     return () => {
       alive = false;
     };
-  }, [attempt]);
+  }, [attempt, router]);
 
   const send = async (card: Card, guide: Guide) => {
     set보내기못닿음(false);
@@ -204,6 +234,14 @@ export default function Home() {
         setScreen({ kind: "card", card, guide: outcome.guide });
       }
     } catch (e) {
+      // **보내는 쪽도 같이 보낸다.** 학부모가 자녀를 지우면 **아이 기기는 다음 요청에서
+      // 401 로 떨어지는데**(`문구.md` 3.9), 그때 문구만 띄우면 **아이는 지워진 화면에 갇힌다** —
+      // 이제 「나가기」도 인증 확인 뒤에만 그려서 **누를 것이 하나도 없다.**
+      // **쓰던 문장을 잃지만 되돌릴 방법이 없다** — 세션이 실제로 사라진 것이라 다시 보낼 곳이 없다.
+      if (인증이풀렸다(e)) {
+        router.replace("/child/auth");
+        return;
+      }
       if (e instanceof ApiError) {
         // **카드를 부르는 쪽과 같은 함수를 쓴다.** 전에는 여기만 `e.서버문구` 라
         // **보내는 쪽만 앱 목소리로 떨어졌다** — 하루 상한은 **여섯 번째 문장을 보낼 때도**
@@ -366,12 +404,19 @@ export default function Home() {
           (`layout.tsx` 의 `flex min-h-dvh flex-col`). 「아이 눈에 띄는 자리에 두지 않는다」를
           **자리로 지킨 것**이고, 글자를 못 읽게 줄인 것이 아니다.
 
-          **화면 상태를 안 가린다 — 어느 상태에서든 그 자리에 있다.** 「보내는 중」에만 숨기는
-          규칙을 두려다 접었다: **오락가락하는 컨트롤이 오히려 눌러보게 만든다.**
-          실수로 누르는 것은 확인 창이 막는다 — 그것이 되묻기를 둔 이유 전부다. */}
-      <footer className="page-frame flex justify-center pb-6">
-        <LeaveButton />
-      </footer>
+          **들어온 뒤에만 그린다** (2026-09-08 실기기, PM 판정). **로그인 전 화면에 나가는 문만
+          있었다** — 들어온 적 없는 아이에게 「다시 들어오려면 부모님께 새 접속 코드를 받아야 해요」는
+          **겁만 주고 사실도 아니다**(잃을 세션이 없다). **문장은 맞고 자리가 틀렸다.**
+          **로딩 중에도 안 그린다** — 리다이렉트 전 찰나에 보이고, 아이는 그 찰나에 누른다.
+
+          **인증된 뒤에는 상태를 안 가린다 — 어느 상태에서든 그 자리에 있다.** 「보내는 중」에만
+          숨기는 규칙을 두려다 접었다: **오락가락하는 컨트롤이 오히려 눌러보게 만든다.**
+          **두 규칙은 축이 다르다** — 앞은 「들어왔나」이고 뒤는 「들어온 뒤 무엇을 하는 중인가」다. */}
+      {인증확인됨(screen) && (
+        <footer className="page-frame flex justify-center pb-6">
+          <LeaveButton />
+        </footer>
+      )}
     </>
   );
 }

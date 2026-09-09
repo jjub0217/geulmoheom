@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { BookPageFrame } from "@/components/book-page";
-import { ApiError, NetworkError, apiGet } from "@/lib/api";
+import { ApiError, NetworkError, apiGet, 인증이풀렸다 } from "@/lib/api";
 
 import { 버튼, 못닿음 } from "../copy";
 import { 상태표시 } from "../status-copy";
@@ -30,6 +31,7 @@ type Screen =
   | { kind: "unreachable"; hints: string[] };
 
 export default function BookScreen() {
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -42,6 +44,13 @@ export default function BookScreen() {
       })
       .catch((e: unknown) => {
         if (!alive) return;
+        // **모험 화면과 같은 뿌리다** (2026-09-08). 여기도 401 이면 문구만 띄우고
+        // **나가는 문조차 없었다** — 이 화면에는 「나가기」가 아예 없어서 뒤로 가기 말고는 길이 없다.
+        // 아이가 결과 화면의 「내 책」을 눌렀는데 그 사이 쿠키가 죽으면 정확히 여기로 온다.
+        if (인증이풀렸다(e)) {
+          router.replace("/child/auth");
+          return;
+        }
         if (e instanceof ApiError) {
           setScreen({ kind: "refused", line: e.서버문구 });
           return;
@@ -56,7 +65,7 @@ export default function BookScreen() {
     return () => {
       alive = false;
     };
-  }, [attempt]);
+  }, [attempt, router]);
 
   return (
     <main className="page-frame flex flex-1 flex-col gap-8 py-10">
