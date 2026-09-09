@@ -38,7 +38,6 @@ const CARD: CardResponse = {
   type: "discovery",
   situation: "낡은 등대 문이 반쯤 열려 있고 안쪽에서 파란 빛이 새어 나온다.",
   prompt_label: "탐험가는 어떻게 할까?",
-  sketch_url: "https://r2.example/geulmoheom/cards/c99_sketch.webp",
   guide: { expression: "default", line: "나침반이 조용하네." },
   today: { cards_done: 0, cap: 5 },
 };

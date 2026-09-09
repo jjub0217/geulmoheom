@@ -29,14 +29,11 @@ import { 상태표시 } from "../src/app/status-copy";
 type CardResponse =
   paths["/api/v1/cards/next"]["get"]["responses"][200]["content"]["application/json"];
 
-const CARD_SKETCH = "https://r2.example/geulmoheom/cards/c99_sketch.webp";
-
 const CARD: CardResponse = {
   card_id: "c99",
   type: "discovery",
   situation: "낡은 등대 문이 반쯤 열려 있고 안쪽에서 파란 빛이 새어 나온다.",
   prompt_label: "탐험가는 어떻게 할까?",
-  sketch_url: CARD_SKETCH,
   guide: {
     expression: "default",
     line: "나침반이 조용하네. 네가 뭘 할지 말해주면 움직일 거야!",
@@ -872,4 +869,45 @@ test("그림이 화면을 다 먹지 않는다 — 아래 것들이 접히면 �
   // 액자 바로 아래 등급 배지가 **스크롤 없이 보인다.**
   const 배지 = (await page.locator("main [data-티어배지]").boundingBox())!;
   expect(배지.y + 배지.height).toBeLessThan(화면높이);
+});
+
+test("낮은 화면에서도 액자가 비율을 지킨다 — 실기기가 여기서 깨졌다", async ({ page }) => {
+  // **iPad 6 가로다** (2026-09-09 실측 뷰포트 1024×768). 프로젝트 뷰포트 둘(1280×800·390×844)이
+  // **둘 다 이 자리를 안 밟았다** — 실기기에서 액자가 **260×237(비율 1.10)** 로 찍혔는데
+  // 검사는 0.579 로 초록이었다. **재는 조건이 달라서 모순이 아니었다.**
+  await page.setViewportSize({ width: 1024, height: 768 });
+
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  const 액자 = page.locator("main [data-삽화자리]");
+  await expect(액자).toBeVisible();
+  const 자리 = (await 액자.boundingBox())!;
+
+  // **높이가 눌리면 안 된다.** 액자 안에는 흐름에 있는 것이 없어서(`Image fill` 은 절대 배치)
+  // **`min-height:auto` 가 0 으로 풀리고**, 세로 flex 가 꽉 차면 **비율을 이기고 찌그러뜨린다.**
+  expect(자리.width / 자리.height).toBeCloseTo(계약비율, 2);
 });
