@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -23,11 +23,68 @@ import { join } from "node:path";
 const 절대주소 = /https?:\/\/[^"'`\s]+\/api\/v1/;
 
 /**
+ * 상대 경로로 박힌 api. **따옴표 종류를 열어 둔다** —
+ * 번들러가 `` `/api/v1${경로}` `` 처럼 **백틱 템플릿**으로 인라인한다.
+ * 2026-09-09 에 이걸 큰따옴표로만 찾다가 **진짜 빌드에서 「못 찾았다」로 죽었다** —
+ * 가드는 정직하게 죽었는데 **가드의 픽스처가 진짜 번들과 달랐다.** 오늘 잡은 것과 같은 부류다.
+ */
+const 상대경로 = /["'`]\/api\/v1/;
+
+/**
  * **Playwright 가 `globalSetup` 에 `FullConfig` 를 넘긴다.** 그래서 여기에 인자를 두면
  * 그 객체가 경로 자리로 들어온다 — **인자 없는 껍데기를 따로 둔다.**
  */
 export default function 정적빌드확인() {
   빌드대상확인(join(process.cwd(), "out"));
+  낡았나확인(join(process.cwd(), "out"), join(process.cwd(), "src"));
+}
+
+/**
+ * **「무엇을 향해 구웠나」와 「언제 구웠나」는 다른 물음이다.** 2026-09-09 에 둘 다 밟혔다 —
+ * PM 은 **시각은 최신인데 대상이 다른 빌드**를, 나는 **대상은 맞는데 36분 낡은 빌드**를 놓쳤다.
+ * **위 `빌드대상확인` 은 대상만 본다.** 이건 시각을 본다.
+ *
+ * **소스가 더 새로우면 죽는다.** 안 그러면 **고친 것을 안 재고 옛 코드를 잰다** —
+ * 「재는 대상이 내가 생각한 그것이 아니다」의 한 갈래다.
+ */
+export function 낡았나확인(빌드뿌리: string, 소스뿌리: string) {
+  const 구운때 = 최신시각(빌드뿌리);
+  const 고친때 = 최신시각(소스뿌리);
+  if (구운때 === null || 고친때 === null) return;
+  if (구운때 >= 고친때) return;
+
+  const 분 = Math.round((고친때 - 구운때) / 60_000);
+  throw new Error(
+    [
+      `이 out/ 은 낡았다 — 소스가 ${분}분 더 새롭다.`,
+      "고친 것을 안 재고 옛 코드를 잰다. 다시 구워라:",
+      "  NEXT_PUBLIC_API_BASE_URL=/api/v1 pnpm build",
+    ].join("\n"),
+  );
+}
+
+/** 폴더 안에서 가장 최근에 손댄 시각. 없으면 `null`. */
+function 최신시각(뿌리: string): number | null {
+  let 최신: number | null = null;
+  const 훑기 = (곳: string) => {
+    let 목록;
+    try {
+      목록 = readdirSync(곳, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const 것 of 목록) {
+      const 길 = join(곳, 것.name);
+      if (것.isDirectory()) {
+        훑기(길);
+        continue;
+      }
+      const 때 = statSync(길).mtimeMs;
+      if (최신 === null || 때 > 최신) 최신 = 때;
+    }
+  };
+  훑기(뿌리);
+  return 최신;
 }
 
 /** 검사할 수 있게 뿌리를 받는다. **가드 자체를 안 재면 그것도 안 무는 가드다.** */
@@ -50,7 +107,7 @@ export function 빌드대상확인(뿌리: string) {
     const 내용 = readFileSync(join(청크방, 이름), "utf8");
     const 맞은것 = 절대주소.exec(내용);
     if (맞은것) 걸린것.push(`${이름}: ${맞은것[0]}`);
-    if (내용.includes('"/api/v1"')) 상대경로있나 = true;
+    if (상대경로.test(내용)) 상대경로있나 = true;
   }
 
   if (걸린것.length > 0) {
