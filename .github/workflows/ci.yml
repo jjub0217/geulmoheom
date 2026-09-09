@@ -111,8 +111,12 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.init.outputs.ready == 'true'
         with: { node-version-file: web/.nvmrc, cache: pnpm }
+      # **타입 검사가 먼저다.** `eslint` 는 **깨진 import 를 못 잡는다** — 2026-09-09 에
+      # 헬퍼 파일 이름을 바꾸고 한 곳이 옛 이름을 가리키는 채로 **lint 가 초록이었다.**
+      # e2e 가 결국 잡았지만 **원인에서 먼 자리에서** 잡았고, **파일럿 9일은 매일 핫픽스를 치는
+      # 기간**이라 그때 타입 검사가 없는 것이 제일 위험하다 (2026-09-09 PM 판정).
       - if: steps.init.outputs.ready == 'true'
-        run: pnpm install --frozen-lockfile && cd web && pnpm lint && pnpm test
+        run: pnpm install --frozen-lockfile && cd web && pnpm typecheck && pnpm lint && pnpm test
       # 브라우저는 러너에 없다. **버전을 여기 적지 않는다** — 설치되는 것은
       # `@playwright/test` 가 정하는 짝이라, 여기 숫자를 박으면 **둘이 갈리는 날 조용히 어긋난다.**
       - if: steps.init.outputs.ready == 'true'

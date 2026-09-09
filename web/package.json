@@ -8,6 +8,7 @@
     "start": "pnpm dlx serve out",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
     "e2e:static": "playwright test --config playwright.static.config.ts"
   },
