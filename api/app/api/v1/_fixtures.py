@@ -7,7 +7,11 @@
 
 from datetime import UTC, datetime, timedelta
 
-R2 = "https://r2.example/geulmoheom"
+# **`R2` 와 `PAGE` 를 걷어냈다** (2026-09-09). `R2` 는 `https://r2.example/...` 라는
+# 없는 주소였고, `sketch_url` 이 그것을 실제 응답에 실어 **아이 화면에 빈 액자가
+# 떴다** — 실기기 리허설에서 사람이 보고서야 걸렸다. 프론트가 「못 불러와도 안
+# 무너지게」 옳게 처리해 둬서 **기계는 아무것도 안 켰다.**
+# **죽은 픽스처를 남기면 계약보다 오래 산다** — `placeholder_url` 과 같은 자리다.
 
 PARENT_ID = "8f1c2d3e-0000-4000-8000-000000000001"
 CHILD_ID = "8f1c2d3e-0000-4000-8000-000000000002"
@@ -43,13 +47,3 @@ CARD_GUIDE = {
     "line": "나침반이 조용하네. 네가 뭘 할지 말해주면 움직일 거야!",
 }
 TODAY = {"cards_done": 2, "cap": 5}
-
-
-PAGE = {
-    "page_no": 1,
-    "source": "card",
-    "source_id": "c01",
-    "tier": "legendary",
-    "artwork_url": f"{R2}/artworks/{ARTWORK_ID}.webp",
-    "text": "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다",
-}

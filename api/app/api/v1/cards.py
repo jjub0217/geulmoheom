@@ -37,8 +37,6 @@ def _응답(행: CardRow) -> Card:
             "type": 행.type,
             "situation": 행.situation_text,
             "prompt_label": 행.prompt_label,
-            # **스케치 에셋은 아직 없다** (W3 A0-3). 키는 DB 에 있고 주소 모양만 맞춘다.
-            "sketch_url": f"{fx.R2}/{행.sketch_r2_key}",
             "guide": fx.CARD_GUIDE,
             "today": fx.TODAY,
         }

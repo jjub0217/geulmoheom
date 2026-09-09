@@ -737,7 +737,27 @@ export interface components {
             /** Pages */
             pages: components["schemas"]["BookPage"][];
         };
-        /** Card */
+        /**
+         * Card
+         * @description **그림이 없다.** 카드 화면에는 상황문과 가이드만 나간다 (2026-09-09 PM 판정).
+         *
+         *     **`sketch_url` 을 걷어냈다.** 그 값은 `https://r2.example/...` 라는 픽스처 주소였고
+         *     가리키는 에셋은 만든 적이 없다 — **프론트가 빈 액자를 그리고 있었다.**
+         *     프론트가 「못 불러와도 안 무너지게」 옳게 처리해 둬서 **조용히 지나갔다.**
+         *
+         *     **다시 채우는 것이 답이 아니라고 판정됐다.** 카드 스케치와 결과 삽화가 **같은 장면
+         *     프롬프트에서 나와서**, 쓰기 전에 그 장면을 보여주면 **결과가 카드와 같은 그림이 되고
+         *     보상이 0 이다.** 거기에 한 겹 더 — **아이가 묘사할 것을 그림이 대신 말해 준다.**
+         *     Stage 0 이 재는 것이 H2(묘사 노력)인데 **보고 베끼면 그 값이 오염된다.**
+         *
+         *     **반론을 알고 넘어간다** — 글만 있으면 만 10~12세에게 진입 장벽일 수 있다.
+         *     **관찰 신호 1번이 정확히 그것을 잰다**(30초를 넘기면 카드 문장이 실패한 것).
+         *     **못 시작하면 그때 스케치를 설계한다** — 「모르니까 안 넣는다」가 아니다.
+         *
+         *     **`장면카드_초안.md` 의 「스케치 프롬프트」 열은 남는다** — `app/artwork.py` 가
+         *     **결과 삽화**를 굽는 데 쓴다. **이름이 판단을 가렸던 자리다** — 「스케치」라
+         *     카드 화면의 밑그림처럼 읽혔는데 실제로는 결과 삽화용이다.
+         */
         Card: {
             /** Card Id */
             card_id: string;
@@ -750,8 +770,6 @@ export interface components {
             situation: string;
             /** Prompt Label */
             prompt_label: string;
-            /** Sketch Url */
-            sketch_url: string;
             guide: components["schemas"]["Guide"];
             today: components["schemas"]["Today"];
         };

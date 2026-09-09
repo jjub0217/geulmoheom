@@ -36,7 +36,6 @@ def test_스무_장이_전부_조회된다(client: TestClient, 카드):
     # **글자까지 같다.** 검수본이 바뀌면 코드를 고치지 말고 문서만 고치면 된다는 뜻이다
     assert body["situation"] == 카드.상황문
     assert body["type"] in {"crisis", "discovery", "encounter"}
-    assert body["sketch_url"].endswith(f"{카드.card_id}_sketch.webp")
     assert body["prompt_label"] == "탐험가는 어떻게 할까?"
 
 
