@@ -71,15 +71,22 @@ Child = Annotated[ChildRow, Depends(require_child)]
 
 
 def _result() -> AttemptResult:
+    # **대사를 박지 않는다 — 목도 `문구.md` 1.6 을 읽는다** (0장, 2026-09-09 PM 판정).
+    # 박아 두면 **목으로 화면을 만드는 사람이 진짜 문구를 한 번도 못 본다.**
+    # 여기 있던 문장은 PRD A0-3 의 **예시**였고 1.6 표 열다섯 중에 없었다.
+    #
+    # **흔들리지 않는다.** 씨앗이 고정된 `ATTEMPT_ID` 라 늘 같은 문장이 나온다 —
+    # 실제 경로에서 새로고침해도 같은 말이 나오는 것과 같은 장치다.
+    하이라이트 = [
+        Highlight(text="은빛", kind="adj"),
+        Highlight(text="살금살금", kind="adv"),
+    ]
     return AttemptResult(
         outcome="result",
         attempt_id=fx.ATTEMPT_ID,
         tier="rare",
-        highlights=[
-            Highlight(text="은빛", kind="adj"),
-            Highlight(text="살금살금", kind="adv"),
-        ],
-        guide=Guide(expression="compass_bright", line="'살금살금'이 나침반을 움직였어!"),
+        highlights=하이라이트,
+        guide=_guide("rare", UUID(fx.ATTEMPT_ID), 하이라이트),
         artwork={
             "artwork_id": fx.ARTWORK_ID,
             "status": "pending",

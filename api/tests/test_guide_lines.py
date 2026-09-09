@@ -169,3 +169,34 @@ async def test_결과_대사는_카드_대사가_아니다(client: TestClient, m
     ).json()
 
     assert 몸["guide"]["line"] != fx.CARD_GUIDE["line"]
+
+
+async def test_목_강제_결과_대사도_1_6_에서_온다(client: TestClient):
+    """**목도 이 문서를 읽는다** (`문구.md` 0장, 2026-09-09 PM 판정).
+
+    박아 두면 **목으로 화면을 만드는 사람이 진짜 문구를 한 번도 못 본다** — 그리고
+    안 맞는 문장에 자리를 맞추면 진짜 문장이 올 때 또 옮긴다.
+    """
+    몸 = client.post(
+        "/api/v1/attempts",
+        json={"card_id": "c01", "text": "그림자 뒤로 살금살금 돌아간다"},
+        headers={"X-Mock-Outcome": "result"},
+    ).json()
+
+    말 = 몸["highlights"][0]["text"]
+    후보 = [줄.replace("{말}", 말) for 줄 in 결과대사()[몸["tier"]]]
+    assert 몸["guide"]["line"] in 후보
+
+
+async def test_목_결과_대사는_두_번_불러도_같다(client: TestClient):
+    """**픽스처가 흔들리면 프론트가 못 쓴다.** 목의 시도 id 가 고정이라 대사도 고정이다 —
+    안 고정이면 목이 「새로고침하면 다른 말」을 재현하고 있다는 뜻이라 더 나쁘다."""
+    보냄 = {
+        "json": {"card_id": "c01", "text": "그림자 뒤로 살금살금 돌아간다"},
+        "headers": {"X-Mock-Outcome": "result"},
+    }
+
+    첫번 = client.post("/api/v1/attempts", **보냄).json()
+    두번 = client.post("/api/v1/attempts", **보냄).json()
+
+    assert 첫번["guide"]["line"] == 두번["guide"]["line"]
