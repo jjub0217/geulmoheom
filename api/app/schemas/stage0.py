@@ -275,6 +275,14 @@ class Artwork(BaseModel):
     status: ArtworkStatus
     url: str | None
     tier: Tier
+    # **설명 문구를 안 넓혔다** (2026-09-09). 2026-09-09 에 티어 폴백이 생기면서
+    # 「15초 초과」가 이 값의 전부가 아니게 됐지만, **설명만 고쳐도 `/openapi.json`
+    # 이 바뀌어 `web/src/api/types.gen.ts` 재생성이 따라붙는다.** 프론트 동작은
+    # 하나도 안 달라지므로 **결정 잠금(`adr/0011`)의 「더 좋게」**이고, 문구는
+    # `docs/api/Stage0.md` 5절(PM 몫)에서 먼저 고친다.
+    #
+    # **실제 의미는 셋이다** — 15초 초과 · 같은 카드의 `legendary` 로 떨어짐 ·
+    # 기본 에셋. 어느 쪽이든 **아이 화면에는 드러내지 않는다**.
     fallback: bool = Field(description="15초 초과 시 기본 에셋으로 확정된 것 (B-3)")
 
 

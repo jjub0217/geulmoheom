@@ -24,7 +24,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +37,6 @@ from app.api.v1.deps import (
     mock_outcome,
     require_child,
 )
-from app.artwork_store import 굽기
 from app.artwork_store import 만들기 as 삽화만들기
 from app.book_store import 페이지올리기
 from app.card_store import 오늘상태, 오늘쓴카드들
@@ -180,7 +179,6 @@ async def create_attempt(
     payload: AttemptRequest,
     아이: Child,
     session: Session,
-    뒤에서: BackgroundTasks,
     outcome: Annotated[MockOutcome | None, Depends(mock_outcome)],
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> AttemptResponse:
@@ -293,14 +291,16 @@ async def create_attempt(
         session, 아이, payload, text=text, 평가=평가, 재시도=재시도, 하이라이트=하이라이트
     )
 
-    # **행만 만들고 응답한다** (B-3 ①). 굽는 데 평균 6.2초가 드는데
-    # (`benchmarks/W1-image-bench.md`) 그동안 아이를 세워 두지 않는다 — 프론트가
-    # 3초 뒤부터 폴링한다 (`Stage0.md` 5절).
+    # **행만 만든다. 여기서 굽지 않는다** (W5 7번 ② · 2026-09-09 확정).
+    # `만들기()` 는 기존 파일을 가리키거나 기본 에셋으로 확정하고, **어느 쪽이든
+    # 즉시 `ready`** 다 — 아이를 세워 두는 시간이 0이 된다.
+    #
+    # **여기 있던 `뒤에서.add_task(굽기, ...)` 를 걷어냈다.** 그 한 줄이
+    # **아이 손에서 유료 이미지 호출이 나가는 유일한 경로**였다. 파일럿에는
+    # `basic`·`rare` 파일이 아예 없어서, 두면 아이가 카드를 쓸 때마다 캐시 미스로
+    # 굽는다. **`artwork_store.굽기()` 자체는 남아 있다** — Stage 1 에서 되살아나고,
+    # 그때 이 자리로 돌아온다.
     삽화 = await 삽화만들기(session, 시도.id, 평가.tier, payload.card_id)
-    # **이미 구워 둔 조합이면 안 굽는다** (W5 7번 ①). 굽으면 같은 파일을 덮어쓰면서
-    # 돈만 나가고, 아이는 이미 `ready` 를 받았다.
-    if 삽화.status != "ready":
-        뒤에서.add_task(굽기, 삽화.id, payload.card_id, 평가.tier)
 
     # **책이 여기서 쌓인다** (`Stage0.md` 9절 10b). 카드별 **최고 티어 1건**이 한
     # 페이지이고, 티어가 올랐을 때만 교체된다 — 같은 티어로 다시 쓰면 **처음 해낸

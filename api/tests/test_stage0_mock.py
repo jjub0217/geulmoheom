@@ -300,12 +300,14 @@ def test_헤더가_없으면_판정_결과가_나온다(client: TestClient):
     assert body["tier"] == "rare"
     assert [h["text"] for h in body["highlights"]] == ["은빛", "살금살금"]
     assert body["outcome"] == "result"
-    assert body["artwork"]["status"] == "pending"
+    # **즉시 `ready` 다** (2026-09-09). 신규 생성을 하지 않으므로 기존 파일을
+    # 가리키거나 기본 에셋으로 확정하고, 어느 쪽이든 굽는 시간이 없다.
+    assert body["artwork"]["status"] == "ready"
     # **`placeholder_url` 은 2026-09-08 계약에서 빠졌다.** 성공이든 폴백이든 그림은
     # `/artworks/{id}/image` 한 주소로 나간다 — 별도 주소를 두면 **주소만 보고
     # 「기본 그림인가」를 알 수 있게 된다.**
     assert "placeholder_url" not in body["artwork"]
-    assert body["artwork"]["url"] is None
+    assert body["artwork"]["url"].endswith(f"/artworks/{body['artwork']['artwork_id']}/image")
 
 
 def test_scaffold_를_헤더로_강제한다(client: TestClient):

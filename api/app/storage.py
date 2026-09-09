@@ -28,6 +28,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,12 @@ def 조합키(card_id: str, tier: str, mime: str) -> str | None:
     if not 확:
         logger.warning("모르는 이미지 형식이라 저장하지 않는다: %s", mime)
         return None
+    return _키(card_id, tier, 확)
+
+
+def _키(card_id: str, tier: str, 확: str) -> str:
+    """**만드는 쪽과 찾는 쪽이 같은 문자열을 써야 한다.** 두 군데에 적어 두면
+    한쪽만 바뀌고, 그러면 **못 찾아서 통째로 기본 에셋**이 된다."""
     return f"artworks/{card_id}_{tier}-{_조각(card_id, tier)}.{확}"
 
 
@@ -90,17 +97,56 @@ def _조각(card_id: str, tier: str) -> str:
     return hmac.new(비밀, f"{card_id}/{tier}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
-async def 조합찾기(card_id: str, tier: str) -> str | None:
-    """이미 구워 둔 것이 있으면 그 키, 없으면 `None`.
+@dataclass(frozen=True)
+class 찾은삽화:
+    """`조합찾기()` 가 찾은 것.
+
+    `티어폴백` 이면 **요청한 티어가 아니라 같은 카드의 `legendary`** 다. 부르는 쪽은
+    그것을 `artworks.fallback = true` 로 옮긴다 — **아이에게는 안 알리고**, 어느
+    종류의 폴백인지는 서버 로그에만 남는다 (`주차계획/W5.md` 「삽화」).
+    """
+
+    키: str
+    티어폴백: bool
+
+
+async def 조합찾기(card_id: str, tier: str) -> 찾은삽화 | None:
+    """가리킬 파일이 있으면 그것, 없으면 `None`.
+
+    **찾는 순서가 둘이다** (W5 7번 ①, 2026-09-09).
+
+    1. **요청한 티어** — 있으면 그대로. 폴백이 아니다
+    2. **같은 카드의 `legendary`** — **신규 생성을 하지 않기로 확정**되면서
+       (`주차계획/W5.md` 「삽화 — 기존 것 재사용 + 티어 폴백」) 갖고 있는 파일이
+       `legendary` 뿐이라 생긴 갈래다. **티어가 바꾸는 것은 접미어(밀도)뿐이고
+       장면은 같으므로**, 같은 카드 안에서는 밀도가 다른 그림이 나가는 것이지
+       엉뚱한 그림이 나가는 것이 아니다
+    3. 둘 다 없으면 `None` — 부르는 쪽이 **기본 에셋**으로 간다
+
+    **⚠ `legendary` 키를 새로 계산한다.** 키에 `_조각(card_id, tier)` 가 들어가서
+    **티어마다 문자열이 통째로 다르다** — 확장자만 바꿔 훑어서는 안 걸린다.
+
+    **카드를 넘어가지 않는다.** 다른 카드의 그림은 폴백이 아니라 **아이가 쓴 것과
+    다른 장면**이다.
 
     **확장자를 훑는다.** 프로바이더가 무엇을 줄지 우리가 짐작하지 않는다는 규칙이
     그대로라(`확장자` 주석), 어느 확장자로 저장됐는지는 **찾아봐야 안다.**
 
-    **DB 를 안 본다 — 파일을 본다.** 미리 뽑아 둔 60장은 **행 없이 파일만** 올라오므로
-    (`scripts/` 로 굽는다), 행으로 찾으면 그것들이 통째로 안 걸린다.
+    **DB 를 안 본다 — 파일을 본다.** 미리 넣어 둔 것은 **행 없이 파일만** 올라오므로
+    (`scripts/install_legendary.py`), 행으로 찾으면 그것들이 통째로 안 걸린다.
     """
+    if (키 := await _티어에서찾기(card_id, tier)) is not None:
+        return 찾은삽화(키, 티어폴백=False)
+
+    if tier != "legendary" and (키 := await _티어에서찾기(card_id, "legendary")) is not None:
+        return 찾은삽화(키, 티어폴백=True)
+
+    return None
+
+
+async def _티어에서찾기(card_id: str, tier: str) -> str | None:
     for 확 in dict.fromkeys(확장자.values()):
-        키 = f"artworks/{card_id}_{tier}-{_조각(card_id, tier)}.{확}"
+        키 = _키(card_id, tier, 확)
         if await 있나(키):
             return 키
     return None

@@ -4,9 +4,13 @@
 남기는 곳**이다. 나눈 이유는 `artwork.py` 가 DB 를 안 물게 하기 위해서다 —
 프롬프트 조립과 출력 검사는 `scripts/bench_image.py` 도 부른다.
 
-**아이를 세워 두지 않는다.** `POST /attempts` 는 행을 `pending` 으로 만들고 바로
-응답하고, 굽기는 그 뒤에 돈다. 프론트는 3초 뒤부터 2초 간격으로 폴링한다
-(`Stage0.md` 5절, 실측 평균 6.2초).
+**⛔ 2026-09-09 — 아이 요청에서 굽는 길이 없어졌다** (`주차계획/W5.md` 「삽화 —
+기존 것 재사용 + 티어 폴백」). `만들기()` 는 **기존 파일을 가리키거나 기본 에셋으로
+확정하고 어느 쪽이든 즉시 `ready`** 다. **`pending` 행이 안 생기므로 아래 `굽기()` ·
+`오래_기다렸으면_확정()` 은 지금 아무 데서도 안 돈다** — **지운 것이 아니라 Stage 1
+에서 되살아나는 자리**이고, 그때 `POST /attempts` 가 다시 이 문을 연다.
+**「지금 안 돈다」를 안 적으면 `failed` 와 같은 자리가 된다** — 영영 안 오는 값을
+기다리는 분기.
 
 **모든 실패가 `ready` 로 수렴한다.** `failed` 는 2026-09-08 계약에서 빠졌다 —
 생성 실패도, 저장 실패도, 예외도 **`ready` + `fallback=true`** 다. 그림 자리는
@@ -37,24 +41,46 @@ logger = logging.getLogger(__name__)
 async def 만들기(
     session: AsyncSession, card_attempt_id: uuid.UUID, tier: Tier, card_id: str
 ) -> Artwork:
-    """행 하나. **커밋까지 한다** — 뒤에서 굽는 쪽이 다른 세션으로 이 행을 찾아야
-    하므로, 안 커밋하면 백그라운드가 없는 행을 본다.
+    """행 하나. **커밋까지 한다** — 「내 책」과 폴링이 다른 세션으로 이 행을 찾는다.
 
-    **같은 조합이 이미 있으면 굽지 않고 그것을 가리킨다** (W5 7번 ①). 조합은
-    **20 카드 x 3 티어 = 60가지로 유한**하다 — Stage 0 삽화에 **아이 입력이 안
-    들어가기 때문**이다(PRD B-5). 안 그러면 같은 그림을 100명에게 100번 굽는다.
+    **⛔ 여기서 굽지 않는다** (W5 7번 ② · 2026-09-09 확정). **어떤 경우에도
+    `pending` 을 만들지 않고, 세 갈래 전부 즉시 `ready` 로 확정한다.**
 
-    **행은 시도마다 새로 생긴다.** 계약이 안 바뀐다 — `artwork_id` 는 이 시도의 것이고,
-    달라지는 것은 **처음부터 `ready` 냐**뿐이다.
+    1. **요청한 조합이 있다** → 그것을 가리킨다. `fallback = False`
+    2. **없고 같은 카드의 `legendary` 가 있다** → 그것을 가리킨다. **`fallback = True`**
+    3. **둘 다 없다** → `r2_key` 없이 `fallback = True`. 프록시가 기본 에셋을 준다
+
+    **종전에는 캐시 미스에서 `pending` 을 만들고 뒤에서 구웠다.** 파일럿에는
+    `basic`·`rare` 파일이 아예 없어서 **그 길이 곧 「아이가 카드를 쓸 때마다 유료
+    호출」**이었다. 그래서 **행 만드는 자리에서 막는다** — 부르는 쪽이 안 굽기로
+    마음먹는 것에 기대지 않는다.
+
+    **계약은 안 바뀐다.** `artwork_id` 는 이 시도의 것이고, 주소도
+    `/artworks/{id}/image` 하나 그대로다. **어느 종류의 폴백인지는 서버 로그에만
+    남긴다** — 아이에게는 어느 쪽이든 그냥 그림이 나온 것이어야 한다.
     """
-    캐시된 = await 조합찾기(card_id, tier)
+    찾은 = await 조합찾기(card_id, tier)
+    if 찾은 is None:
+        # **아이 원문이 아니다** — 카드 id 와 티어는 우리가 정한 값이라 실어도 된다.
+        # 이것이 「빈 조합을 보고한다」의 실물이다: 채우려고 굽지 않고, 어느 조합이
+        # 실제로 불렸는지만 남긴다 (`주차계획/W5.md` 「삽화」).
+        logger.info(
+            "삽화 조합이 없어 기본 에셋으로 간다",
+            extra={"request_id": current_request_id(), "card_id": card_id, "tier": tier},
+        )
+    elif 찾은.티어폴백:
+        logger.info(
+            "삽화를 같은 카드의 legendary 로 폴백한다",
+            extra={"request_id": current_request_id(), "card_id": card_id, "tier": tier},
+        )
+
     삽화 = Artwork(
         card_attempt_id=card_attempt_id,
         tier=tier,
-        status="ready" if 캐시된 else "pending",
-        r2_key=캐시된,
-        fallback=False,
-        ready_at=datetime.now(UTC) if 캐시된 else None,
+        status="ready",
+        r2_key=찾은.키 if 찾은 else None,
+        fallback=찾은 is None or 찾은.티어폴백,
+        ready_at=datetime.now(UTC),
     )
     session.add(삽화)
     await session.commit()
@@ -63,6 +89,10 @@ async def 만들기(
 
 async def 굽기(artwork_id: uuid.UUID, card_id: str, tier: Tier) -> None:
     """생성 → 저장 → 행 갱신. **예외를 밖으로 내지 않는다.**
+
+    **⛔ 지금 이것을 부르는 제품 코드가 없다** (2026-09-09, 위 모듈 주석). **유료
+    이미지 호출이 여기서 나가므로 아무 데서나 다시 부르지 않는다** — 되살리는 것은
+    Stage 1 이고, 그때도 **아이 요청이 아니라 정해진 자리에서** 부른다.
 
     백그라운드에서 돈다. 여기서 터진 것이 아이 응답을 되돌릴 수는 없지만
     (응답은 이미 나갔다), **행이 `pending` 에 갇히면 프론트가 15초를 헛돈다** —
@@ -150,6 +180,9 @@ async def 내것읽기(session: AsyncSession, artwork_id: str, child_id: uuid.UU
 
 async def 오래_기다렸으면_확정(session: AsyncSession, 삽화: Artwork) -> Artwork:
     """15초를 넘긴 `pending` 을 **`ready` + `fallback` 으로 굳힌다** (`Stage0.md` 5절).
+
+    **⛔ 지금은 `pending` 행이 안 생겨서 이 함수가 아무것도 안 한다** (2026-09-09,
+    위 모듈 주석). **폴링 경로째로 Stage 1 에서 되살아난다** — 그래서 안 지운다.
 
     **프론트도 같은 15초에 폴링을 끊는다.** 그런데 서버가 안 굳히면 그 행은 **영영
     `pending`** 이다 — 굽기가 죽었거나 프로세스가 내려간 경우가 그렇고, 그러면
