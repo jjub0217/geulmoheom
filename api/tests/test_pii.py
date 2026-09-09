@@ -232,8 +232,15 @@ def test_전각_번호를_가려도_나머지_글자는_그대로다():
 
 
 # ── 실명 (NER) ────────────────────────────────────────────
+#
+# **⛔ 운영 기본값은 꺼짐이다** (2026-09-09 대표 판정 · `pii_ner_enabled`).
+# 아래 넷은 **켠 갈래**를 잰다 — Stage 1 가족 공유(A-7) 전에 되살릴 때 **그 코드가
+# 여전히 도는지**를 여기서 보장한다. 안 재고 두면 되살리는 날 처음부터 다시 짓는다.
+# **끈 갈래는 그 아래 둘**이 잰다. **한쪽만 재면 다른 쪽이 영영 안 재진다** — 오늘만
+# 세 번 나온 함정이다(축 ⑰ · 프론트 픽스처 `pending` 한쪽).
 
 
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_모델이_짚은_실명을_가린다(monkeypatch):
     """**대표 판정 2026-09-08** (미결 11-6) — NER 이 맡는 것은 실명뿐이다."""
     from app import pii
@@ -248,6 +255,7 @@ async def test_모델이_짚은_실명을_가린다(monkeypatch):
     assert 종류 == ["name"]
 
 
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_문장에_없는_이름을_돌려주면_버린다(monkeypatch):
     """모델이 지어낸 문자열은 **어디를 가릴지 알 수 없다.**
 
@@ -265,6 +273,7 @@ async def test_문장에_없는_이름을_돌려주면_버린다(monkeypatch):
     assert 종류 == []
 
 
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_아이가_지은_이름은_화이트리스트로_뺀다(monkeypatch):
     """**서버가 이미 아는 값이라 호출 없이 오탐을 줄인다** (PRD E-2).
 
@@ -282,6 +291,7 @@ async def test_아이가_지은_이름은_화이트리스트로_뺀다(monkeypat
     assert 종류 == []
 
 
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_NER_이_죽어도_정규식_결과는_살아_있다(monkeypatch):
     """**아이를 막지 않는다.** 실명을 못 잡는 것과 아이가 못 쓰는 것 중 후자가 나쁘다 —
     E-1 검사와 방향이 반대인 이유는 `app/moderation.py` 머리말에 있다.
@@ -298,6 +308,7 @@ async def test_NER_이_죽어도_정규식_결과는_살아_있다(monkeypatch):
     assert 종류 == ["phone"]
 
 
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_실명도_흐름에서_가려지고_이벤트로_남는다(client, 자녀행, 판정_고정, monkeypatch):
     """**셋을 동시에 던진다** — 검사·평가·실명 NER. 순차로 두면 지연 예산이 깨진다
     (`adr/0009` 결정 2 와 같은 이유).
@@ -318,3 +329,66 @@ async def test_실명도_흐름에서_가려지고_이벤트로_남는다(client
         행들 = list((await session.execute(select(Event))).scalars())
     (마스킹,) = [행 for 행 in 행들 if 행.event == "pii_masked"]
     assert 마스킹.payload == {"layer": "server", "kind": "name"}
+
+
+async def test_꺼져_있으면_실명을_안_가리고_호출도_안_나간다(monkeypatch):
+    """**2026-09-09 대표 판정 — 「실명 검사 제거. 이름 노출해도 괜찮음」.**
+
+    **끈 것을 「안 가린다」로만 재면 절반이다.** 호출이 여전히 나가면 **돈이 나가고
+    아이 문장이 프로바이더로 간다** — 화면만 보면 똑같아서 안 보인다. 그래서
+    **불렸는지를 따로 센다.**
+    """
+    from app import pii
+    from app.config import get_settings
+
+    get_settings.cache_clear()  # 기본값이 꺼짐인지를 본다 — 여기서 켜지 않는다
+
+    # **예외로 세우면 안 된다.** `실명까지가리기()` 의 `except Exception` 이
+    # `AssertionError` 까지 삼켜서 **불려도 초록**이 된다 (2026-09-09 실측 — 뒤집다가
+    # 잡았다). 삼킬 수 없는 것으로 센다.
+    불린횟수 = []
+
+    async def _세기(text: str) -> list[str]:
+        불린횟수.append(text)
+        return []
+
+    monkeypatch.setattr(pii, "_실명물어보기", _세기)
+
+    가려진, 종류 = await pii.실명까지가리기("김민준이랑 같이 동굴로 들어갔다", 제외=())
+    assert not 불린횟수, "꺼져 있는데 NER 호출이 나갔다 — 돈이 나가고 원문이 밖으로 간다"
+    assert 가려진 == "김민준이랑 같이 동굴로 들어갔다"
+    assert 종류 == []
+
+
+async def test_꺼져도_전화_이메일_주소_학교명은_그대로_가린다(monkeypatch):
+    """**⛔ 꺼진 것은 실명 갈래 하나다.** 정규식 넷은 판정 대상이 아니었다.
+
+    **이 검사가 그 경계다** — 없으면 다음 사람이 「PII 마스킹을 껐다」로 읽고
+    정규식까지 들어낸다. 그러면 **아이 전화번호가 책에 인쇄된다.**
+    """
+    from app import pii
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    # **여기서도 호출을 막는다.** 안 막으면 기본값이 켜지는 날 이 검사가 조용히
+    # 진짜 Gemini 로 나간다 — 재려던 것과 상관없이 돈이 나가는 자리다.
+    불린횟수 = []
+
+    async def _세기(text: str) -> list[str]:
+        불린횟수.append(text)
+        return []
+
+    monkeypatch.setattr(pii, "_실명물어보기", _세기)
+
+    문장 = "김민준한테 01012345678 로 연락해. me@example.com 이고 은하초등학교 3동 201호야"
+    가려진, 종류 = await pii.실명까지가리기(문장, 제외=())
+
+    assert set(종류) == {"phone", "email", "school", "address"}, 종류
+    assert "01012345678" not in 가려진
+    assert "me@example.com" not in 가려진
+    assert "은하초등학교" not in 가려진
+    assert "201호" not in 가려진
+    # **실명만 남는다.** 이것이 판정된 내용이다
+    assert "김민준" in 가려진
+    assert not 불린횟수, "꺼져 있는데 NER 호출이 나갔다"

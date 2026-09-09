@@ -94,6 +94,7 @@ def test_아주_긴_제목도_안_터진다(client: TestClient, 자녀행: Child
 # ── 제목에도 PII 검사가 붙는다 ───────────────────────────
 
 
+@pytest.mark.usefixtures("_NER_켠다")
 def test_제목의_실명이_가려진다(client: TestClient, 자녀행: Child, monkeypatch: pytest.MonkeyPatch):
     """**표지에 박히는 자리다.** 본문보다 눈에 더 잘 띈다."""
 

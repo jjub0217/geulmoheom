@@ -285,3 +285,18 @@ async def client(학부모행: Parent, 자녀행: Child) -> TestClient:
     c.cookies.set(PARENT_COOKIE, issue(학부모행.id, "parent"))
     c.cookies.set(CHILD_COOKIE, issue(자녀행.id, "child", token_version=자녀행.token_version))
     return c
+
+
+@pytest.fixture
+def _NER_켠다(monkeypatch: pytest.MonkeyPatch):
+    """실명(NER)을 켠다. **운영 기본값은 꺼짐이다** (2026-09-09 대표 판정).
+
+    **코드 경로가 따로 있는 게 아니라 같은 자리가 켜지는 것**이라, 이 픽스처를 쓴
+    검사들은 **되살릴 때 그 코드가 여전히 도는지**를 보장한다 (`app/pii.py`).
+    """
+    from app.config import get_settings
+
+    monkeypatch.setenv("PII_NER_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

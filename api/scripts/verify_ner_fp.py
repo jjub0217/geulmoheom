@@ -95,5 +95,23 @@ async def main() -> None:
     print("통과 — 판타지 이름이 서버에서 안 가려진다")
 
 
+def _NER_이_켜져_있어야_한다() -> None:
+    """**꺼진 채로 돌면 「미탐 0」이 통과가 아니라 아무것도 안 잰 것이다.**
+
+    2026-09-09 대표 판정으로 `pii_ner_enabled` 기본값이 꺼짐이 됐다
+    (`app/config.py`). 이 스크립트는 **운영 코드를 그대로 태우므로**, 꺼져 있으면
+    정규식 결과만 받고 **초록으로 끝난다.** 이 파일이 대조군을 두는 이유와 같은
+    함정이라 **자동으로 켜지 않는다** — 켜는 것은 사람이 정한다.
+    """
+    from app.config import get_settings
+
+    if not get_settings().pii_ner_enabled:
+        raise SystemExit(
+            "실명(NER)이 꺼져 있다 — 이대로 돌리면 아무것도 안 잰 채 초록이 뜬다.\n"
+            "재려면 켜서 돌린다:  PII_NER_ENABLED=1 uv run python -m scripts.verify_ner_fp"
+        )
+
+
 if __name__ == "__main__":
+    _NER_이_켜져_있어야_한다()
     asyncio.run(main())

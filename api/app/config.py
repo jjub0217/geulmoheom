@@ -93,6 +93,21 @@ class Settings(BaseSettings):
     # **`PILOT_REQUIRED` 에 넣지 않는다.** 파일럿에서 비어 있는 것이 정상이다.
     gemini_base_url: str = ""
 
+    # **실명(NER) 마스킹. 기본값이 꺼짐이고 그게 파일럿 운영값이다** —
+    # 2026-09-09 대표 판정(「실명 검사 제거. 이름 노출해도 괜찮음」).
+    #
+    # **끄는 것은 실명 갈래 하나뿐이다.** 전화·이메일·주소·학교명은 같은 파일의
+    # 정규식 넷이 그대로 가린다 — **판정 대상이 아니었다.** 이 구분이 틀리면
+    # 아이 전화번호가 책에 인쇄된다 (`app/pii.py` 「실명 (NER)」 절).
+    #
+    # **왜 지우지 않고 설정으로 두나** — Stage 1 가족 공유(A-7) 전에 되살려야 한다
+    # (`docs/미룬것.md`). 지우면 두 번 만들고 `benchmarks/W5-ner-accuracy.md` 의
+    # 61/61 실측도 다시 재야 한다. 꺼져 있으면 **호출 자체가 안 나가서** 돈도 안 든다.
+    #
+    # **`.env.example` 에 넣지 않는다** — 그 파일은 채우라고 있는 템플릿인데
+    # 이 값은 **비어 있는 것이 운영**이다 (`gemini_base_url` 과 같은 자리).
+    pii_ner_enabled: bool = False
+
     r2_account_id: str = ""
     r2_access_key_id: SecretStr = SecretStr("")
     r2_secret_access_key: SecretStr = SecretStr("")
