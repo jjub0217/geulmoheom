@@ -17,6 +17,10 @@ import { defineConfig } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // **정적·Safari 하네스의 스펙은 여기서 안 돈다** (`playwright.static.config.ts`).
+  // 이름이 「정적 빌드를 사파리로」인 검사가 **dev 번들 · Chromium 에서 초록이면 그게 거짓말**이다 —
+  // 재는 조건이 제목과 다른 검사는 **있는 것만 못하다.**
+  testIgnore: "**/static-safari.spec.ts",
   reporter: "list",
   // 코드를 고친 뒤 첫 실행은 Next 가 그 화면을 처음 컴파일하는 시간과 겹친다 —
   // 기본 5초로는 첫 한두 개가 애매하게 실패한다. 진짜 실패와 구분하기 위해 여유를 준다.
