@@ -154,17 +154,34 @@ test("쓸수록 나침반이 밝아진다 — 숫자도 진행바도 없이", as
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
 
+  // **몇 글자만 써도 눈에 띄게 움직여야 한다.** 여기가 아이가 규칙을 배우는 자리다 —
+  // 2026-09-09 실기기에서 **빈 상태와 6자가 눈으로 같았고**, 그래서 그 표시가
+  // **정체불명의 점**으로 남았다.
+  // **전이가 0.5초다.** 「조금이라도 커졌다」에서 멈추면 **전이 중간값을 잡는다** —
+  // 2026-09-09 에 실제로 그렇게 0.35 를 읽고 검사가 헛돌 뻔했다. **단계마다 목표치까지 기다린다.**
   await 입력창.fill("문을 연다");
-  await expect.poll(밝기).toBeGreaterThan(0);
+  await expect.poll(밝기).toBeGreaterThan(0.33);
   const 조금 = await 밝기();
 
-  // 30자에서 가득 찬다 (PRD A0-2). 넘겨도 1 에서 멈춘다.
-  await 입력창.fill("낡은 등대 문틈으로 손전등을 비추자 계단 위에 젖은 발자국이 이어져 있었다");
+  // 서른 자쯤. **PRD A0-2 MUST 는 「30자 넘으면 밝아짐」**이다.
+  const 서른쯤 = "낡은 등대 문틈으로 손전등을 비추자 계단이 보였다";
+  await 입력창.fill(서른쯤);
+  await expect.poll(밝기).toBeGreaterThan(0.6);
+  const 밝아짐 = await 밝기();
+  expect(밝아짐).toBeGreaterThan(조금);
+
+  // **30자를 넘어서도 계속 올라야 한다.** 전에는 여기서 멈췄고 — **「30에서 가득」은 PRD 가 아니라
+  // 우리 구현이었다** — **H2 합격선이 회당 150자인데 30~150 구간에 신호가 0** 이었다.
+  // **더 써도 반응이 없으면 더 쓸 이유가 없다.**
+  await 입력창.fill(서른쯤.repeat(2));
+  await expect.poll(밝기).toBeGreaterThan(0.7);
+  expect(await 밝기()).toBeGreaterThan(밝아짐);
+
+  await 입력창.fill(서른쯤.repeat(7));
   await expect.poll(밝기).toBe(1);
 
   // 계단이 아니라 연속 변화다 — 적게 썼을 때가 가득 찬 것보다 어두워야 한다.
   expect(조금).toBeLessThan(1);
-  expect(조금).toBeGreaterThan(0);
 
   // **숫자·퍼센트·진행바가 화면에 없다.** 숫자를 지운 자리에 바를 넣으면 같은 것이 된다.
   const 화면 = await page.locator("main").innerText();

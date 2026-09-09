@@ -13,12 +13,40 @@
  *    몇 픽셀 움직이면 빛만 엉뚱한 데 남는다. 이 나침반은 **그림과 독립된 자기 요소**다
  */
 
-/** 빛이 가득 차는 글자 수. PRD A0-2. */
-const 가득 = 30;
+/**
+ * **PRD A0-2 의 MUST 는 「30자 넘으면 밝아짐」이다** (119행). **「30에서 멈춘다」는 PRD 가 아니라
+ * 2026-09-09 까지의 우리 구현**이었고, 그것이 **두 구간을 다 죽였다** (실기기에서 사용자가 찾았다).
+ *
+ * **① 처음 몇 글자에서 안 움직였다.** 6자면 밝기 0.2 — 빛 반지름이 12→16, 불투명도 0.2 라
+ * **빈 상태와 눈으로 구분이 안 된다.** 그런데 **아이가 「글자가 늘면 밝아진다」를 배우는 자리가
+ * 정확히 거기**다. 못 배우면 그 표시는 **영영 정체불명의 점**이다.
+ *
+ * **② 30자 뒤로 아무 일도 없었다.** **H2 합격선이 회당 150자**인데 **우리가 실제로 원하는
+ * 구간(30~150)에서 신호가 0** 이었다 — **더 써도 반응이 없으면 더 쓸 이유가 없다.**
+ *
+ * 그래서 구간을 둘로 나눈다. **PRD 는 그대로 지킨다** — 30자에서 확실히 밝다.
+ */
+const 밝아지는곳 = 30;
+/** H2 합격선. **여기까지 계속 변한다.** */
+const 끝 = 150;
+/** 30자에서의 밝기. **「밝아졌다」로 읽히면서 위로 더 갈 자리를 남긴다.** */
+const 밝아진값 = 0.65;
+
+/**
+ * **초반이 가파르고 뒤가 완만하다.** 선형이면 초반 변화가 아이 눈에 안 잡힌다 —
+ * 세제곱근이 **3자에서 이미 0.30** 을 준다(선형은 0.065). **배우는 구간을 먼저 산다.**
+ */
+export function 나침반밝기(length: number): number {
+  if (length <= 0) return 0;
+  if (length < 밝아지는곳) {
+    return 밝아진값 * Math.cbrt(length / 밝아지는곳);
+  }
+  const 남은길 = (length - 밝아지는곳) / (끝 - 밝아지는곳);
+  return 밝아진값 + (1 - 밝아진값) * Math.min(남은길, 1);
+}
 
 export function CompassGlow({ length }: { length: number }) {
-  // 0 → 1. 넘겨도 1 에서 멈춘다.
-  const 밝기 = Math.min(length / 가득, 1);
+  const 밝기 = 나침반밝기(length);
 
   return (
     <svg
@@ -42,7 +70,7 @@ export function CompassGlow({ length }: { length: number }) {
       <circle
         cx="32"
         cy="32"
-        r={12 + 20 * 밝기}
+        r={12 + 22 * 밝기}
         fill="url(#compass-glow)"
         style={{ opacity: 밝기 }}
         className="transition-all duration-500 motion-reduce:transition-none"
@@ -57,18 +85,24 @@ export function CompassGlow({ length }: { length: number }) {
         stroke="var(--color-brass)"
         strokeWidth="2.5"
       />
+      {/* **크리스털은 밝기와 크기가 함께 움직인다.** 불투명도만 바꾸면 **작은 원의 13% 변화**라
+          눈에 안 잡힌다 — 실기기에서 그래서 안 보였다. 커지는 것이 더 먼저 읽힌다. */}
       <circle
         cx="32"
         cy="32"
-        r="5"
+        r={5 + 2.5 * 밝기}
         fill="var(--color-glow)"
-        style={{ opacity: 0.35 + 0.65 * 밝기 }}
-        className="transition-opacity duration-500 motion-reduce:transition-none"
+        style={{ opacity: 0.3 + 0.7 * 밝기 }}
+        className="transition-all duration-500 motion-reduce:transition-none"
       />
+      {/* **바늘은 배경색으로 파낸다.** 고정색(`scarf-deep` #2b4a6f)이었는데 **다크 배경(#1b527a)과
+          거의 같은 색**이라, 다크에서 바늘이 안 보이면서 **크리스털만 덮어 나침반이 통째로 죽었다**
+          (2026-09-09, 사용자 아이패드가 다크였다 — 우리가 본 스샷은 전부 라이트였다).
+          `--background` 를 쓰면 **어느 모드에서도 「파낸 자리」로 읽힌다.** */}
       <path
         d="M32 23 L35.5 32 L32 41 L28.5 32 Z"
-        fill="var(--color-scarf-deep)"
-        style={{ opacity: 0.55 }}
+        fill="var(--background)"
+        style={{ opacity: 0.8 }}
       />
     </svg>
   );

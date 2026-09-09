@@ -106,14 +106,21 @@ export function AttemptInput({
       {/* **테두리가 이 덩어리를 감싼다.** 전에는 테두리가 `textarea` 에만 있어
           「보내기」가 **다른 물건**으로 보였다. 초점 표시도 여기로 올라온다 —
           `focus-within` 이라 **키보드로 들어와도 어느 자리인지 보인다.** */}
+      {/* **물음은 테두리 밖이다** (2026-09-09, 실기기에서 사용자가 찾았다).
+          안에 넣었더니 **아이 글과 한 덩어리**가 됐다 — 「저건 내가 안 썼는데 왜 내 글이랑
+          같은 상자 안에 있지」. **결과 화면에서 방금 고친 것과 같은 종류를 여기에 만든 것**이다:
+          담에 넣는 순간 **소유가 섞인다.**
+          `장면카드_초안.md` 도 이쪽 편이다 — **「탐험가는 어떻게 할까?」는 상황문의 마지막 문장**이고
+          **UI 가 자동으로 붙이는 것**이지 아이가 쓰는 칸의 일부가 아니다.
+          **테두리 안에는 아이가 쓴 것과 아이가 하는 것(나침반·보내기)만 남는다.** */}
+      <label htmlFor="attempt" className="text-xl">
+        {label}
+      </label>
       <div
         className="flex flex-col rounded-3xl border-2 border-brass/50 bg-markings/70
           outline-2 outline-offset-2 outline-transparent focus-within:border-glow
           focus-within:outline-glow dark:bg-glow-deep/40"
       >
-        <label htmlFor="attempt" className="px-5 pt-4 text-xl">
-          {label}
-        </label>
         <textarea
         id="attempt"
         ref={입력창}
@@ -147,7 +154,7 @@ export function AttemptInput({
         // 밝은 배경에서 칸이 사라져 아이가 어디에 쓰는지 모른다 — 첫 스크린샷에서 실제로 그랬다.
           // 테두리와 배경은 위 감싸개가 가진다. 여기는 **글자만** 둔다 —
           // 안에 또 테두리를 그리면 **상자 안의 상자**가 되어 덩어리가 다시 갈라진다.
-          className="w-full resize-none bg-transparent px-5 py-3 text-xl/relaxed
+          className="w-full resize-none bg-transparent px-5 pb-3 pt-4 text-xl/relaxed
             text-foreground outline-none"
         />
 
