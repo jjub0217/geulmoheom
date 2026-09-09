@@ -7,7 +7,7 @@ import { PII_MASK } from "../src/lib/pii";
 // 문구도 같은 이유로 박지 않는다 — `docs/문구.md` 2.2·2.4·2.5 가 SSOT 다.
 import { 버튼, 못닿음 } from "../src/app/copy";
 // 상한도 문구와 같다 — **숫자를 여기 박으면 규약이 바뀌는 날 테스트가 제품을 붙잡는다.**
-import { 폴링상한 } from "../src/lib/artwork";
+import { 첫폴링, 폴링상한 } from "../src/lib/artwork";
 // 대기 대사도 박지 않는다 — `docs/문구.md` **1.5** 가 SSOT 다.
 import { 삽화대기대사 } from "../src/components/artwork-copy";
 // 진입 라벨은 `용어사전.md` 48행 **아이 화면** 열이다.
@@ -949,4 +949,57 @@ test("낮은 화면에서도 액자가 비율을 지킨다 — 실기기가 여�
   // **높이가 눌리면 안 된다.** 액자 안에는 흐름에 있는 것이 없어서(`Image fill` 은 절대 배치)
   // **`min-height:auto` 가 0 으로 풀리고**, 세로 flex 가 꽉 차면 **비율을 이기고 찌그러뜨린다.**
   expect(자리.width / 자리.height).toBeCloseTo(계약비율, 2);
+});
+
+test("이미 구워진 그림은 그 자리에서 뜬다 — 3초를 기다리지 않는다", async ({ page }) => {
+  // **2026-09-09 계약 변경**(`cc5b724`). 백엔드가 lazy 캐시를 세우면서
+  // **`POST /attempts` 가 캐시 히트면 `ready` 와 `url` 을 그 자리에서 실어 온다.**
+  // **스키마는 안 바뀌고 값만 바뀌므로 `make contracts-check` 가 못 잡는다.**
+  //
+  // **파일럿에서는 예외가 아니라 상시다** — 60조합을 다 미리 뽑으므로 **거의 모든 시도가 캐시 히트**다.
+  // 여기서 3초를 기다리면 **아이가 매번 이미 있는 그림을 두고 3초를 본다.**
+  //
+  // **이 갈래에 검사가 하나도 없었다** — 픽스처가 전부 `pending` 만 줬다.
+  // 계약이 **두 모양을 다 허용하는데 한 모양만 재고 있었다.**
+  const 즉시그림 = `${ARTWORK_URL}`;
+
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        ...결과(결과가이드, [{ text: "살금살금", kind: "adv" }]),
+        artwork: { artwork_id: ARTWORK, status: "ready", url: 즉시그림 },
+      } satisfies AttemptResult,
+    }),
+  );
+
+  // **폴링이 아예 안 나가야 한다.** 나가면 「3초를 안 기다린다」가 거짓이다.
+  let 물어봤나 = false;
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) => {
+    물어봤나 = true;
+    return route.fulfill({ status: 200, json: { artwork_id: ARTWORK, status: "ready", url: 즉시그림, tier: "rare", fallback: false } satisfies components["schemas"]["Artwork"] });
+  });
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("낡은 등대 문틈으로 살금살금 손전등을 비췄다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // 그림이 **첫 폴링 시각(3초)보다 훨씬 전에** 떠야 한다.
+  await expect(page.locator(`main img[src="${즉시그림}"]`)).toBeVisible({ timeout: 첫폴링 - 500 });
+
+  // **「삽화 대기」 대사가 스쳐서도 안 된다** — 이미 있는 그림 앞에서 기다리는 말을 하면
+  // **말과 화면이 어긋난다.** 깜박이는 것도 아이에게는 오류로 보인다.
+  await expect(page.locator("main [data-대기대사]")).toHaveCount(0);
+
+  // 등급·가이드·아이 문장도 **같이** 열린다 — 그림이 이미 있으니 가릴 이유가 없다.
+  await expect(page.locator("main [data-티어배지]")).toHaveText(티어이름.rare);
+  await expect(page.getByText(결과가이드.line)).toBeVisible();
+
+  expect(물어봤나).toBe(false);
 });
