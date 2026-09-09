@@ -55,8 +55,23 @@ const EVENTS = "**/api/v1/events";
  */
 type AttemptResult = components["schemas"]["AttemptResult"];
 
+/**
+ * **결과 대사는 카드 대사와 다르다.** 서버가 등급에 따라 골라 `{말}` 자리에 **첫 하이라이트**를
+ * 채워 내려준다 (`문구.md` 1.6 — **그 표는 서버 몫이고 프론트는 폴백을 갖지 않는다**).
+ *
+ * **여기 있는 이유** — 2026-09-09 까지 이 파일의 픽스처가 **결과 응답에 카드의 `guide` 를 그대로**
+ * 넣고 있었다. 그러면 **서버가 절대 안 보내는 응답**이 되고(축 ⑩), 더 나쁜 것은
+ * **「카드 대사」와 「결과 대사」가 글자까지 같아져 둘을 가르는 검사가 하나도 성립하지 않는다**는 것이다 —
+ * 화면이 `screen.card.guide` 를 그려도 **154개가 전부 초록**이었다.
+ * **사람이 스크린샷을 보고서야 나왔다.**
+ */
+const 결과가이드: components["schemas"]["Guide"] = {
+  expression: "compass_bright",
+  line: "오, '살금살금'에 바늘이 크게 흔들렸어!",
+};
+
 function 결과(
-  guide: components["schemas"]["Guide"],
+  guide: components["schemas"]["Guide"] = 결과가이드,
   highlights: AttemptResult["highlights"] = [],
 ): AttemptResult {
   return {
@@ -174,7 +189,7 @@ test("쓴 것을 보낸다 — 글자 수로 잠기지 않고, retry_of 는 비�
   let 보낸것: Record<string, unknown> = {};
   await page.route(ATTEMPTS, (route) => {
     보낸것 = route.request().postDataJSON();
-    return route.fulfill({ status: 200, json: 결과(CARD.guide) });
+    return route.fulfill({ status: 200, json: 결과() });
   });
   await 보내기.click();
 
@@ -206,7 +221,7 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
     route.fulfill({ status: 200, json: CARD }),
   );
   await page.route(ATTEMPTS, (route) =>
-    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+    route.fulfill({ status: 200, json: 결과() }),
   );
 
   // 첫 물음에는 아직 굽는 중이고, 그다음에 뜬다. **두 번은 물어야 폴링이 실제로 돈 것**이다.
@@ -243,7 +258,8 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
 
   // **결과 대사가 여기 있으면 안 된다.** 있으면 아이가 그림보다 먼저 등급 반응을 읽는다 —
   // 2026-09-08 까지 실제로 그랬고, 1.5 가 생긴 이유가 그것이다.
-  await expect(page.getByText(CARD.guide.line)).toHaveCount(0);
+  // **카드 대사가 아니라 결과 대사를 봐야 한다** — 둘이 같은 문자열이면 이 줄은 아무것도 안 잰다.
+  await expect(page.getByText(결과가이드.line)).toHaveCount(0);
   // **배지도 마찬가지다.** 배지가 먼저 뜨면 그림은 이미 아는 것을 확인하는 절차가 된다.
   await expect(page.locator("main [data-티어배지]")).toHaveCount(0);
 
@@ -252,7 +268,9 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
   expect(물어본횟수).toBeGreaterThanOrEqual(2);
 
   // 그림이 온 **뒤에** 결과 대사와 배지가 온다. 대기 대사는 그림이 덮어 사라진다.
-  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  // **카드 대사가 아니다** — 서버가 등급 보고 고른 것이고 `{말}` 이 채워져 있다 (`문구.md` 1.6).
+  await expect(page.getByText(결과가이드.line)).toBeVisible();
+  await expect(page.getByText(CARD.guide.line)).toHaveCount(0);
   await expect(page.locator("main [data-티어배지]")).toHaveText(티어이름.rare);
   await expect(대기대사).toHaveCount(0);
 
@@ -294,7 +312,7 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
     route.fulfill({ status: 200, json: CARD }),
   );
   await page.route(ATTEMPTS, (route) =>
-    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+    route.fulfill({ status: 200, json: 결과() }),
   );
   // **서버에 통째로 못 닿는 경우**다. 정상 경로에서는 서버가 15초에 기본 에셋으로 확정하므로
   // 여기까지 오지 않는다 — 그래서 이 검사가 **유일하게 「못받음」을 밟는 자리**다.
@@ -316,7 +334,7 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
 
   // 그림만 없다. **가이드 대사도 배지도 그대로 있다** (`문구.md` 1.7) — 아이는 자기 문장이
   // 통했다는 것을 알아야 하고, 그림은 「내 책」에서 다시 본다. 오류 문구도 버튼도 안 생긴다.
-  await expect(page.getByText(CARD.guide.line)).toBeVisible();
+  await expect(page.getByText(결과가이드.line)).toBeVisible();
   await expect(page.locator("main [data-티어배지]")).toHaveText(티어이름.rare);
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
   // **아무 말도 안 한다** (`문구.md` 1.7). 금지어 목록으로 막지 않고 **화면에 남은 것을 통째로
@@ -331,7 +349,7 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   // **누구 말인지 안 읽힌다** — 실기기에서 실제로 그랬고, 그러면 관찰 신호 7번을 못 잰다.
   // 지금 순서는 **내 책의 한 쪽과 같다**: 그림(여기서는 사라졌다) · 문장 · 배지.
   // **이 배열을 고칠 때는 화면 순서를 고치는 것**이라는 걸 알고 고쳐야 한다.
-  expect(줄들).toEqual([쓴것, 티어이름.rare, CARD.guide.line, 내책라벨]);
+  expect(줄들).toEqual([쓴것, 티어이름.rare, 결과가이드.line, 내책라벨]);
   expect(화면).not.toContain(못닿음.보내기);
 });
 
@@ -343,7 +361,7 @@ test("쓴 문장이 그대로 나오고 묘사어 자리에 표시가 붙는다"
   await page.route(ATTEMPTS, (route) =>
     route.fulfill({
       status: 200,
-      json: 결과(CARD.guide, [
+      json: 결과(결과가이드, [
         { text: "낡은", kind: "adj" },
         { text: "살금살금", kind: "adv" },
         // **원문에 없는 것**이다. 서버가 걸러 주기로 돼 있지만(`Stage0.md` 4절)
@@ -396,7 +414,7 @@ test("굽는 동안에는 쓴 문장도 표시도 안 보인다 — 표시가 �
   await page.route(ATTEMPTS, (route) =>
     route.fulfill({
       status: 200,
-      json: 결과(CARD.guide, [{ text: "낡은", kind: "adj" }]),
+      json: 결과(결과가이드, [{ text: "낡은", kind: "adj" }]),
     }),
   );
   // 계속 굽는 중으로 둔다.
@@ -632,7 +650,7 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
   let 보낸것: Record<string, unknown> = {};
   await page.route(ATTEMPTS, (route) => {
     보낸것 = route.request().postDataJSON();
-    return route.fulfill({ status: 200, json: 결과(CARD.guide) });
+    return route.fulfill({ status: 200, json: 결과() });
   });
   await 보내기.click();
   // **결과 화면에 닿은 신호는 삽화 자리다** — 위 「쓴 것을 보낸다」와 같은 이유다.
@@ -793,7 +811,7 @@ test("액자가 그림 비율이다 — 아이 그림을 자르지 않는다", a
     route.fulfill({ status: 200, json: CARD }),
   );
   await page.route(ATTEMPTS, (route) =>
-    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+    route.fulfill({ status: 200, json: 결과() }),
   );
   await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
     route.fulfill({
@@ -835,7 +853,7 @@ test("그림이 화면을 다 먹지 않는다 — 아래 것들이 접히면 �
     route.fulfill({ status: 200, json: CARD }),
   );
   await page.route(ATTEMPTS, (route) =>
-    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+    route.fulfill({ status: 200, json: 결과() }),
   );
   await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
     route.fulfill({
@@ -885,7 +903,7 @@ test("낮은 화면에서도 액자가 비율을 지킨다 — 실기기가 여�
     route.fulfill({ status: 200, json: CARD }),
   );
   await page.route(ATTEMPTS, (route) =>
-    route.fulfill({ status: 200, json: 결과(CARD.guide) }),
+    route.fulfill({ status: 200, json: 결과() }),
   );
   await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
     route.fulfill({
