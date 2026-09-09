@@ -165,7 +165,7 @@
   "tier": "rare",
   "highlights": [ { "text": "은빛", "kind": "adj" }, { "text": "살금살금", "kind": "adv" } ],
   "guide": { "expression": "compass_bright", "line": "'살금살금'이 나침반을 움직였어!" },
-  "artwork": { "artwork_id": "...", "status": "pending", "url": null, "placeholder_url": "https://r2/.../c01_sketch.webp" },
+  "artwork": { "artwork_id": "...", "status": "pending", "url": null },
   "today": { "cards_done": 3, "cap": 5, "locked": false },
   "can_retry": true
 }
@@ -210,8 +210,10 @@
 
 ### GET `/artworks/{artwork_id}`
 ```json
-{ "artwork_id": "...", "status": "ready", "url": "https://r2/.../a.webp", "tier": "rare", "fallback": false }
+{ "artwork_id": "...", "status": "ready", "url": "https://api.example/api/v1/artworks/.../image", "tier": "rare", "fallback": false }
 ```
+> **⚠ 위 두 예시는 2026-09-09 까지 낡아 있었다.** `https://r2/...` 와 `placeholder_url` 을 실은 채였는데 **둘 다 이 절 아래에서 폐기된 것**이다. **오늘만 이 부류가 세 번째다** — `sketch_url`(빈 액자) · `placeholder_url` · 이것. **규칙을 고칠 때 같은 문서의 예시가 안 따라온다.** 코드와 검사는 이미 맞았고 **문서만 틀렸다**.
+
 - **`status` ∈ `pending | ready`** (2026-09-08 계약 변경 — **`failed` 를 뺐다**)
   - **나갈 자리가 없는 값이었다.** 15초 초과는 아래 표대로 **`ready` + `fallback = true`** 로 확정되고, **생성 실패·출력 검사 차단도 안전한 기본 삽화**로 간다 (PRD B-3 「플레이 중단 없음」). **모든 실패가 `ready` 로 수렴한다**
   - **그런데 프론트는 「`failed` 면 즉시 중단」을 구현하고 테스트까지 물고 있었다** — **영영 안 오는 값을 기다리는 분기**다. `BlockedReason` 에서 `pii` 를 뺀 것과 같은 자리이고, **거기서는 픽스처가 죽은 값을 살려 두고 있었다**
@@ -236,6 +238,11 @@
 - 위 폴링 응답의 **`url` 이 이 경로를 가리킨다.** 저장소 주소를 클라이언트에 내보내지 않는다
 - **`Cache-Control: private, max-age=86400`** — Cloudflare 가 앞단이라 **`private` 이 아니면 공유 캐시에 아이 창작물이 남는다**
 - **`<img>` 로 불린다.** cross-origin fetch 가 아니라 **서브리소스 요청**이라, 쿠키가 실리려면 **api 와 web 이 same-site 여야 한다** — `adr/0007` 이 그렇게 잡아 뒀다(같은 등록가능 도메인). **`SameSite=Lax` 로 실리는 것을 실기기에서 확인한다**
+- **⛔ `url` 은 절대 주소이고, 그 절대 주소를 만드는 규칙이 배포 형태에 묶여 있다** (2026-09-09 프론트 지적 · 코드 실측).
+  `api/app/api/v1/artworks.py` 의 `삽화주소()` 가 **`request.url_for()`** 로 만든다. 그 함수의 주석이 **「절대 주소여야 한다 — web 은 `app.` 이고 api 는 `api.` 라(`adr/0007`) 상대 경로면 `<img src>` 가 web 오리진에 붙어 그림이 통째로 안 뜬다」**고 적고 있다.
+  **그 근거는 3단 호스트(`adr/0007`)를 전제한다.** **한 오리진에 프록시로 합치는 형태로 가면 근거가 뒤집힌다** — 그때는 **상대 경로가 맞고 절대 주소가 틀린다**. `request.url_for()` 는 api 컨테이너가 보는 호스트를 쓰므로 **공개 오리진이 아니라 api 호스트**를 내놓고, 그러면 `<img>` 가 cross-site 로 나가 **`__Host-` 쿠키가 안 실려 그림이 0%** 다.
+  **`--proxy-headers` 로는 안 풀린다** — uvicorn 의 그 옵션은 `X-Forwarded-Proto`·`X-Forwarded-For` 를 보지 **`X-Forwarded-Host` 를 안 본다**. scheme 만 고쳐지고 **호스트는 그대로 api 호스트다**.
+  **배포 형태가 확정되는 순간 이 한 줄을 같이 정한다.** 형태를 정하고 이것을 안 정하면 **배포 후에야 드러나고, 드러나는 모습이 「그림이 안 뜬다」라서 원인이 안 보인다**
   - **왜 자동으로 실리나** — `__Host-` 접두사는 **`Domain` 속성이 없어 호스트 전용**이라, `api.` 가 발급한 쿠키가 **그 호스트로 가는 이미지 요청에 그대로 실린다.** `SameSite=Lax` 는 cross-site 만 막는데 `app.` 과 `api.` 는 **같은 등록가능 도메인이라 same-site** 다. **우연이 아니라 `adr/0007` 이 만들어 둔 조건이고, 배포처를 옮기면 같이 깨진다**
   - **⚠ `<img crossOrigin>` 을 붙이지 않는다** (2026-09-08 프론트 지적). **`crossOrigin="anonymous"` 를 붙이면 그 자동이 꺼진다** — 이미지 최적화·CDN 관례로 **습관적으로 붙이는 속성**이다. 붙는 순간 자격증명이 빠져 **그림이 통째로 안 뜨는데, 네트워크 탭을 안 열면 원인이 안 보인다**
 
