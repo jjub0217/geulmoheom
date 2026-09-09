@@ -81,6 +81,18 @@ class Settings(BaseSettings):
     # 프로바이더·키는 따로 두지 않는다. Gemini 네이티브라 `gemini_api_key` 하나를 쓴다.
     image_model: str = ""
 
+    # **비워 두는 것이 운영이다.** 채우면 Gemini 호출이 그 주소로 간다 —
+    # E2E 가 api 를 진짜로 태울 때 **유료 호출 둘(묘사 평가·이미지 생성)만** 끊는
+    # 손잡이다 (`주차계획/W5.md` 백엔드 1번 · `tests/fake_gemini.py`).
+    #
+    # **분기가 아니라 주소다.** `if TESTING:` 을 심으면 테스트에서만 도는 코드 경로가
+    # 생기고, 그러면 E2E 가 재는 것이 제품이 아니게 된다 (B-3 20% 사고 · 축 ⑪).
+    # 비어 있으면 SDK 기본값이라 **오늘과 완전히 같은 동작**이다 — R2 를 안 채우면
+    # 로컬 디스크로 떨어지는 것과 같은 자리.
+    #
+    # **`PILOT_REQUIRED` 에 넣지 않는다.** 파일럿에서 비어 있는 것이 정상이다.
+    gemini_base_url: str = ""
+
     r2_account_id: str = ""
     r2_access_key_id: SecretStr = SecretStr("")
     r2_secret_access_key: SecretStr = SecretStr("")
