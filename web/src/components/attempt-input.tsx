@@ -30,11 +30,28 @@ export const 가림안내: Record<PiiKind, string> = {
   school: "학교 이름은 안 써도 돼서 가렸어!",
 };
 
+/**
+ * **쓰는 자리 하나가 한 덩어리다** (2026-09-09, 실기기에서 사용자가 보고 고침).
+ *
+ * 전에는 **라벨·나침반·입력창·「보내기」가 각각 떨어져** 있었다. 그래서 셋이 안 읽혔다 —
+ * ① 라벨 옆 나침반이 **무엇에 반응하는 물건인지** 안 보였고 ② 「보내기」가 **오른쪽 아래 멀리**
+ * 있어 쓰던 자리와 끊겼고 ③ 칸이 낮아 **짧게 쓰라는 신호**를 줬다.
+ *
+ * **만 11세는 라벨이 아니라 「가까움」과 「담김」으로 관계를 읽는다.** 그래서 넷을 **테두리 하나 안**에
+ * 넣었다 — 물음이 위, 쓰는 칸이 가운데, **나침반과 「보내기」가 같은 바닥 줄**이다.
+ * **나침반이 자기 글자 옆에서 밝아지므로** 무엇이 무엇을 움직이는지가 자리로 보인다.
+ *
+ * **숫자·바·퍼센트는 여전히 없다** (PRD A0-2 MUST). **읽히게 만드는 것과 숫자를 쓰는 것은 다르다** —
+ * 바꾼 것은 나침반의 **자리**이지 표시 방식이 아니다.
+ */
 export function AttemptInput({
   label,
   value,
   onChange,
   onMasked,
+  onSend,
+  보낼수있나,
+  보내기라벨,
   disabled = false,
 }: {
   label: string;
@@ -42,6 +59,11 @@ export function AttemptInput({
   onChange: (value: string) => void;
   /** 가린 **종류**만 알린다. 문장은 넘기지 않는다. */
   onMasked?: (kinds: PiiKind[]) => void;
+  /** 「보내기」가 이 안에 있다. **쓰던 자리와 보내는 자리를 떼어놓지 않는다.** */
+  onSend: () => void;
+  보낼수있나: boolean;
+  /** `문구.md` 2.2. **여기서 짓지 않는다** — 부모가 상수를 넘긴다. */
+  보내기라벨: string;
   disabled?: boolean;
 }) {
   const 입력창 = useRef<HTMLTextAreaElement>(null);
@@ -81,15 +103,18 @@ export function AttemptInput({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <label htmlFor="attempt" className="text-xl">
+      {/* **테두리가 이 덩어리를 감싼다.** 전에는 테두리가 `textarea` 에만 있어
+          「보내기」가 **다른 물건**으로 보였다. 초점 표시도 여기로 올라온다 —
+          `focus-within` 이라 **키보드로 들어와도 어느 자리인지 보인다.** */}
+      <div
+        className="flex flex-col rounded-3xl border-2 border-brass/50 bg-markings/70
+          outline-2 outline-offset-2 outline-transparent focus-within:border-glow
+          focus-within:outline-glow dark:bg-glow-deep/40"
+      >
+        <label htmlFor="attempt" className="px-5 pt-4 text-xl">
           {label}
         </label>
-        {/* 쓸수록 밝아진다. 라벨 옆에 두어 쓰는 눈이 닿는 자리에 있게 한다.
-            **길이는 가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
-        <CompassGlow length={value.length} />
-      </div>
-      <textarea
+        <textarea
         id="attempt"
         ref={입력창}
         value={value}
@@ -109,18 +134,43 @@ export function AttemptInput({
           }
           가리고전달(e.target.value, e.target.selectionStart);
         }}
-        // 보내는 중에는 잠근다. 값은 그대로 두어 **쓴 것이 눈앞에 남아 있게** 한다.
-        readOnly={disabled}
-        rows={4}
+          // 보내는 중에는 잠근다. 값은 그대로 두어 **쓴 것이 눈앞에 남아 있게** 한다.
+          readOnly={disabled}
+          // **칸의 크기는 「얼마나 쓰는가」를 말하는 신호다.** 4줄은 짧게 쓰라는 뜻이었다 —
+          // H2 합격선이 **회당 150자**다. 더 키우지 않는 것은 **아이패드에서 자판이 올라오면
+          // 화면의 절반이 사라지기 때문**이고, 그때 「보내기」가 밖으로 밀리면 안 된다.
+          rows={5}
         // 아이가 쓰는 칸이다. 맞춤법 빨간 줄로 「틀렸다」는 인상을 주지 않는다.
         spellCheck={false}
         autoComplete="off"
         // 테두리는 **비어 있을 때도 보여야 한다.** 배경색만으로 칸을 나타내면
         // 밝은 배경에서 칸이 사라져 아이가 어디에 쓰는지 모른다 — 첫 스크린샷에서 실제로 그랬다.
-        className="w-full resize-none rounded-2xl border-2 border-brass/50 bg-markings/70
-          p-5 text-xl/relaxed text-foreground outline-2 outline-offset-2 outline-transparent
-          focus-visible:border-glow focus-visible:outline-glow dark:bg-glow-deep/40"
-      />
+          // 테두리와 배경은 위 감싸개가 가진다. 여기는 **글자만** 둔다 —
+          // 안에 또 테두리를 그리면 **상자 안의 상자**가 되어 덩어리가 다시 갈라진다.
+          className="w-full resize-none bg-transparent px-5 py-3 text-xl/relaxed
+            text-foreground outline-none"
+        />
+
+        {/* **나침반이 「보내기」 바로 왼쪽에 붙는다.**
+            처음엔 바닥 줄 양 끝으로 벌려 봤는데(`justify-between`) **화면을 찍어 보니 더 나빴다** —
+            큰 빈 상자의 좌하단에 **점 하나가 홀로** 남아, 쓰는 글자와도 「보내기」와도 멀었다.
+            **원래 문제(「무엇인지 안 읽힌다」)가 자리만 옮겨 그대로 남은 것**이다.
+            붙여 두면 **읽는 순서가 「이게 차오른다 → 여기를 누른다」**가 되고, 아이가 보내려고
+            손을 뻗을 때 **반드시 지나가는 자리**에 있다. */}
+        <div className="flex items-center justify-end gap-5 px-5 pb-4">
+          {/* 길이는 **가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
+          <CompassGlow length={value.length} />
+          <button
+            type="button"
+            disabled={!보낼수있나}
+            onClick={onSend}
+            className="rounded-full bg-scarf px-10 py-3 text-xl text-markings
+              disabled:opacity-40"
+          >
+            {보내기라벨}
+          </button>
+        </div>
+      </div>
       {안내 && (
         // 가린 이유를 말해주는 **유일한 자리**다. 전송을 막지 않으므로, 이 한 줄이 없으면
         // 아이는 자기 글자가 왜 바뀌었는지 알 방법이 없다.

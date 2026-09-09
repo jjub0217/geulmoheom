@@ -25,7 +25,9 @@ export function CompassGlow({ length }: { length: number }) {
       // 64 좌표계에 나침반은 반지름 12 다. 나머지가 빛이 퍼질 여백이다 —
       // 좁게 잡으면 가득 찼을 때 빛이 네모나게 잘려 「원이 아니라 사각형」으로 보인다.
       viewBox="0 0 64 64"
-      className="size-14 shrink-0"
+      // **점이 아니라 물건으로 보여야 한다.** 56px 일 때 실기기에서 「무엇인지 안 읽혔다」 —
+      // 「보내기」(높이 약 60px) 옆에 서면서 **둘이 한 줄의 짝**으로 읽히는 크기다.
+      className="size-16 shrink-0"
       // 장식이다. 스크린리더에 읽히면 그게 곧 숫자 없는 진행 표시가 되어버린다.
       aria-hidden="true"
     >

@@ -297,6 +297,11 @@ export default function Home() {
               onChange={setText}
               onMasked={가림알림}
               disabled={screen.kind === "sending"}
+              보내기라벨={버튼.보내기}
+              // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
+              // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
+              보낼수있나={text.trim() !== "" && screen.kind !== "sending"}
+              onSend={() => void send(screen.card, screen.guide)}
             />
             {/* **입력칸 곁이다.** 무엇에 대한 말인지 아이가 찾지 않아도 되게 —
                 자녀 인증 화면이 오류를 입력칸 곁에 두는 것과 같다. */}
@@ -305,17 +310,6 @@ export default function Home() {
                 {못닿음.보내기}
               </p>
             )}
-            <button
-              type="button"
-              // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
-              // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
-              disabled={text.trim() === "" || screen.kind === "sending"}
-              onClick={() => void send(screen.card, screen.guide)}
-              className="self-end rounded-full bg-scarf px-10 py-3 text-xl text-markings
-                disabled:opacity-40"
-            >
-              {버튼.보내기}
-            </button>
           </div>
         )}
 
@@ -332,14 +326,24 @@ export default function Home() {
                 자기 문장이 통했다는 것을 알아야 하고, 그림은 「내 책」에서 다시 본다. */}
             {삽화.kind !== "기다림" && (
               <div className="flex flex-col items-center gap-6">
-                {/* **그림과 같이 열린다.** 배지가 먼저 뜨면 그림은 이미 아는 것을 확인하는
-                    절차가 된다 — 「등급을 미리 흘리지 않는다」가 낱말이 아니라 순서로 깨진다. */}
-                <TierBadge tier={screen.result.tier} />
-                <GuideFigure guide={screen.result.guide} />
-                {/* **아이가 쓴 그 문장이다** (`text` 는 보낸 것 그대로 남아 있다).
+                {/* **아이 문장이 그림 바로 아래다** (2026-09-09, 실기기에서 사용자가 보고 고침).
+                    전에는 **가이드 그림 아래**에 있어 **누구 말인지 안 읽혔다** — 가이드가 바로 위에서
+                    말하고 있으니 그 말의 이어짐으로 보인다.
+                    **자기 문장을 자기 것으로 못 알아보면 관찰 신호 7번**(「이 단어들이 나침반을
+                    움직였어」가 전달되는가)**을 아예 못 잰다.** 쓰기를 막지는 않는데 **관찰을 막고,
+                    프리테스트의 목적이 관찰이다** (PM 판정).
+                    **자리는 「내 책」에서 베꼈다** — 책 페이지가 **삽화 위·문장 아래**다
+                    (`Stage0.md` 6절). 결과 화면이 **책 한 쪽과 같은 모양**이면, 아이는 그 배치를
+                    여기서 처음 배우고 책에서 다시 만난다. **새 규칙을 만든 게 아니라 있는 것을 맞췄다.**
                     하이라이트도 **그림과 같이** 열린다 — 표시가 많고 적은 것 자체가
                     등급을 짐작하게 하는 신호라, 굽는 동안 미리 보이면 안 된다. */}
                 <WrittenLine text={text} highlights={screen.result.highlights} />
+                {/* **그림과 같이 열린다.** 배지가 먼저 뜨면 그림은 이미 아는 것을 확인하는
+                    절차가 된다 — 「등급을 미리 흘리지 않는다」가 낱말이 아니라 순서로 깨진다.
+                    **책에서도 배지가 문장 아래**라 순서가 같다. */}
+                <TierBadge tier={screen.result.tier} />
+                {/* 가이드는 **아이 문장을 읽고 반응하는 쪽**이라 그 뒤에 선다. */}
+                <GuideFigure guide={screen.result.guide} />
                 {/* **그림을 막 받은 이 자리가 「내 책에 쌓인다」를 가장 잘 말한다** —
                     결과 대사(1.6 기본 2번)가 파는 것이 정확히 그것이다.
                     **나가기 옆에 두지 않는다**: 하나는 눈에 안 띄어야 하고 이건 반대다. */}
