@@ -113,9 +113,25 @@ export function AttemptInput({
           `장면카드_초안.md` 도 이쪽 편이다 — **「탐험가는 어떻게 할까?」는 상황문의 마지막 문장**이고
           **UI 가 자동으로 붙이는 것**이지 아이가 쓰는 칸의 일부가 아니다.
           **테두리 안에는 아이가 쓴 것과 아이가 하는 것(나침반·보내기)만 남는다.** */}
-      <label htmlFor="attempt" className="text-xl">
-        {label}
-      </label>
+      {/* **나침반이 물음 줄로 올라왔다** (2026-09-09, 대사 1.4b 와 짝을 맞춘다).
+          가이드가 **「여기 이 나침반, 네 말을 따라 움직여」**라고 가리키는데 **가리킬 대상이
+          화면 반대편(상자 안 오른쪽 아래)에 있었다** — 둘 다 제자리인데 **지시어가 그 사이를 못 건넜다.**
+
+          **셋째 길을 골랐다: 나침반을 가이드 쪽으로 올리되 쓰는 자리 바로 위에 둔다.**
+          ① **가이드 대사 바로 아래 같은 열**이라 「여기 이」가 닿는다
+          ② **글자 바로 위**라 쓰는 동안 시야에 있다 — 대사 옆까지 올리면 자판이 올라올 때 사라진다
+          ③ **상자 밖이라 소유가 안 섞인다.** 「여기 이 나침반」이면 **그건 가이드의 물건**이고,
+             테두리 안은 **아이가 쓴 것과 아이가 하는 것**만 두기로 한 그 규칙 그대로다
+
+          **잃는 것 — 「차오른다 → 누른다」 짝.** 「보내기」 옆에 둬서 정체를 읽히게 했던 것인데,
+          **이제 대사가 그 일을 말로 한다.** 자리로 설명하던 것을 문장이 대신하므로 짝을 놓아준다. */}
+      <div className="flex items-center gap-4">
+        <label htmlFor="attempt" className="text-xl">
+          {label}
+        </label>
+        {/* 길이는 **가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
+        <CompassGlow length={value.length} />
+      </div>
       <div
         className="flex flex-col rounded-3xl border-2 border-brass/50 bg-markings/70
           outline-2 outline-offset-2 outline-transparent focus-within:border-glow
@@ -158,15 +174,9 @@ export function AttemptInput({
             text-foreground outline-none"
         />
 
-        {/* **나침반이 「보내기」 바로 왼쪽에 붙는다.**
-            처음엔 바닥 줄 양 끝으로 벌려 봤는데(`justify-between`) **화면을 찍어 보니 더 나빴다** —
-            큰 빈 상자의 좌하단에 **점 하나가 홀로** 남아, 쓰는 글자와도 「보내기」와도 멀었다.
-            **원래 문제(「무엇인지 안 읽힌다」)가 자리만 옮겨 그대로 남은 것**이다.
-            붙여 두면 **읽는 순서가 「이게 차오른다 → 여기를 누른다」**가 되고, 아이가 보내려고
-            손을 뻗을 때 **반드시 지나가는 자리**에 있다. */}
-        <div className="flex items-center justify-end gap-5 px-5 pb-4">
-          {/* 길이는 **가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
-          <CompassGlow length={value.length} />
+        {/* 「보내기」는 **상자 안에 남는다** — 쓰던 자리와 보내는 자리를 떼어놓지 않는다.
+            **아이가 하는 것**이라 아이 테두리 안이 맞다. */}
+        <div className="flex items-center justify-end px-5 pb-4">
           <button
             type="button"
             disabled={!보낼수있나}
