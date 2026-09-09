@@ -28,9 +28,48 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT = REPO_ROOT / "web" / "out"
+SRC = REPO_ROOT / "web" / "src"
 CERT = REPO_ROOT / ".certs" / "geulmoheom.test.pem"
 KEY = REPO_ROOT / ".certs" / "geulmoheom.test-key.pem"
 PORT = 3001
+
+
+def _최근시각(폴더: Path) -> float | None:
+    """그 폴더 아래에서 **가장 최근에 바뀐 파일의 시각.** 파일이 없으면 `None`."""
+    시각들 = [p.stat().st_mtime for p in 폴더.rglob("*") if p.is_file()]
+    return max(시각들) if 시각들 else None
+
+
+def 낡았나(out: Path, src: Path) -> str | None:
+    """`out` 이 `src` 보다 오래됐으면 사유, 아니면 `None`.
+
+    **오늘 두 번 났고 둘이 거울상이다** (2026-09-09). 하나는 **시각은 최신인데 대상이
+    다른 빌드**였고, 하나는 **대상은 맞는데 시각이 낡은 빌드**였다. **둘 다 `out/` 을
+    열어봐서는 안 갈린다** — 그리고 **낡은 화면은 서버도 주소도 멀쩡해서 겉으로
+    아무 문제가 없어 보인다.** 아이가 고치기 전 화면을 보고, 그것이 판정에 들어간다.
+
+    **억지로 띄우는 길을 두지 않는다** (프론트 제안, 채택). 있으면 급할 때 그걸 쓰고,
+    **급할 때가 정확히 오늘 같은 때**다.
+
+    **`git checkout`·`git stash` 가 mtime 을 바꾼다** — 그때는 안 낡았는데 낡았다고
+    나올 수 있다. **그 방향으로 틀리는 쪽을 택한다**: 「괜히 한 번 더 굽는다」가
+    「낡은 화면이 아이에게 나간다」보다 싸다.
+    """
+    빌드 = _최근시각(out)
+    소스 = _최근시각(src)
+    # **없는 것을 근거로 안 막는다.** 여기서 죽으면 띄울 방법이 사라진다.
+    if 빌드 is None or 소스 is None:
+        return None
+    if 소스 <= 빌드:
+        return None
+    from datetime import datetime
+
+    꼴 = "%H:%M:%S"
+    return (
+        f"`web/out` 이 `web/src` 보다 낡았다 — "
+        f"빌드 {datetime.fromtimestamp(빌드).strftime(꼴)} · "
+        f"소스 {datetime.fromtimestamp(소스).strftime(꼴)}"
+    )
 
 
 class 핸들러(http.server.SimpleHTTPRequestHandler):
@@ -65,6 +104,8 @@ def main() -> None:
         raise SystemExit(f"{OUT} 이 없다. 먼저 빌드한다 — `make build-out`")
     if not CERT.exists():
         raise SystemExit("인증서가 없다. 먼저 `make certs-lan`")
+    if 사유 := 낡았나(OUT, SRC):
+        raise SystemExit(f"{사유}\n→ 먼저 `make build-out`")
 
     맥락 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     맥락.load_cert_chain(CERT, KEY)
