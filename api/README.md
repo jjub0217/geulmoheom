@@ -167,7 +167,7 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 |---|---|---|
 | `APP_ENV` | `pilot` | 이 값이 `.env.pilot` 을 고르고 아래 필수 검사를 켠다 |
 | `DATABASE_URL` | Render Postgres 의 **Internal** URL | ⛔ **앞을 `postgresql+asyncpg://` 로 갈아 넣는다.** 그대로 넣으면 기동에서 죽는다 |
-| `REDIS_URL` | Render Key Value 의 Internal URL | 청사진이면 자동으로 붙는다 |
+| `REDIS_URL` | Render Key Value 의 Internal URL | 청사진이면 자동으로 붙는다. **손으로 만들었으면 비었는지 본다** — 비면 기동은 되고(필수 목록이 아니다) **`/readyz` 의 `redis` 만 down 이 된다.** **Key Value 와 Web Service 가 같은 리전이어야 사설망으로 붙는다** |
 | `GEMINI_API_KEY` | Google AI Studio, **유료 티어** | 무료 티어는 아이 원문 동의 게이트를 깬다 (`adr/0005`) |
 | `EVALUATOR_MODEL` | `gemini-3.1-flash-lite` | W2 벤치 확정 |
 | `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | W1 벤치 확정. **이번 파일럿엔 호출이 안 나간다**(굽는 자리를 막았다) — 그래도 비면 기동을 막는 값이다 |
@@ -215,11 +215,25 @@ cd api && APP_ENV=pilot PYTHONPATH=. uv run python scripts/install_legendary.py
 **서버의 `JWT_SECRET` 과 같은 값이어야 한다.** 다르면 키가 전부 어긋나 **60조합이 통째로
 기본 에셋**이 된다. 목록은 `docs/삽화_legendary_선정.md` 가 SSOT 다.
 
-#### 8-5. 마이그레이션
+#### 8-5. 마이그레이션과 **장면 카드 뿌리기** — 둘 다 시작 명령에 있다
 
-**새 DB 는 비어 있다.** 손으로 돌릴 것이 없다 — **`alembic upgrade head` 가 시작 명령에
-붙어 있어** 매 기동마다 돈다(같은 상태면 아무것도 안 한다). 확인은 첫 배포 로그에서
-`Running upgrade` 줄을 보는 것이다.
+**새 DB 는 비어 있다.** 손으로 돌릴 것이 없다 — Dockerfile 의 시작 명령이 셋을 순서대로
+한다.
+
+```
+alembic upgrade head && python scripts/seed_cards.py && exec uvicorn …
+```
+
+**둘 다 몇 번을 돌려도 결과가 같다**(alembic 은 같은 리비전이면 넘어가고, 씨뿌리기는
+덮어쓴다). **`&&` 라 앞이 실패하면 서버가 아예 안 뜬다 — 그것이 의도다.** 스키마 없이
+뜨면 **가입이 500** 이고, 카드 없이 뜨면 **아이가 빈 화면**을 본다.
+
+**⛔ Render 대시보드에서 Web Service 를 손으로 만들었다면 「Start Command」 칸을 본다.**
+거기에 다른 값이 들어 있으면 **Dockerfile 의 이 줄이 안 쓰이고, 마이그레이션도 씨뿌리기도
+안 돈다.** **칸을 비우거나**(이미지의 명령을 쓴다) 위 문자열을 그대로 넣는다
+(`${PORT:-10000}` 자리는 `$PORT`).
+
+**2026-09-10 에 이 자리를 실제로 밟았다** — 서버는 떴는데 `POST /parents/signup` 이 500 이었다.
 
 #### 8-6. Cold Start 완화 — 계정 하나 더
 
@@ -230,10 +244,21 @@ cd api && APP_ENV=pilot PYTHONPATH=. uv run python scripts/install_legendary.py
 
 #### 8-7. 올리고 나서 보는 것
 
-1. `/healthz` 가 200 · 첫 배포 로그에 `Running upgrade`
-2. 아이가 **인터넷 주소로 들어와 한 판**을 끝낸다 (가입 → 카드 → 문장 → 등급 → 그림 → 책)
-3. **삽화가 실기기에서 뜬다** — 안 뜨면 `vercel.json` 의 `destination` 과 8-4 를 먼저 본다
-4. iPad 쿠키 `Expires` 실측 · `CLIENT_IP_HEADER` 실측(8-3)
+**⛔ `/healthz` 로 시작하지 않는다. 그것은 「프로세스가 살아 있다」만 말한다** — DB 도
+Redis 도 안 만진다. **`/api/v1/parents/me` 의 401 도 인증에서 먼저 끊겨 DB 를 안 지난다.**
+**2026-09-10 에 그 셋이 전부 초록인 채로 가입이 500 이었다.**
+
+1. **`https://<서비스>.onrender.com/readyz`** — **Render 주소로 직접 부른다**(Vercel 은
+   `/api/*` 만 넘긴다). `{"postgres":"up","redis":"up","cards":"up"}` **셋 다 up 이어야 200** 이다
+   - `postgres: down` → `DATABASE_URL`(스킴·Internal 여부·리전)
+   - `cards: down` → **씨뿌리기가 안 돌았다**(8-5) 또는 테이블이 없다
+   - `redis: down` → `REDIS_URL` 이 비었거나 **Key Value 가 다른 리전**이다.
+     **속도 제한·비용·되묻기가 전부 「못 세면 열어 준다」라 화면에는 아무 증상이 없다**
+2. **쓰기가 한 번 돈다** — 학부모 가입. **읽기만으로는 스키마가 있는지 모른다**
+3. 아이가 **인터넷 주소로 들어와 한 판**을 끝낸다 (가입 → 카드 → 문장 → 등급 → 그림 → 책)
+4. **삽화가 실기기에서 뜬다** — **「뜬다」가 아니라 「카드마다 다르다」로 본다.**
+   기본 에셋도 200 으로 잘 뜬다. 안 되면 `vercel.json` 의 `destination` 과 8-4 를 먼저 본다
+5. iPad 쿠키 `Expires` 실측 · `CLIENT_IP_HEADER` 실측(8-3)
 
 ---
 

@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir uv==0.12.10
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/srv/api \
     PATH="/srv/api/.venv/bin:$PATH"
 
 WORKDIR /srv/api
@@ -43,6 +44,20 @@ COPY docs/ /srv/docs/
 # **그래서 속도 제한은 이 헤더를 안 쓴다.** 클라이언트가 채워 보낼 수 있어서다. 그쪽은
 # `CLIENT_IP_HEADER` 로 따로 받는다 (`app/child_auth_limit.py`).
 #
-# 마이그레이션을 기동에 붙인다. **`exec` 로 넘겨** uvicorn 이 PID 1 을 받게 한다 —
-# 안 그러면 Render 의 종료 신호가 셸에서 멈춘다.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips=\"*\""]
+# **기동에 셋을 순서대로 붙인다 — 마이그레이션 · 장면 카드 뿌리기 · uvicorn.**
+#
+# **⛔ 카드 뿌리기를 빼면 기동은 성공하고 아이가 카드를 못 받는다** (2026-09-10 에
+# 실제로 그랬다 — `/readyz` 의 `cards: down`). `scripts/seed_cards.py` 머리말이
+# **「배포마다 돈다」**고 적어 뒀는데 **첫 Dockerfile 이 그걸 안 읽었다** — 축 ⑪ 이다.
+# 둘 다 **몇 번을 돌려도 결과가 같다**(alembic 은 같은 리비전이면 넘어가고,
+# 씨뿌리기는 덮어쓴다).
+#
+# **`&&` 로 잇는다 — 앞이 실패하면 서버가 아예 안 뜬다.** 그것이 의도다:
+# 스키마 없이 뜨면 **가입이 500 이 되고**(그 자리를 겪었다), 카드 없이 뜨면
+# **아이가 빈 화면을 본다.** **죽는 쪽이 보인다.**
+# (문서에서 카드를 지웠는데 이미 아이가 쓴 카드면 FK 가 여기서 막는다 —
+#  그건 사람이 판단할 일이라 조용히 넘기지 않는 것이 맞다.)
+#
+# **`exec` 로 넘겨** uvicorn 이 PID 1 을 받게 한다 — 안 그러면 Render 의 종료 신호가
+# 셸에서 멈춘다.
+CMD ["sh", "-c", "alembic upgrade head && python scripts/seed_cards.py && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips=\"*\""]
