@@ -55,18 +55,31 @@ def _보관함(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def 구우면_터진다(monkeypatch: pytest.MonkeyPatch) -> None:
+def 구우면_터진다(monkeypatch: pytest.MonkeyPatch):
     """**아이 요청 경로에서 생성이 불리면 그 자리에서 실패시킨다.**
 
     이것을 픽스처로 둔 이유가 있다 — 안 두면 이 파일의 모든 테스트가 **실제로
     이미지를 굽는다.** 네트워크를 타고 돈이 나가고, **초록으로 지나간다.**
     굽기 자체를 보는 테스트는 이 위에 자기 것을 덧끼운다.
+
+    **⚠ 터뜨리는 것만으로는 안 선다** (2026-09-10, 축 ⑱). 부르는 쪽 `굽기()` 가
+    `except Exception` 으로 **`AssertionError` 까지 삼키고 로그만 남긴다**
+    (`artwork_store.py`). 그래서 **불려도 초록**이었다 — **감시가 대상에게 삼켜지는
+    자리**다. 지금은 `굽기()` 를 아무 데서도 안 불러 안 터지지만, **Stage 1 에서
+    되살아나는 순간 이 감시는 초록인 채 아이 손에서 돈이 나간다.**
+
+    **그래서 삼킬 수 없는 것으로 센다.** 터뜨리는 것은 그대로 둔다 — 그건 굽기를
+    거기서 멈추는 몫이고, **불렸다는 사실을 남기는 것은 아래 목록**이다.
     """
+    불린것: list[tuple[str, str]] = []
 
     async def _굽지마라(card_id: str, tier: str) -> 생성결과:
+        불린것.append((card_id, tier))
         raise AssertionError("아이 요청에서 삽화를 구웠다")
 
     monkeypatch.setattr(artwork_store, "생성", _굽지마라)
+    yield
+    assert not 불린것, f"아이 요청에서 삽화를 구웠다 — 유료 호출이 나갔다: {불린것}"
 
 
 def _보내기(client: TestClient, **덧붙임) -> dict:
