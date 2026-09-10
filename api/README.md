@@ -34,7 +34,12 @@ cd geulmoheom
 cp .env.example .env
 ```
 
-**채워야 하는 키** — `ANTHROPIC_API_KEY`, `R2_*`. 이미지 키(`IMAGE_*`)는 **W1 벤치 후** 확정한다.
+**채워야 하는 키** — `GEMINI_API_KEY`, `R2_*`. **키 하나로 글과 그림을 다 부른다** — 이미지도 Gemini
+네이티브다(`adr/0006`). 모델 이름은 `EVALUATOR_MODEL`·`IMAGE_MODEL` 에 넣고 **둘 다 확정됐다**
+(`gemini-3.1-flash-lite` · `gemini-3.1-flash-lite-image`). 확정본은 `.env.example` 에 있다.
+**⚠ 키는 ASCII 여야 한다** — 헤더로 나가서 한글을 넣으면 `UnicodeEncodeError` 로 죽는다(2026-09-09 실측).
+**⛔ `ANTHROPIC_API_KEY` 는 없다** — 2026-08-31 에 Gemini 로 교체됐다(`adr/0005`). 이 줄이 낡아 있어
+**새 머신 세팅이 그 자리에서 막혔다**(2026-09-10 대표 점검).
 `JWT_SECRET` 은 임의의 긴 난수. `DATABASE_URL`·`REDIS_URL` 은 아래 포트에 맞춰져 있다.
 
 ### 3. 로컬 DB
@@ -59,7 +64,10 @@ docker exec geulmoheom-postgres pg_isready -U geulmoheom
 docker exec geulmoheom-redis redis-cli ping        # PONG
 ```
 
-### 4. 프로젝트 초기화 (W1 첫 작업)
+### 4. 프로젝트 초기화 (W1 첫 작업) — **이미 끝났다. 기록이다**
+
+**⛔ 새로 들어온 사람이 이 절을 실행하지 않는다.** W1 에 한 번 한 일이고, **오늘 할 일은
+`/my-week <이번 주차>`** 다(아래 「자주 막히는 자리」 표). 아래 `W1` 은 그때의 숫자다.
 
 ```bash
 cd api && claude                # ← 반드시 api 안에서. api/CLAUDE.md 가 함께 읽힌다
@@ -134,13 +142,14 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 | 증상 | 어디를 본다 |
 |---|---|
 | 포트 충돌 / 컨테이너가 안 뜬다 | 위 3번 경고. `docker ps -a` 로 `Created` 상태인지 확인 |
-| 프론트가 뭘 기다리는가 | `/api-check` — `api-requests/open/` 과 `접수` 여부 |
+| 프론트가 뭘 기다리는가 | **`api-requests/` 는 휴면이다**(2026-09-06~, `adr/0008`). 같은 사람이라 왕복이 없다 — `api/CLAUDE.md` 「api-requests」 |
 | 아직 안 정해진 설계 결정 | `docs/api/미결.md`. 언제 정하는지는 주차 계획이 정한다 |
 | 명세를 고쳐야 한다 | 코드 커밋에 섞지 않는다. `명세 변경:` 줄 → PM 모자로 별도 커밋 |
-| 지금 뭘 해야 하지 | `/my-week W1` → `api/tasks/W1.md` |
+| 지금 뭘 해야 하지 | `/my-week W<n>` → `api/tasks/W<n>.md`. **`<n>` 은 `docs/주차계획/` 의 최신 주차다** — 예시 숫자를 그대로 돌리지 않는다 |
 | 한 세션이 길어진다 | 하위 체크박스 하나 = 세션 하나. 커밋하고 새로 띄운다 (`작업흐름.md` 3-3) |
 
 ## 참조
 
 `docs/작업흐름.md`(전체 흐름) · `api/CLAUDE.md`(작업 규칙) · `docs/api/`(계약) ·
-`docs/MVP_PRD.md` 3~6장 · `docs/안전_어휘_기준.md` · `docs/검증가설_성공지표.md`(F-1 로깅 정의)
+`docs/MVP_PRD.md` 3~6장 · `docs/안전_어휘_기준.md` · `docs/검증가설_성공지표.md`(F-1 로깅 정의) ·
+**`docs/용어사전.md`(낱말) · `docs/문구.md`(문장 — 화면에 그대로 나가는 것의 SSOT)**
