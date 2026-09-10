@@ -159,9 +159,14 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 ## 합의된 전제
 
 - Python 3.12, `uv`, 엔트리 `app.main:app`
-- LLM: Anthropic SDK, `claude-opus-5`. Evaluator 는 effort low + few-shot 예시셋 프롬프트 캐싱 (PRD 9장)
-- **W1 목 응답 서버가 최우선.** `docs/api/Stage0.md` 그대로, `outcome` 3분기를 파라미터로 강제 가능하게.
-  이게 늦으면 프론트가 멈춘다
+- LLM: **Google Gemini** (`google-genai`, **유료 티어** — `docs/adr/0005`). Evaluator 는
+  `gemini-3.1-flash-lite`(W2 벤치 확정, `benchmarks/W2-evaluator-bench.md`) · **thinking 끔** ·
+  few-shot 예시셋은 `app/rubric.py` 가 `docs/루브릭_예시셋.md` 에서 **읽는다**(코드에 안 박는다).
+  **이미지도 같은 키**로 Gemini 네이티브다 (`gemini-3.1-flash-lite-image` · `adr/0006`)
+  - **종전 「Anthropic SDK · `claude-opus-5` · effort low + 프롬프트 캐싱」은 0005·0006 이전 것이다.**
+    **프롬프트 캐싱은 코드에 없다** — 붙이는 날 이 줄을 고친다
+- **목 응답 서버는 W1 에 섰다.** 규칙은 그대로 산다 — `docs/api/Stage0.md` 대로 응답하고
+  `outcome` 3분기를 **`X-Mock-Outcome` 헤더로 강제**할 수 있다 (화면 작업이 쓴다)
 - **로깅·APM·오류 리포트에 아이 입력 원문 금지.** 원문이 가도 되는 곳은 `card_attempts.text` 하나뿐이다 (PRD 1.1b)
 - 안전 어휘 판정 기준은 `docs/안전_어휘_기준.md` — **코드에 화이트리스트를 복사하지 않는다**
 
