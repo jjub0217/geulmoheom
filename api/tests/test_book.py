@@ -93,6 +93,23 @@ def test_푼_카드가_페이지가_된다(client: TestClient):
     assert 페이지["page_no"] == 1
 
 
+def test_책_삽화_주소가_시도_응답과_같은_규칙이다(client: TestClient):
+    """**같은 그림을 세 곳이 가리킨다** — 시도 응답 · 폴링 · 책.
+
+    **⛔ 상대 경로다** (`adr/0012` ① — 배포가 한 오리진이다). 책만 절대 주소로 남으면
+    **결과 화면에서는 그림이 뜨는데 책에서만 안 뜬다** — 그리고 `artwork_url` 이
+    `null` 도 아니어서 **아이 화면에는 깨진 액자가 남는다.**
+
+    2026-09-10 까지 이 자리는 `url_for()` 를 **따로** 부르고 있었고, 검사가 하나도
+    없었다.
+    """
+    시도 = _풀기(client, "c01").json()
+
+    (페이지,) = _책(client)["pages"]
+
+    assert 페이지["artwork_url"] == f"/api/v1/artworks/{시도['artwork']['artwork_id']}/image"
+
+
 def test_아이_원문_그대로다(client: TestClient):
     """**맞춤법·AI 보정 없음** (`Stage0.md` 6절). 요약도 하지 않는다."""
     이상한문장 = "그림자가 캄캄했지만  나는 살금살금  걸어갔다"

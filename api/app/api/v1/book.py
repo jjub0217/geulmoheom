@@ -14,6 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from app.api.v1.artworks import 그림경로
 from app.api.v1.deps import Session, require_child
 from app.book_store import 삽화주소들, 세어보기, 책, 페이지들
 from app.events import 남기기, 이벤트
@@ -57,7 +58,9 @@ async def _펼치기(
     행들 = await 페이지들(session, 그책.id, 오늘만=오늘만)
 
     def 주소만들기(artwork_id: str) -> str:
-        return str(request.url_for("get_artwork_image", artwork_id=artwork_id))
+        # **주소 규칙을 여기서 따로 갖지 않는다** — 상대 경로여야 하는 이유가
+        # `삽화주소()` 한 곳에 있다 (`adr/0012` ①).
+        return 그림경로(request, artwork_id)
 
     주소 = await 삽화주소들(session, 행들, 주소만들기)
     return 그책, [_page(행, 주소.get(행.id)) for 행 in 행들]

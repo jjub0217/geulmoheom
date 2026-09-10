@@ -119,16 +119,18 @@ async def test_공유_캐시에_안_남는다(client: TestClient, 자녀행: Chi
 async def test_폴링이_이_주소를_가리킨다(client: TestClient, 자녀행: Child):
     """**저장소 주소가 클라이언트로 안 나간다.** 폴링 응답의 `url` 이 이 경로다.
 
-    **절대 주소여야 한다** — web 은 `app.` 이고 api 는 `api.` 라, 상대 경로면
-    `<img src>` 가 web 오리진으로 붙어 그림이 통째로 안 뜬다 (`adr/0007`).
+    **⛔ 상대 경로여야 한다** (2026-09-10 · `adr/0012`). 배포가 **한 오리진**이라
+    절대 주소면 **api 컨테이너 호스트**가 나가고, `<img>` 가 cross-site 로 붙어
+    **쿠키가 안 실려 그림이 0%** 다. 종전 이 검사는 `adr/0007` 의 3단 호스트를
+    근거로 **`https://` 로 시작하는지**를 재고 있었다.
+
+    **`endswith` 로 재지 않는다** — 절대 주소도 그 검사는 통과한다.
     """
     삽화 = await _삽화를_넣는다(자녀행.id)
 
     url = client.get(f"/api/v1/artworks/{삽화.id}").json()["url"]
 
-    assert url is not None
-    assert url.startswith("https://")
-    assert url.endswith(f"/api/v1/artworks/{삽화.id}/image")
+    assert url == f"/api/v1/artworks/{삽화.id}/image"
 
 
 # ── 남의 것은 없는 것이다 ────────────────────────────────

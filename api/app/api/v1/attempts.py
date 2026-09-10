@@ -538,7 +538,7 @@ async def _삽화참조(session: AsyncSession, card_attempt_id: UUID, request: R
     return {
         "artwork_id": str(삽화.id),
         "status": 삽화.status,
-        "url": str(request.url_for("get_artwork_image", artwork_id=str(삽화.id)))
-        if 삽화.status == "ready"
-        else None,
+        # **`삽화주소()` 가 `status` 도 같이 본다.** 여기서 조건을 따로 쓰면
+        # 「굽는 중엔 `None`」과 「상대 경로」 둘 다 한쪽만 고쳐진다 (`adr/0012` ①).
+        "url": 삽화주소(request, 삽화),
     }

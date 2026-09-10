@@ -62,18 +62,41 @@ def 삽화주소(request: Request, 삽화: ArtworkRow) -> str | None:
     **저장소 주소가 아니라 우리 주소다.** 프론트가 `status` 로 가르는데 주소까지
     미리 주면 그 분기가 흐려진다.
 
-    **절대 주소여야 한다.** web 은 `app.` 이고 api 는 `api.` 라(`adr/0007`), 상대
-    경로면 `<img src>` 가 web 오리진에 붙어 **그림이 통째로 안 뜬다.** 뒤에 프록시가
-    있으면 `--proxy-headers` 로 scheme 이 https 로 잡혀야 한다.
+    **⛔ 상대 경로다** (2026-09-10 · `adr/0012` 따라오는 작업 ①). 종전 「절대 주소여야
+    한다」는 **3단 호스트(`adr/0007` — web 은 `app.`, api 는 `api.`)를 전제**했는데,
+    배포가 **한 오리진(`vercel.json` 의 `rewrites`)** 으로 정해지면서 그 전제가 뒤집혔다.
+    `request.url_for()` 는 **api 컨테이너가 보는 호스트**를 내놓으므로, 절대 주소로 두면
+    `<img>` 가 공개 오리진이 아니라 api 호스트로 나가 **`__Host-` 쿠키가 안 실리고
+    그림이 0%** 다. 잘림(43% 보임)보다 나쁘다.
 
-    **두 곳이 이 규칙을 따로 갖지 않는다.** 시도 응답과 폴링 응답은 **스키마가 달라
-    (`ArtworkRef` · `Artwork`) 모델은 각자 만들지만**, 갈리면 아픈 것은 이 한 줄이다 —
-    실제로 시도 응답은 `status` 를 `"pending"` 으로 **박아 두고** 있었고, 그래서
-    **캐시 히트로 이미 `ready` 인 삽화도 `pending` 으로 나갔다.**
+    **`--proxy-headers` 로는 안 풀린다** — uvicorn 은 `X-Forwarded-Proto` 와 `-For` 만
+    보고 **`X-Forwarded-Host` 를 안 본다.** 절대 주소를 고집하면 **scheme 만 https 로
+    잡히고 호스트는 여전히 api 컨테이너**다.
+
+    **⚠ 로컬 개발에서는 이 값으로 그림이 안 뜬다** — `next dev` 는 web 과 api 가 다른
+    오리진이라 `/api/v1/...` 이 web 쪽에 붙는다. **코드는 배포 형태를 따르고 로컬은
+    프론트가 프록시로 맞춘다** — 설정으로 갈래를 만들면 **운영에서만 틀리는 값**이
+    생기고, 그 실패는 조용하다.
+
+    **셋이 이 한 줄을 공유한다** — 시도 응답(`POST /attempts`) · 폴링 · 책(`GET /book`).
+    스키마는 각자 만들어도(`ArtworkRef` · `Artwork` · `BookPage`) **주소 규칙이 갈리면
+    한쪽만 고쳐지고 조용하다.** 실제로 시도 응답은 `status` 를 `"pending"` 으로
+    **박아 두고** 있었고, 그래서 **캐시 히트로 이미 `ready` 인 삽화도 `pending` 으로
+    나갔다.** 2026-09-10 에는 **셋이 각자 `url_for()` 를 부르고 있었다** — 이 함수의
+    주석이 「두 곳이 따로 갖지 않는다」고 적은 채였다.
     """
     if 삽화.status != "ready":
         return None
-    return str(request.url_for("get_artwork_image", artwork_id=str(삽화.id)))
+    return 그림경로(request, str(삽화.id))
+
+
+def 그림경로(request: Request, artwork_id: str) -> str:
+    """`<img src>` 에 그대로 들어가는 경로. **상대인 이유는 `삽화주소()` 에 있다.**
+
+    행이 없고 id 만 있는 자리(`GET /book`)가 부른다. **`.path` 를 떼는 것이지 문자열을
+    손으로 잇는 것이 아니다** — 라우트가 바뀌면 여기가 따라온다.
+    """
+    return request.url_for("get_artwork_image", artwork_id=artwork_id).path
 
 
 @router.get(
@@ -86,9 +109,10 @@ async def get_artwork_image(
 ) -> Response:
     """그림 바이트. **버킷을 공개하는 대신 여기서 낸다** (미결 11-7).
 
-    **`<img>` 서브리소스로 불린다.** 쿠키가 자동으로 실리려면 api 와 web 이
-    same-site 여야 하고 `adr/0007` 이 그렇게 잡아 뒀다 — **`crossOrigin` 속성을
-    붙이면 그 자동이 꺼져 그림이 통째로 안 뜬다** (프론트 몫, `Stage0.md` 5절).
+    **`<img>` 서브리소스로 불린다.** 쿠키가 자동으로 실리려면 브라우저에게 web 과
+    같은 오리진으로 보여야 하고, **`adr/0012` 가 `vercel.json` 의 `rewrites` 로 그렇게
+    잡았다**(종전 근거는 `adr/0007` 의 same-site 3단 호스트였다) — **`crossOrigin`
+    속성을 붙이면 그 자동이 꺼져 그림이 통째로 안 뜬다** (프론트 몫, `Stage0.md` 5절).
 
     **남의 것은 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
     **기본 에셋도 같은 주소로 나간다** — 주소가 갈리면 「`fallback` 을 아이에게

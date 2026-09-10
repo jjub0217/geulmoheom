@@ -307,7 +307,9 @@ def test_헤더가_없으면_판정_결과가_나온다(client: TestClient):
     # `/artworks/{id}/image` 한 주소로 나간다 — 별도 주소를 두면 **주소만 보고
     # 「기본 그림인가」를 알 수 있게 된다.**
     assert "placeholder_url" not in body["artwork"]
-    assert body["artwork"]["url"].endswith(f"/artworks/{body['artwork']['artwork_id']}/image")
+    # **상대 경로다** (`adr/0012` ① — 한 오리진). `endswith` 만 재면 절대 주소도
+    # 통과하므로 **통째로 비교한다** — 셋 중 한 곳만 절대로 돌아가면 조용히 샌다.
+    assert body["artwork"]["url"] == f"/api/v1/artworks/{body['artwork']['artwork_id']}/image"
 
 
 def test_scaffold_를_헤더로_강제한다(client: TestClient):
