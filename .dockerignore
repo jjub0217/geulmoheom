@@ -1,0 +1,27 @@
+# `api/Dockerfile` 의 빌드 컨텍스트가 저장소 루트라 여기서 걸러야 한다.
+# **비밀부터 건다** — `.env` 가 이미지에 구워지면 그 사실이 아무 데도 안 보인다.
+.env
+.env.*
+!.env.example
+!.env.pilot.example
+.artworks
+
+.git
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+
+# 런타임이 안 읽는 것들. web 은 Vercel 이라 이미지에 들어갈 이유가 없다 (`adr/0012`).
+web/
+landing/
+infra/
+api-requests/
+api/out
+api/tests
+api/benchmarks
+api/notes
+api/tasks
+docs/archive
+docs/주차계획

@@ -126,6 +126,34 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 **`/openapi.json` 이 곧 프론트 계약이자 스키마 SSOT** 다. 응답 스키마를 바꾸면
 커밋 메시지에 `명세 변경:` 줄을 남긴다 — 문서 반영은 PM 모자를 쓴 **별도 커밋**으로.
 
+### 8. 배포 (`docs/adr/0012`)
+
+**web=Vercel · api=Render(무료) · 한 오리진.** 브라우저에는 Vercel 호스트 하나만 보이고
+`/api/*` 를 Vercel 이 Render 로 넘긴다 — **Render 주소는 노출되지 않는다.**
+
+| 파일 | 무엇 |
+|---|---|
+| `api/Dockerfile` | 컨테이너. **빌드 컨텍스트가 저장소 루트다** — 런타임이 `docs/` 를 읽는다 |
+| `render.yaml` | Render 청사진(api + Postgres + Key Value). 무료 플랜 |
+| `web/vercel.json` | Vercel 쪽. `rewrites` 의 `destination` 에 Render 주소를 채운다 (프론트 몫) |
+
+**올리는 순서**
+
+1. Render 대시보드에서 **Blueprint 로 `render.yaml`** 을 읽힌다
+2. `sync: false` 인 값들을 채운다 — 특히 **`DATABASE_URL` 은 앞을 `postgresql+asyncpg://`
+   로 갈아 넣는다.** Render 가 주는 `postgresql://…` 를 그대로 넣으면 **기동에서 죽는다**
+3. `CLIENT_IP_HEADER` 는 **올린 뒤 실제 헤더를 보고** 채운다. **`X-Forwarded-For` 를 적지
+   않는다** — 클라이언트가 채워 보낼 수 있어 접속 코드 속도 제한을 비껴간다
+4. **넣어 둔 `legendary` 18장을 올린다** (`scripts/install_legendary.py`).
+   **`JWT_SECRET` 에서 키가 유도되므로 넣는 환경과 서버의 비밀이 같아야 한다** —
+   다르면 60조합이 통째로 기본 에셋으로 나가는데 **아이 화면은 안 멈춘다**
+5. `web/vercel.json` 의 `destination` 을 채우고 web 을 올린다 (프론트)
+
+**⚠ 무료라서 치르는 값** — 15분 무요청이면 인스턴스가 잠들고 **다음 아이가 30~50초를
+기다린다.** 완화는 **외부 무료 모니터링이 `/healthz` 를 5~14분 간격으로 때리는 것**이다.
+`/healthz` 는 인증도 DB 도 안 본다. **GitHub Actions 로 하지 않는다** — CI 가 결제 문제로
+2026-09-09 부터 안 돈다. 나머지 둘(90일 뒤 DB 삭제 · Redis 무영속)은 `adr/0012` 에 있다.
+
 ---
 
 ## 합의된 전제
