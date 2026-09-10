@@ -137,22 +137,103 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 | `render.yaml` | Render 청사진(api + Postgres + Key Value). 무료 플랜 |
 | `web/vercel.json` | Vercel 쪽. `rewrites` 의 `destination` 에 Render 주소를 채운다 (프론트 몫) |
 
-**올리는 순서**
+#### 8-1. Web Service 를 만든다 — **한 번에**
 
-1. Render 대시보드에서 **Blueprint 로 `render.yaml`** 을 읽힌다
-2. `sync: false` 인 값들을 채운다 — 특히 **`DATABASE_URL` 은 앞을 `postgresql+asyncpg://`
-   로 갈아 넣는다.** Render 가 주는 `postgresql://…` 를 그대로 넣으면 **기동에서 죽는다**
-3. `CLIENT_IP_HEADER` 는 **올린 뒤 실제 헤더를 보고** 채운다. **`X-Forwarded-For` 를 적지
-   않는다** — 클라이언트가 채워 보낼 수 있어 접속 코드 속도 제한을 비껴간다
-4. **넣어 둔 `legendary` 18장을 올린다** (`scripts/install_legendary.py`).
-   **`JWT_SECRET` 에서 키가 유도되므로 넣는 환경과 서버의 비밀이 같아야 한다** —
-   다르면 60조합이 통째로 기본 에셋으로 나가는데 **아이 화면은 안 멈춘다**
-5. `web/vercel.json` 의 `destination` 을 채우고 web 을 올린다 (프론트)
+**청사진으로 하면 아래 칸이 전부 채워진다** — Render 대시보드 → Blueprints → 이 저장소의
+`render.yaml`. 손으로 만든다면 그 값이 이것들이다.
 
-**⚠ 무료라서 치르는 값** — 15분 무요청이면 인스턴스가 잠들고 **다음 아이가 30~50초를
-기다린다.** 완화는 **외부 무료 모니터링이 `/healthz` 를 5~14분 간격으로 때리는 것**이다.
-`/healthz` 는 인증도 DB 도 안 본다. **GitHub Actions 로 하지 않는다** — CI 가 결제 문제로
-2026-09-09 부터 안 돈다. 나머지 둘(90일 뒤 DB 삭제 · Redis 무영속)은 `adr/0012` 에 있다.
+**⚠ Postgres·Key Value 를 이미 대시보드에서 만들었다면 청사진을 그대로 적용하지 않는다** —
+**같은 것이 하나 더 생긴다**(청사진은 기존 것을 가져오지 않는다). 그때는 **Web Service 만
+손으로 만들고** `render.yaml` 은 **값의 출처로만** 읽는다. **리전은 이미 만든 DB 에 맞춘다.**
+
+| 칸 | 값 | 왜 |
+|---|---|---|
+| Language | **Docker** | FastAPI 컨테이너다. Postgres·Redis 를 물고 있어 서버리스에 못 올라간다 |
+| Root Directory | **비운다** | 빌드 컨텍스트가 저장소 루트다 — `api/` 로 잡으면 `docs/` 가 안 들어간다 |
+| Dockerfile Path | `api/Dockerfile` | |
+| Build Command | **없음** | Docker 가 빌드다 |
+| Start Command | **비운다** | Dockerfile 의 `CMD` 를 쓴다 — 마이그레이션과 `--proxy-headers` 가 거기 박혀 있다 |
+| Instance Type | **Free** | 감수하는 것 셋은 `adr/0012` |
+| Region | **DB·Key Value 와 같은 리전** | 다르면 사설망으로 못 붙는다 |
+| Health Check Path | `/healthz` | 인증도 DB 도 안 본다. **`/readyz` 를 걸지 않는다** — DB 가 잠깐 흔들릴 때 인스턴스가 죽는다 |
+| Port | **지정하지 않는다** | `$PORT` 를 읽는다 |
+
+#### 8-2. 환경변수 — **이름과 출처만. 값은 대시보드에서 직접 넣는다**
+
+**⛔ 커밋되는 `.env.pilot.example` 에 값을 적지 않는다.** 2026-09-10 에 두 번 났고
+지금은 검사가 막는다 (`tests/test_env_pilot_example.py`).
+
+| 이름 | 출처 · 값 | 비고 |
+|---|---|---|
+| `APP_ENV` | `pilot` | 이 값이 `.env.pilot` 을 고르고 아래 필수 검사를 켠다 |
+| `DATABASE_URL` | Render Postgres 의 **Internal** URL | ⛔ **앞을 `postgresql+asyncpg://` 로 갈아 넣는다.** 그대로 넣으면 기동에서 죽는다 |
+| `REDIS_URL` | Render Key Value 의 Internal URL | 청사진이면 자동으로 붙는다 |
+| `GEMINI_API_KEY` | Google AI Studio, **유료 티어** | 무료 티어는 아이 원문 동의 게이트를 깬다 (`adr/0005`) |
+| `EVALUATOR_MODEL` | `gemini-3.1-flash-lite` | W2 벤치 확정 |
+| `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | W1 벤치 확정. **이번 파일럿엔 호출이 안 나간다**(굽는 자리를 막았다) — 그래도 비면 기동을 막는 값이다 |
+| `GM_MODEL` | **비운다** | Stage 1 용이고 **코드 어디서도 안 읽는다**. 필수 목록에도 없다 |
+| `JWT_SECRET` | 새로 뽑는다 (예: `openssl rand -hex 32`) | ⛔ **삽화 파일 키가 이 값에서 유도된다**(`app/storage.py` `_조각`). **정한 뒤 파일럿 내내 갈지 않는다** — 갈면 8-4 를 다시 돌려야 하고, 안 돌리면 **그림만 통째로 기본 에셋이 되는데 아무 데도 빨간불이 안 뜬다** |
+| `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` | Cloudflare R2 (S3 호환 토큰) | 아래 8-4 |
+| `CLIENT_IP_HEADER` | `X-Vercel-Forwarded-For` | 아래 8-3 |
+| `DAILY_COST_ALERT_USD` | `20` | PRD F-3 |
+| ~~`NEXT_PUBLIC_API_BASE_URL`~~ | **Render 에 넣지 않는다** | web 의 **빌드 타임** 값이고 `web/vercel.json` 의 `build.env` 에 있다. api 는 이 이름을 읽지 않는다 |
+
+**필수 여덟이 비면 서버가 안 뜬다** (`app/config.py` `PILOT_REQUIRED`). 조용히 떠서
+아이 문장을 받아 놓고 첫 호출에서 터지는 것보다 낫다.
+
+#### 8-3. `CLIENT_IP_HEADER` — **왜 `X-Vercel-Forwarded-For` 인가, 틀리면 무엇이 되나**
+
+`아이 → Vercel → Render → FastAPI` 라 **Render 가 보는 접속자는 아이가 아니라 Vercel** 이다.
+
+- **`X-Forwarded-For` 를 쓰지 않는다.** Render 주소는 비밀이 아니라 **Vercel 을 건너뛰고
+  직접 때리면 아무 값이나 넣을 수 있다.** Vercel 이 자기 앞에서 덮어쓰는 것과 별개다
+- **`X-Vercel-Forwarded-For` 는 Vercel 이 채우는 값**이고, Vercel 문서가 「`x-forwarded-for`
+  는 위에 프록시가 있으면 덮일 수 있어서 이 헤더를 따로 둔다」고 적고 있다
+- **⚠ 다만 「외부 rewrite 목적지에도 이 헤더를 보내는가」는 문서에 없다. 실측이 답이다**
+
+**틀렸을 때 무슨 일이 나는지가 중요하다** — 헤더가 없으면 `클라이언트IP()` 가 `None` 을
+돌려주고 **②(같은 IP 시간당 30회 제동)만 꺼진다.** **①(같은 기기 5회 → 15분 잠금)은 그대로
+돈다** — 그리고 **주는 ①이다**(`app/child_auth_limit.py` 머리말). 즉 **파일럿을 여는 데
+막는 값이 아니다.** 반대로 **아이 전부가 한 IP 로 뭉치는 값**을 넣는 것이 나쁘다 — 그건
+**아무 잘못 없는 아이가 막히는** 쪽이다.
+
+**실측 방법** — 서버 코드를 고치지 않는다. `vercel.json` 의 `destination` 을 **한 번만**
+헤더를 그대로 돌려주는 곳으로 돌려 `curl` 로 보고 되돌린다. **아이 데이터가 없는 요청
+하나이고 쿠키를 안 실어 보낸다** — 그래도 **바깥으로 나가는 일이라 사람이 판단할 것**이다.
+
+#### 8-4. 삽화 18장 — R2 에 올린다
+
+**`PILOT_REQUIRED` 에서 R2 를 빼지 않는다.** 빼면 로컬 디스크로 떨어지는데
+**Render 무료는 디스크가 인스턴스와 함께 사라진다** — 재기동마다 그림이 사라지고
+**아이 화면은 안 멈춘다.** 파일럿에서 삽화를 **굽지 않으므로** R2 는 읽기만 한다.
+
+```bash
+# R2 셋과 JWT_SECRET 을 .env.pilot 에 채운 뒤, 로컬에서 한 번 돌린다.
+cd api && APP_ENV=pilot PYTHONPATH=. uv run python scripts/install_legendary.py
+```
+
+**서버의 `JWT_SECRET` 과 같은 값이어야 한다.** 다르면 키가 전부 어긋나 **60조합이 통째로
+기본 에셋**이 된다. 목록은 `docs/삽화_legendary_선정.md` 가 SSOT 다.
+
+#### 8-5. 마이그레이션
+
+**새 DB 는 비어 있다.** 손으로 돌릴 것이 없다 — **`alembic upgrade head` 가 시작 명령에
+붙어 있어** 매 기동마다 돈다(같은 상태면 아무것도 안 한다). 확인은 첫 배포 로그에서
+`Running upgrade` 줄을 보는 것이다.
+
+#### 8-6. Cold Start 완화 — 계정 하나 더
+
+**15분 무요청이면 잠들고 다음 아이가 30~50초를 기다린다.** 외부 무료 모니터링
+(UptimeRobot · cron-job.org 급)이 **5~14분 간격으로 `https://<서비스>.onrender.com/healthz`**
+를 때린다. **Vercel 주소로 때리면 안 된다** — `/api/*` 만 넘어가서 `/healthz` 는 안 간다.
+**GitHub Actions 로 하지 않는다** — CI 가 결제 문제로 2026-09-09 부터 안 돈다.
+
+#### 8-7. 올리고 나서 보는 것
+
+1. `/healthz` 가 200 · 첫 배포 로그에 `Running upgrade`
+2. 아이가 **인터넷 주소로 들어와 한 판**을 끝낸다 (가입 → 카드 → 문장 → 등급 → 그림 → 책)
+3. **삽화가 실기기에서 뜬다** — 안 뜨면 `vercel.json` 의 `destination` 과 8-4 를 먼저 본다
+4. iPad 쿠키 `Expires` 실측 · `CLIENT_IP_HEADER` 실측(8-3)
 
 ---
 
