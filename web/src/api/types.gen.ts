@@ -684,6 +684,11 @@ export interface components {
             /** Title */
             title: string;
             /**
+             * Author
+             * @description 지은이. 자녀 닉네임 그대로
+             */
+            author: string;
+            /**
              * Visibility
              * @description Stage 0 에서는 항상 private. 필드만 선반영
              * @enum {string}

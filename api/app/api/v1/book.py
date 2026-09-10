@@ -74,6 +74,9 @@ async def get_book(아이: Child, session: Session, request: Request) -> Book:
     return Book(
         book_id=str(그책.id),
         title=그책.title,
+        # **PII 검사를 다시 붙이지 않는다** — `nickname` 은 자녀 생성 때 이미 지났다
+        # (422 `PII_DETECTED`). 여기서 또 검사하면 **같은 값을 두 기준으로 재게 된다.**
+        author=아이.nickname,
         # Stage 0 에서는 항상 `private`. 필드만 선반영이다 (P1 공유 서재).
         visibility=그책.visibility,
         pages=페이지,

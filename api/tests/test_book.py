@@ -62,6 +62,26 @@ def test_아직_안_썼으면_책이_비어_있다(client: TestClient, 자녀행
     assert 자녀행.nickname in 책["title"]
 
 
+def test_지은이가_자녀_닉네임_그대로다(client: TestClient, 자녀행: Child):
+    """**2026-09-10 대표 판정** (A0-6) — 「자기가 쓴 글을 아이가 뿌듯해 한다」.
+
+    **책에 속한 값이다.** `GET /child/me` 의 `nickname` 이 아니라 여기 있는 이유는,
+    공유 서재(P1)에서 남의 책을 열면 **보는 사람**과 **쓴 사람**이 갈리기 때문이다
+    (`Stage0.md` 6절). 지금은 값이 같아서 안 보이는 차이다.
+    """
+    assert _책(client)["author"] == 자녀행.nickname
+
+
+def test_빈_책에도_지은이가_있다(client: TestClient, 자녀행: Child):
+    """**아이가 처음 들어온 순간 보는 화면이다.** 아직 아무것도 안 썼어도 표지에는
+    자기 이름이 있어야 한다 — 뿌듯함이 나오는 자리가 거기다.
+    """
+    책 = _책(client)
+
+    assert 책["pages"] == []
+    assert 책["author"] == 자녀행.nickname
+
+
 def test_푼_카드가_페이지가_된다(client: TestClient):
     _풀기(client, "c01")
 

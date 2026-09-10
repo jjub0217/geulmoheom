@@ -308,6 +308,10 @@ class BookCounts(BaseModel):
 class Book(BaseModel):
     book_id: str
     title: str
+    # **책에 속한 값이다.** `GET /child/me` 의 `nickname` 은 **보는 사람**의 이름이고
+    # 이건 **쓴 사람**의 이름이다 — 공유 서재(P1)에서 남의 책을 열면 갈린다
+    # (`Stage0.md` 6절). `visibility` 를 미리 넣어 둔 것과 같은 이유다.
+    author: str = Field(description="지은이. 자녀 닉네임 그대로")
     visibility: Visibility = Field(description="Stage 0 에서는 항상 private. 필드만 선반영")
     pages: list[BookPage]
     counts: BookCounts
