@@ -260,8 +260,11 @@ export function ChildrenPanel() {
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-semibold">{만들기.제목}</h2>
           {/* **넣기 전에 알린다.** 서버가 걸러내지만 거절당한 뒤에 아는 것보다 낫고,
-              학부모의 불안은 「거절」이 아니라 **「어디에 남나」**다. */}
+              학부모의 불안은 「거절」이 아니라 **「어디에 남나」**다.
+              **두 문장을 한 `<p>` 에 넣지 않는다** — 「실제 이름도 괜찮습니다」와
+              「걸러집니다」가 붙으면 실명도 걸러지는 것으로 읽힌다 (`children-copy.ts` 주석). */}
           <p className="opacity-80">{만들기.안내}</p>
+          <p className="opacity-80">{만들기.걸러지는것}</p>
         </div>
 
         <label className="flex flex-col gap-1">
