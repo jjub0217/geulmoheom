@@ -10,7 +10,7 @@ import { ApiError, NetworkError, apiGet, 인증이풀렸다 } from "@/lib/api";
 
 import { 버튼, 못닿음 } from "../copy";
 import { 상태표시 } from "../status-copy";
-import { 빈책 } from "./copy";
+import { 빈책, 지은이 } from "./copy";
 
 type Book = components["schemas"]["Book"];
 
@@ -77,6 +77,23 @@ export default function BookScreen() {
         <>
           {/* **서버가 준 제목 그대로다.** 프론트가 짓지도 다듬지도 않는다. */}
           <h1 className="text-center text-3xl/relaxed">{screen.book.title}</h1>
+
+          {/* **제목 아래 한 줄** (`문구.md` 1.15 · A0-6). **아이가 자기 책을 열어도 자기 이름이
+              어디에도 없었다** — 대표 판정의 근거인 「자기가 쓴 글을 뿌듯해한다」가 나오는 자리가
+              정확히 여기다. **실명을 열어 준 것과 한 짝**이라, 이름을 쓸 수 있게 해 놓고
+              보이는 자리가 없으면 반만 한 것이다.
+
+              **`GET /child/me` 의 `nickname` 으로 그리지 않는다.** 지금은 같은 값이지만
+              **공유가 열리는 순간 남의 책에 보는 사람 이름이 찍힌다** — `visibility` 를 미리
+              넣어 둔 것과 같은 자리다. **지은이는 책에 속한 값**이라 `book.author` 를 쓴다.
+
+              **빈 값 갈래를 만들지 않는다.** `nickname` 은 자녀 생성 때 필수라 비지 않는다.
+              **만약 비면 그 줄을 통째로 안 그린다** — 「지은이 (없음)」은 없다. */}
+          {screen.book.author !== "" && (
+            <p data-지은이 className="-mt-6 text-center text-lg opacity-70">
+              {지은이(screen.book.author)}
+            </p>
+          )}
 
           {screen.book.pages.length === 0 ? (
             // **빈 책은 오류가 아니다.** 처음 들어온 아이는 아직 안 썼을 뿐이다 —

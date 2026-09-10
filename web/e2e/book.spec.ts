@@ -29,12 +29,19 @@ const 페이지 = (
   ...over,
 });
 
-const 책 = (pages: components["schemas"]["BookPage"][]): Book => ({
+const 책 = (
+  pages: components["schemas"]["BookPage"][],
+  over: Partial<Book> = {},
+): Book => ({
   book_id: "b1",
   title: "불꽃탐험가의 모험",
+  // **아이 이름이다** (A0-6). 이제 실명이 그대로 남으므로 **사람 이름 모양**으로 둔다 —
+  // 지어낸 이름이고 실제 아이 이름을 검사에 넣지 않는다 (`루브릭_예시셋.md` 와 같은 규칙).
+  author: "민준",
   visibility: "private",
   pages,
   counts: { basic: 0, rare: 0, legendary: pages.length },
+  ...over,
 });
 
 /** 가로 스크롤이 생기면 태블릿 가로·모바일 세로 어느 쪽이든 깨진 것이다. */
@@ -53,10 +60,33 @@ test("쓴 문장과 그림이 책 페이지로 다시 열린다", async ({ page 
   await page.route(BOOK, (route) =>
     route.fulfill({ status: 200, json: 책내용 }),
   );
+
+  // **어디를 부르는지 센다.** 아래 지은이 검사가 **값이 아니라 출처**를 재는 데 쓴다.
+  const 부른곳: string[] = [];
+  page.on("request", (req) => 부른곳.push(req.url()));
+
   await page.goto("/book");
 
   // 제목은 **서버가 준 것 그대로**다. 프론트가 짓지 않는다.
   await expect(page.getByText(책내용.title)).toBeVisible();
+
+  // **지은이는 제목 아래 한 줄** (A0-6 · `문구.md` 1.15).
+  // **문자열을 박지 않는다** — 아이 이름은 계정마다 다르다. `data-*` 표식으로 잡고
+  // **값은 서버가 준 것과 대조한다** (W4 에서 네 번 밟은 그것).
+  const 지은이줄 = page.locator("[data-지은이]");
+  await expect(지은이줄).toContainText(책내용.author);
+
+  // **`GET /child/me` 의 `nickname` 이 아니라 `book.author` 다** — **지금은 두 값이 같아서
+  // 바꿔 그려도 화면이 똑같아 보인다.** 그래서 **값이 아니라 출처를 잰다**: 이 화면은
+  // `/child/me` 를 **아예 안 부른다.** 부르기 시작하면 여기가 빨간불이고, 그때 누군가
+  // `nickname` 으로 갈아탄 것이다. **공유가 열리면 그 차이가 「남의 책에 보는 사람 이름」**이 된다.
+  expect(부른곳.filter((u) => u.includes("/child/me"))).toEqual([]);
+
+  // **꾸미는 말을 붙이지 않는다** (`문구.md` 1.15). 칭찬은 가이드가 하고 표지는 사실을 적는다.
+  const 지은이글자 = await 지은이줄.innerText();
+  for (const 안쓰는말 of ["멋진", "작가님", "우리", "훌륭", "대단"]) {
+    expect(지은이글자).not.toContain(안쓰는말);
+  }
 
   // **문장은 아이 원문 그대로**다 — 요약도 교정도 없다 (비전 2장).
   const 문장들 = page.locator("main [data-책문장]");
@@ -98,8 +128,15 @@ test("굽는 중이라 그림이 없어도 페이지는 선다 — 자리를 비
 });
 
 test("빈 책은 없다고 말하지 않는다 — 앞으로 생길 것을 말한다", async ({ page }) => {
-  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책([]) }));
+  // **지은이를 다른 이름으로 준다.** 위 검사 하나만으로는 **컴포넌트가 이름을 박아 둬도
+  // 통과한다** — 픽스처의 이름과 화면의 이름이 우연히 같기만 하면 되기 때문이다.
+  // **두 번째 이름이 그 우연을 없앤다.** 아이 이름은 계정마다 다르다.
+  const 책내용 = 책([], { author: "서윤" });
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책내용 }));
   await page.goto("/book");
+
+  // **빈 책에도 표지는 선다.** 아직 한 장도 안 썼어도 **그 책은 이 아이 것**이다.
+  await expect(page.locator("[data-지은이]")).toContainText(책내용.author);
 
   await expect(page.getByText(빈책.줄1)).toBeVisible();
   await expect(page.getByText(빈책.줄2)).toBeVisible();
