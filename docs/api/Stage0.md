@@ -210,7 +210,7 @@
 
 ### GET `/artworks/{artwork_id}`
 ```json
-{ "artwork_id": "...", "status": "ready", "url": "https://api.example/api/v1/artworks/.../image", "tier": "rare", "fallback": false }
+{ "artwork_id": "...", "status": "ready", "url": "/api/v1/artworks/.../image", "tier": "rare", "fallback": false }
 ```
 > **⚠ 위 두 예시는 2026-09-09 까지 낡아 있었다.** `https://r2/...` 와 `placeholder_url` 을 실은 채였는데 **둘 다 이 절 아래에서 폐기된 것**이다. **오늘만 이 부류가 세 번째다** — `sketch_url`(빈 액자) · `placeholder_url` · 이것. **규칙을 고칠 때 같은 문서의 예시가 안 따라온다.** 코드와 검사는 이미 맞았고 **문서만 틀렸다**.
 
@@ -242,6 +242,7 @@
   `api/app/api/v1/artworks.py` 의 `삽화주소()` 가 **`request.url_for()`** 로 만든다. 그 함수의 주석이 **「절대 주소여야 한다 — web 은 `app.` 이고 api 는 `api.` 라(`adr/0007`) 상대 경로면 `<img src>` 가 web 오리진에 붙어 그림이 통째로 안 뜬다」**고 적고 있다.
   **그 근거는 3단 호스트(`adr/0007`)를 전제한다.** **한 오리진에 프록시로 합치는 형태로 가면 근거가 뒤집힌다** — 그때는 **상대 경로가 맞고 절대 주소가 틀린다**. `request.url_for()` 는 api 컨테이너가 보는 호스트를 쓰므로 **공개 오리진이 아니라 api 호스트**를 내놓고, 그러면 `<img>` 가 cross-site 로 나가 **`__Host-` 쿠키가 안 실려 그림이 0%** 다.
   **`--proxy-headers` 로는 안 풀린다** — uvicorn 의 그 옵션은 `X-Forwarded-Proto`·`X-Forwarded-For` 를 보지 **`X-Forwarded-Host` 를 안 본다**. scheme 만 고쳐지고 **호스트는 안 고쳐진다**.
+  **✅ 2026-09-10 확정 — 상대 경로로 간다.** `adr/0012` 가 **web=Vercel · api=Render · 한 오리진**으로 정했고, **`vercel.json` 의 `rewrites` 는 목적지 호스트로 `Host` 를 바꾼다.** 그래서 **`request.url_for()` 가 내놓는 절대 주소는 Render 호스트**가 되고 `<img>` 가 cross-site 로 나간다. **위 예시도 상대 경로로 고쳤다.**
   **⭐ 그래서 갈리는 것은 「앞단이 `Host` 를 보존하는가」다** (2026-09-09 백엔드 정정). `request.url_for()` 가 쓰는 것은 **들어온 요청의 `Host` 헤더**다 — **앞단이 그대로 넘기면 공개 오리진이 나오고 지금 코드가 그대로 산다.** 대부분의 리버스 프록시(Cloudflare 등)가 보존한다. **`vercel.json` 의 `rewrites` 만 목적지 호스트로 바꾼다.**
   **즉 이것은 「절대냐 상대냐」의 문제가 아니라 「앞단이 무엇이냐」의 문제다.** **배포 형태를 고를 때의 판단 재료로 쓴다** — 형태를 고르고 나서 이 줄을 읽으면 늦다.
   **배포 형태가 확정되는 순간 이 한 줄을 같이 정한다.** 형태를 정하고 이것을 안 정하면 **배포 후에야 드러나고, 드러나는 모습이 「그림이 안 뜬다」라서 원인이 안 보인다**
