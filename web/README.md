@@ -89,7 +89,8 @@ make dev-api      # 목 서버가 떠 있어야 한다 (백엔드 담당)
 make contracts    # /openapi.json → web/src/api/types.gen.ts
 ```
 
-**`src/api/types.gen.ts`를 손으로 고치지 않는다.** 타입이 안 맞으면 이 파일이 아니라 API가 틀린 것이고, `api-requests/open/`에 요청을 올린다.
+**`src/api/types.gen.ts`를 손으로 고치지 않는다.** 타입이 안 맞으면 이 파일이 아니라 API가 틀린 것이고, **백엔드 세션에서 고친 뒤 다시 생성한다.**
+**`api-requests/` 는 휴면이다** (2026-09-06~, `adr/0008`) — 요청자와 담당자가 같은 사람이 되어 **왕복이 성립하지 않는다.** 개발자가 둘이 되면 되살린다.
 
 ---
 
@@ -100,7 +101,7 @@ make contracts    # /openapi.json → web/src/api/types.gen.ts
 
 ### 형태 — api 를 같은 오리진으로 프록시한다
 
-`web` 은 Vercel, `api` 는 다른 곳(Fly/Railway 등)에 서는데, **브라우저에는 Vercel 주소 하나만 보인다.**
+**`web` 은 Vercel, `api` 는 Render, 둘 다 무료 플랜**이고 (**2026-09-10 대표 판정 · `docs/adr/0012`**), **브라우저에는 Vercel 주소 하나만 보인다.** **도메인은 안 산다** — 버셀 기본 도메인으로 연다.
 `vercel.json` 의 `rewrites` 가 `/api/*` 를 api 호스트로 넘긴다.
 
 **왜 이 형태인가** (`docs/주차계획/W5.md` 「배포 형태 — 검토한 것」)
@@ -144,7 +145,7 @@ api 호스트로 가는 `<img>` 요청에는 **안 실린다.** 그러면 **그�
   - `compass_bright` → 캐릭터(좋은 묘사 썻을때).png
   - `compass_dim` → 캐릭터(묘사부족).png
   - `farewell` → 캐릭터(세션종료).png
-- 클라이언트 1차 PII 마스킹 정규식의 배급 방식은 **아직 미결**이다 — `docs/api/미결.md` 11-3. W3에 정한다
+- 클라이언트 1차 PII 마스킹 정규식은 **빌드 타임 상수로 확정됐다** (미결 11-3, 2026-09-07). 바뀌면 재배포한다 — `src/lib/pii.ts`
 - `POST /attempts`의 `outcome` 3분기(`result`/`scaffold`/`blocked`)를 모두 화면으로 처리한다
 
 ## 막혔을 때
@@ -152,10 +153,10 @@ api 호스트로 가는 `<img>` 요청에는 **안 실린다.** 그러면 **그�
 | 증상 | 어디를 본다 |
 |---|---|
 | `make contracts` 실패 | 목 서버가 떴는가 (`make dev-api`). 안 떴으면 백엔드에게 말한다 |
-| 필요한 필드가 API에 없다 | `api-requests/open/`에 요청 → **백엔드에게 직접 말한다** (알림 없음) |
-| 명세가 틀린 것 같다 | `docs/`는 고치지 않는다. `api-requests/`에 올리거나 PM에게 말한다 |
+| 필요한 필드가 API에 없다 | **백엔드 세션에서 고친다** — `api-requests/` 는 휴면이다 (`adr/0008`) |
+| 명세가 틀린 것 같다 | `docs/`는 고치지 않는다. **루트 PM 세션에서 별도 커밋으로** 반영한다 |
 | 아직 안 정해진 설계 결정 | `docs/api/미결.md`. 언제 정하는지는 주차 계획이 정한다 |
-| 지금 뭘 해야 하지 | `/my-week W1` → `web/tasks/W1.md` |
+| 지금 뭘 해야 하지 | `/my-week W<n>` → `web/tasks/W<n>.md`. **지금은 W5 다** (2026-09-10) |
 | 상대가 뭘 했지 | `/api-check`, `git log -p --since=yesterday` |
 
 ## 참조
