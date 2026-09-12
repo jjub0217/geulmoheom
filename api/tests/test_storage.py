@@ -27,10 +27,10 @@ from app.storage import mime추측, 설정됐나, 올리기, 읽기, 조합키
 def 설정됨(monkeypatch: pytest.MonkeyPatch):
     """R2 넷을 채운 설정. **`.env` 를 안 건드린다.**"""
     s = get_settings()
-    monkeypatch.setattr(s, "r2_account_id", "acct", raising=False)
-    monkeypatch.setattr(s, "r2_access_key_id", SecretStr("키"), raising=False)
-    monkeypatch.setattr(s, "r2_secret_access_key", SecretStr("비밀"), raising=False)
-    monkeypatch.setattr(s, "r2_bucket", "geulmoheom-artworks", raising=False)
+    monkeypatch.setattr(s, "s3_access_key_id", SecretStr("키"), raising=False)
+    monkeypatch.setattr(s, "s3_secret_access_key", SecretStr("비밀"), raising=False)
+    monkeypatch.setattr(s, "s3_region", "ap-northeast-2", raising=False)
+    monkeypatch.setattr(s, "s3_bucket", "geulmoheom-artworks", raising=False)
     return s
 
 
@@ -58,7 +58,7 @@ def test_지금은_설정이_비어_있다():
     assert not 설정됐나()
 
 
-@pytest.mark.parametrize("빈칸", ["r2_account_id", "r2_access_key_id", "r2_secret_access_key"])
+@pytest.mark.parametrize("빈칸", ["s3_access_key_id", "s3_secret_access_key", "s3_region"])
 def test_하나라도_비면_안_켜진_것이다(설정됨, monkeypatch, 빈칸):
     """셋 다 있어야 켜진 것이다. 반쯤 설정된 채로 올리려 들면 실패가 업로드 시점까지 미뤄진다 —
     **아이가 6~8초 기다린 뒤에** 드러난다."""
@@ -152,7 +152,7 @@ def 보관함(tmp_path, monkeypatch):
     return tmp_path / ".artworks"
 
 
-def test_R2_가_비면_로컬에_저장한다(보관함, monkeypatch):
+def test_저장소가_비면_로컬에_저장한다(보관함, monkeypatch):
     """**프리테스트가 대표 응답 시각에 안 묶인다** (2026-09-08 PM 결정).
     자격증명이 오면 이 경로를 안 탄다."""
     받은 = _올림(monkeypatch)
@@ -166,7 +166,7 @@ def test_R2_가_비면_로컬에_저장한다(보관함, monkeypatch):
     assert 키값 == f"artworks/{저장된[0].name}"
 
 
-def test_R2_가_있으면_로컬을_안_쓴다(설정됨, 보관함, monkeypatch):
+def test_저장소가_있으면_로컬을_안_쓴다(설정됨, 보관함, monkeypatch):
     _올림(monkeypatch)
 
     asyncio.run(올리기("artworks/그림.png", 이미지, "image/png"))
@@ -174,7 +174,7 @@ def test_R2_가_있으면_로컬을_안_쓴다(설정됨, 보관함, monkeypatch
     assert not 보관함.exists()
 
 
-def test_모르는_형식은_R2_든_로컬이든_키가_없다(보관함):
+def test_모르는_형식은_저장소든_로컬이든_키가_없다(보관함):
     """형식 검사가 **두 경로 앞**에 있다 — 갈라지면 로컬에서만 되는 코드가 생긴다.
 
     **검사 자리가 옮겨졌다** (2026-09-09). 예전에는 `올리기` 안이었고 지금은 `조합키`다 —
@@ -214,7 +214,7 @@ def test_로컬에_저장한_것을_되읽는다(보관함, monkeypatch):
     assert asyncio.run(읽기(오브젝트키)) == 이미지
 
 
-def test_R2_에_저장한_것을_되읽는다(설정됨, monkeypatch):
+def test_저장소에_저장한_것을_되읽는다(설정됨, monkeypatch):
     class _가짜:
         def put_object(self, **kw):
             pass
@@ -243,7 +243,7 @@ def test_보관함_밖은_읽기에서도_막힌다(보관함):
     assert asyncio.run(읽기("../비밀.txt")) is None
 
 
-def test_R2_읽기_실패는_예외를_안_낸다(설정됨, monkeypatch, caplog):
+def test_저장소_읽기_실패는_예외를_안_낸다(설정됨, monkeypatch, caplog):
     비밀 = "AKIA-비밀키-가-예외에-실렸다"
 
     class _가짜:

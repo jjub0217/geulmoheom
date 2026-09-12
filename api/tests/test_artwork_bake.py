@@ -217,7 +217,7 @@ async def test_못_구우면_ready_에_fallback_이다(
 
 
 async def test_저장에_실패해도_fallback_이다(client: TestClient, monkeypatch: pytest.MonkeyPatch):
-    """그림은 만들었는데 R2 가 안 받은 경우. **행을 `pending` 으로 두면 프론트가 15초를
+    """그림은 만들었는데 저장소가 안 받은 경우. **행을 `pending` 으로 두면 프론트가 15초를
     헛돌고, 그 15초는 아이가 화면 앞에서 기다리는 시간이다.**"""
     삽화 = await _행하나(client)
 

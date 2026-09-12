@@ -57,12 +57,16 @@ services:
         # W1 벤치로 확정 (`docs/adr/0006`). **이번 파일럿에는 호출이 안 나간다** —
         # 굽는 자리를 막아 뒀다 (W5 백엔드 7번). 그래도 비면 기동을 막는 값이다.
         value: gemini-3.1-flash-lite-image
-      - key: R2_ACCOUNT_ID
+      # 삽화 저장소. **2026-09-12 에 Cloudflare R2 → AWS S3** (ADR 은 PM 몫).
+      # 버킷은 퍼블릭 차단 그대로다 — api 가 프록시한다 (미결 11-7).
+      - key: S3_ACCESS_KEY_ID
         sync: false
-      - key: R2_ACCESS_KEY_ID
+      - key: S3_SECRET_ACCESS_KEY
         sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
+      - key: S3_REGION
+        # **비면 기동이 막힌다.** 안 막으면 botocore 가 환경을 뒤지다
+        # **업로드 시점에** 실패한다 — 아이가 기다린 뒤에 드러나는 자리다.
+        value: ap-northeast-2
       - key: CLIENT_IP_HEADER
         # 앞단이 **덮어쓰는** 헤더 이름이어야 한다. **`X-Forwarded-For` 를 적지 않는다** —
         # 클라이언트가 채워 보낼 수 있어 접속 코드 속도 제한을 요청마다 비껴간다

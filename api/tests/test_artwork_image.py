@@ -197,7 +197,7 @@ async def test_기본_에셋도_같은_주소로_나온다(
 async def test_저장소가_못_읽어도_기본_에셋이_나온다(
     client: TestClient, 자녀행: Child, monkeypatch: pytest.MonkeyPatch
 ):
-    """R2 가 잠깐 죽은 경우. **아이는 그림 자리가 빈 것을 본다** — 그러면 안 된다."""
+    """저장소가 잠깐 죽은 경우. **아이는 그림 자리가 빈 것을 본다** — 그러면 안 된다."""
 
     async def _못읽음(오브젝트키: str) -> None:
         return None

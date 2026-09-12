@@ -25,9 +25,8 @@ from app.config import REPO_ROOT
     "REDIS_URL",
     "GEMINI_API_KEY",
     "JWT_SECRET",
-    "R2_ACCOUNT_ID",
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
 )
 
 _설정줄 = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")

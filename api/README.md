@@ -34,7 +34,7 @@ cd geulmoheom
 cp .env.example .env
 ```
 
-**채워야 하는 키** — `GEMINI_API_KEY`, `R2_*`. **키 하나로 글과 그림을 다 부른다** — 이미지도 Gemini
+**채워야 하는 키** — `GEMINI_API_KEY`, `S3_*`(비우면 로컬 디스크로 떨어진다. 개발은 그게 정상이다). **키 하나로 글과 그림을 다 부른다** — 이미지도 Gemini
 네이티브다(`adr/0006`). 모델 이름은 `EVALUATOR_MODEL`·`IMAGE_MODEL` 에 넣고 **둘 다 확정됐다**
 (`gemini-3.1-flash-lite` · `gemini-3.1-flash-lite-image`). 확정본은 `.env.example` 에 있다.
 **⚠ 키는 ASCII 여야 한다** — 헤더로 나가서 한글을 넣으면 `UnicodeEncodeError` 로 죽는다(2026-09-09 실측).
@@ -173,7 +173,7 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 | `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | W1 벤치 확정. **이번 파일럿엔 호출이 안 나간다**(굽는 자리를 막았다) — 그래도 비면 기동을 막는 값이다 |
 | `GM_MODEL` | **비운다** | Stage 1 용이고 **코드 어디서도 안 읽는다**. 필수 목록에도 없다 |
 | `JWT_SECRET` | 새로 뽑는다 (예: `openssl rand -hex 32`) | ⛔ **삽화 파일 키가 이 값에서 유도된다**(`app/storage.py` `_조각`). **정한 뒤 파일럿 내내 갈지 않는다** — 갈면 8-4 를 다시 돌려야 하고, 안 돌리면 **그림만 통째로 기본 에셋이 되는데 아무 데도 빨간불이 안 뜬다** |
-| `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` | Cloudflare R2 (S3 호환 토큰) | 아래 8-4 |
+| `S3_ACCESS_KEY_ID` · `S3_SECRET_ACCESS_KEY` · `S3_REGION` | **AWS S3** (2026-09-12 에 R2 에서 갈았다) | 아래 8-4. **버킷은 퍼블릭 차단 그대로** — api 가 프록시한다. `S3_ENDPOINT_URL` 은 비운다(비면 AWS, 채우면 R2 로 되돌아간다) |
 | `CLIENT_IP_HEADER` | `X-Vercel-Forwarded-For` | 아래 8-3 |
 | `DAILY_COST_ALERT_USD` | `20` | PRD F-3 |
 | ~~`NEXT_PUBLIC_API_BASE_URL`~~ | **Render 에 넣지 않는다** | web 의 **빌드 타임** 값이고 `web/vercel.json` 의 `build.env` 에 있다. api 는 이 이름을 읽지 않는다 |
@@ -201,14 +201,14 @@ make contracts        # /openapi.json → web/src/api/types.gen.ts
 헤더를 그대로 돌려주는 곳으로 돌려 `curl` 로 보고 되돌린다. **아이 데이터가 없는 요청
 하나이고 쿠키를 안 실어 보낸다** — 그래도 **바깥으로 나가는 일이라 사람이 판단할 것**이다.
 
-#### 8-4. 삽화 18장 — R2 에 올린다
+#### 8-4. 삽화 18장 — S3 에 올린다
 
-**`PILOT_REQUIRED` 에서 R2 를 빼지 않는다.** 빼면 로컬 디스크로 떨어지는데
+**`PILOT_REQUIRED` 에서 저장소 키를 빼지 않는다.** 빼면 로컬 디스크로 떨어지는데
 **Render 무료는 디스크가 인스턴스와 함께 사라진다** — 재기동마다 그림이 사라지고
-**아이 화면은 안 멈춘다.** 파일럿에서 삽화를 **굽지 않으므로** R2 는 읽기만 한다.
+**아이 화면은 안 멈춘다.** 파일럿에서 삽화를 **굽지 않으므로** S3 는 읽기만 한다.
 
 ```bash
-# R2 셋과 JWT_SECRET 을 .env.pilot 에 채운 뒤, 로컬에서 한 번 돌린다.
+# S3 셋과 JWT_SECRET 을 .env.pilot 에 채운 뒤, 로컬에서 한 번 돌린다.
 cd api && APP_ENV=pilot PYTHONPATH=. uv run python scripts/install_legendary.py
 ```
 

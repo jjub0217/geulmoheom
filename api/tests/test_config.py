@@ -68,16 +68,16 @@ def test_키가_다_있으면_pilot_이_뜬다():
         jwt_secret="s",
         image_model="어떤-이미지-모델",
         evaluator_model="어떤-모델",
-        r2_account_id="acct",
-        r2_access_key_id="키",
-        r2_secret_access_key="비밀",
+        s3_access_key_id="키",
+        s3_secret_access_key="비밀",
+        s3_region="ap-northeast-2",
         client_ip_header="CF-Connecting-IP",
     )
 
     assert missing_pilot_keys(settings) == []
 
 
-def test_R2_가_비면_pilot_이_안_뜬다():
+def test_저장소가_비면_pilot_이_안_뜬다():
     """**2026-09-08 에 넣었다.** 파일럿에 반드시 필요한데 검사에 없어서, 비어 있어도
     서버가 아무 소리 없이 떴다. 로컬 디스크 폴백은 개발·프리테스트용이고
     **파일럿에서 그리로 떨어지면 삽화가 컨테이너와 함께 사라진다.**"""
@@ -90,9 +90,9 @@ def test_R2_가_비면_pilot_이_안_뜬다():
     )
 
     assert set(missing_pilot_keys(settings)) == {
-        "r2_account_id",
-        "r2_access_key_id",
-        "r2_secret_access_key",
+        "s3_access_key_id",
+        "s3_secret_access_key",
+        "s3_region",
         # 2026-09-08 에 함께 들어왔다 (`/child/auth` 속도 제한 ②). 비어 있으면
         # 모든 요청이 앞단 IP 하나로 뭉쳐 **시간당 30회가 전체에 걸린다.**
         "client_ip_header",

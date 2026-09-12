@@ -33,7 +33,7 @@ _APP_ENV: str = os.getenv("APP_ENV", "dev")
 # `image_api_key` 를 뺐다 (2026-09-07). `adr/0006` 이 이미지 생성을 Gemini 네이티브로
 # 통합해 **LLM 과 같은 키**를 쓴다. 따로 두면 늘 `gemini_api_key` 와 같은 값이 되고,
 # 필수 목록에 둘 다 있는 것이 「둘이 다를 수 있다」는 오해를 만든다.
-# R2 넷이 2026-09-08 에 들어왔다. **파일럿에 반드시 필요한데 검사에 없었다** —
+# 스토리지 셋이 2026-09-08 에 들어왔다. **파일럿에 반드시 필요한데 검사에 없었다** —
 # 비어 있어도 서버가 아무 소리 없이 떴고, 그래서 안 채워진 것을 아무도 몰랐다.
 # 로컬 디스크 폴백(`app/storage.py`)은 **개발·프리테스트용**이다. 파일럿에서 그리로
 # 떨어지면 삽화가 그 컨테이너와 함께 사라진다.
@@ -42,9 +42,12 @@ PILOT_REQUIRED = (
     "jwt_secret",
     "evaluator_model",
     "image_model",
-    "r2_account_id",
-    "r2_access_key_id",
-    "r2_secret_access_key",
+    "s3_access_key_id",
+    "s3_secret_access_key",
+    # **리전이 필수다.** 비면 botocore 가 환경을 뒤지다 **업로드 시점에** 실패한다 —
+    # 기동에서 잡지 않으면 그 사고가 아이가 기다린 뒤에 드러난다.
+    # (R2 시절의 `r2_account_id` 가 있던 자리다. S3 에는 그 개념이 없다.)
+    "s3_region",
     # 앞단이 덮어쓰는 클라이언트 IP 헤더 이름 (2026-09-08, `/child/auth` 속도 제한 ②).
     # **비어 있으면 소켓 주소를 쓰는데, 파일럿에서는 그게 앞단 IP 하나다** — 시간당
     # 30회가 전체 사용자에게 걸려 **아무 잘못 없는 아이가 막힌다.** 안 채운 것을
@@ -108,10 +111,25 @@ class Settings(BaseSettings):
     # 이 값은 **비어 있는 것이 운영**이다 (`gemini_base_url` 과 같은 자리).
     pii_ner_enabled: bool = False
 
-    r2_account_id: str = ""
-    r2_access_key_id: SecretStr = SecretStr("")
-    r2_secret_access_key: SecretStr = SecretStr("")
-    r2_bucket: str = "geulmoheom-artworks"
+    # **삽화 저장소. 2026-09-12 에 Cloudflare R2 → AWS S3 로 갈았다** (사용자 지시 ·
+    # ADR 은 PM 몫). 이미 쓰는 AWS 계정이 있어 **계정을 새로 만들 이유가 없어졌고**,
+    # 배포가 Vercel·Render 로 가면서 **Cloudflare 에 남는 것이 R2 하나뿐**이었다.
+    #
+    # **이름을 `r2_*` 로 두지 않았다.** 이 저장소에는 `r2_public_base_url` 이라는
+    # 이름이 **공개 버킷을 전제해 판단을 가렸던** 전례가 있다 (2026-09-08). 값이
+    # AWS 인데 이름이 R2 면 다음 사람이 **Cloudflare 대시보드를 열게 된다.**
+    #
+    # **⛔ DB 컬럼 `artworks.r2_key` 는 안 바꿨다.** 바꾸면 마이그레이션이고 그쪽은
+    # 잠긴 데이터 모델이다 (`adr/0011`). **이름이 낡은 것과 스키마를 흔드는 것 중
+    # 앞을 골랐다** — 그 컬럼에 들어가는 것은 처음부터 URL 이 아니라 오브젝트 키다.
+    s3_access_key_id: SecretStr = SecretStr("")
+    s3_secret_access_key: SecretStr = SecretStr("")
+    s3_region: str = ""
+    s3_bucket: str = "geulmoheom-artworks"
+    # **비어 있는 것이 AWS 다.** 채우면 그 주소로 간다 — R2 로 되돌릴 때
+    # (`https://<계정>.r2.cloudflarestorage.com`) 코드가 아니라 이 값만 바뀐다.
+    # **`PILOT_REQUIRED` 에 넣지 않는다** — 비어 있는 것이 운영이다.
+    s3_endpoint_url: str = ""
     # **공개 base URL 을 두지 않는다.** 2026-09-08 대표 판정으로 **버킷은 공개하지 않고
     # api 가 프록시한다** (미결 11-7 · `Stage0.md` 5절). 프록시는 S3 API 로 서버에서
     # 읽으므로 공개 주소가 아예 필요 없다 — **이름을 바꾸는 대신 없앴다.**
