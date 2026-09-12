@@ -13,6 +13,7 @@ DB 와 대조한다. 어디서 읽는지는 미결 11-2 확정본 그대로다 �
    **JWT `exp` 는 안 늘린다** — 늘리는 것은 쿠키 `Max-Age` 뿐이다
 """
 
+import logging
 import uuid
 from typing import Annotated, Literal
 
@@ -24,7 +25,10 @@ from app import tokens
 from app.auth import CHILD_COOKIE, PARENT_COOKIE, set_auth_cookie
 from app.db import get_session
 from app.errors import AppError, ErrorCode
+from app.middleware import current_request_id
 from app.models import Child, Parent
+
+logger = logging.getLogger(__name__)
 
 MockOutcome = Literal["result", "scaffold", "blocked"]
 
@@ -67,12 +71,14 @@ async def require_child(request: Request, response: Response, session: Session) 
 
     아이 = await session.scalar(select(Child).where(Child.id == 주장.subject))
     if 아이 is None:
+        _왜끊겼나("행없음")
         raise AppError(ErrorCode.UNAUTHORIZED)
 
     # **폐기.** 접속 코드를 다시 발급하거나 자녀를 지우면 이 값이 올라가고, 그 한 번으로
     # 남아 있는 모든 기기가 여기서 끊긴다 (`공통규약.md` 「폐기」). JWT 는 회수할 수
     # 없으므로 **매 요청 대조하는 이 줄이 유일한 회수 수단**이다.
     if 주장.token_version != 아이.token_version:
+        _왜끊겼나("폐기")
         raise AppError(ErrorCode.UNAUTHORIZED)
 
     _수명밀기(response, CHILD_COOKIE, 원문, 주장)
@@ -84,7 +90,26 @@ def _검증(원문: str, 역할: tokens.Role) -> tokens.Claims:
     try:
         return tokens.verify(원문, expected_role=역할)
     except tokens.TokenError as exc:
+        _왜끊겼나("토큰불량")
         raise AppError(ErrorCode.UNAUTHORIZED) from exc
+
+
+def _왜끊겼나(사유: str) -> None:
+    """**401 의 갈래를 로그에만 남긴다** (2026-09-12). 응답은 그대로 한 가지다.
+
+    **왜 필요한가** — 「쿠키가 아예 안 왔다」와 「왔는데 폐기됐다」가 화면에서도
+    네트워크에서도 **똑같이 401 · 인증 화면**이다. 실기기에서 「앱을 다시 열면
+    로그인이 풀린다」를 만났을 때 **그 둘을 가를 방법이 없었다** — 그래서 이 줄이 있다.
+    **이 줄이 없으면 다음에도 추측으로 돌아간다.**
+
+    **남기는 것은 사유 낱말 하나뿐이다.** 아이 id·토큰·쿠키 값·IP 를 넣지 않는다 —
+    그것들은 전부 아이를 가리키는 값이고, 여기서 알고 싶은 것은 **누구인가가 아니라
+    어느 갈래인가**다.
+
+    **쿠키가 아예 없는 경우는 여기 안 온다** (`_쿠키` 가 먼저 401 을 던진다).
+    그것이 신호다 — **로그에 아무 줄도 없으면 쿠키가 안 실려 온 것**이다.
+    """
+    logger.info("자녀 인증이 끊겼다", extra={"request_id": current_request_id(), "reason": 사유})
 
 
 def _수명밀기(response: Response, 이름: str, 원문: str, 주장: tokens.Claims) -> None:

@@ -159,6 +159,42 @@ def test_재발급하면_이전_기기가_끊긴다(client: TestClient, 자녀�
     assert client.get("/api/v1/child/me").status_code == 401
 
 
+def test_왜_끊겼는지가_로그에만_남는다(
+    client: TestClient,
+    익명: TestClient,
+    자녀행: Child,
+    접속코드: str,
+    caplog: pytest.LogCaptureFixture,
+):
+    """**응답은 그대로 401 하나다.** 갈래는 로그에만 남긴다 (2026-09-12).
+
+    **없으면 추측으로 돌아간다** — 「쿠키가 안 왔다」와 「왔는데 폐기됐다」가
+    화면에서도 네트워크에서도 똑같이 **401 · 인증 화면**이라, 실기기에서
+    「앱을 다시 열면 로그인이 풀린다」를 만났을 때 가를 방법이 없었다.
+
+    **아이를 가리키는 값은 안 남는다** — 사유 낱말 하나뿐이다.
+    """
+    client.cookies.set(CHILD_COOKIE, "")
+    client.post("/api/v1/child/auth", json={"access_code": 접속코드})
+    client.post(f"/api/v1/parents/children/{자녀행.id}/access-code")  # 폐기
+
+    with caplog.at_level("INFO", logger="app.api.v1.deps"):
+        응답 = client.get("/api/v1/child/me")
+
+    assert 응답.status_code == 401
+    기록 = [r for r in caplog.records if r.name == "app.api.v1.deps"]
+    assert [r.reason for r in 기록] == ["폐기"]  # type: ignore[attr-defined]
+    # **몸통에는 안 나간다** — 밖에서 「그 코드는 존재한다」를 알 수 있게 되면 안 된다.
+    assert "폐기" not in 응답.text
+
+    # **쿠키가 아예 없으면 이 줄이 안 나온다. 그 없음이 곧 신호다.**
+    # `client` 로는 못 잰다 — 거기엔 학부모 쿠키가 남아 있어 403(역할 문제)이다.
+    caplog.clear()
+    with caplog.at_level("INFO", logger="app.api.v1.deps"):
+        assert 익명.get("/api/v1/child/me").status_code == 401
+    assert [r for r in caplog.records if r.name == "app.api.v1.deps"] == []
+
+
 def test_자녀_로그아웃은_다른_기기를_끊지_않는다(client: TestClient, 자녀행: Child):
     """로그아웃은 이 기기에서 내려오는 것이다. 다른 기기를 끊는 것은 학부모 몫이다."""
     다른기기 = tokens.issue(자녀행.id, "child", token_version=자녀행.token_version)
