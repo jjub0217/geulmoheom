@@ -76,14 +76,26 @@ async def signup(payload: SignupRequest, response: Response, session: Session) -
     )
     session.add(학부모)
     try:
-        await session.commit()
+        # **`commit()` 이 아니라 `flush()` 다** (2026-09-12). id 만 받고 트랜잭션은 연다 —
+        # **토큰 발급이 실패하면 행이 남으면 안 된다.**
+        #
+        # 그 반대를 운영에서 겪었다: `commit()` → `issue()` 순서였고 `issue()` 가 터져
+        # **500 인데 계정은 저장됐다.** 그러면 학부모는 **못 들어가는데 다시 가입하면
+        # 「이미 가입된 이메일」로 막힌다** — 자기가 만든 계정에 영영 못 들어간다.
+        # 화면에 나가는 것은 「잠깐 문제가 생겼어요」 한 줄뿐이라 **아무도 그 상태를
+        # 못 본다.** 원인은 그때 `JWT_SECRET` 이었지만 **무엇이 터지든 같은 일이 난다.**
+        await session.flush()
     except IntegrityError as exc:
         await session.rollback()
         # 이미 있는 이메일. **「이미 가입된 이메일」이라고 알려주지 않는다** — 그
         # 문장 하나가 아무나 이메일 존재 여부를 확인하는 창구가 된다.
         raise AppError(ErrorCode.VALIDATION_ERROR, detail={"fields": [{"field": "email"}]}) from exc
 
-    set_auth_cookie(response, PARENT_COOKIE, issue(학부모.id, "parent"))
+    # **토큰을 커밋 앞에서 만든다.** 여기서 터지면 세션이 닫히며 롤백돼 계정이 안 남는다.
+    토큰 = issue(학부모.id, "parent")
+    await session.commit()
+
+    set_auth_cookie(response, PARENT_COOKIE, 토큰)
     return SignupResponse(parent_id=str(학부모.id), consent_at=학부모.consent_at)
 
 

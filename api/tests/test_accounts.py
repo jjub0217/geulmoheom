@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app import db, tokens
+from app.api.v1 import parents as parents_router
 from app.auth import CHILD_COOKIE, MAX_AGE_SECONDS, PARENT_COOKIE
 from app.models import Child, Parent
 
@@ -367,6 +368,44 @@ async def test_라벨링_동의는_별개로_기록된다(익명: TestClient):
     assert 학부모 is not None
     assert 학부모.consent_at is not None  # 보호자 동의는 받았고
     assert 학부모.labeling_consent is False  # 라벨링은 거부했다
+
+
+async def test_토큰_발급이_실패하면_계정이_안_남는다(익명: TestClient, monkeypatch):
+    """**가입이 반만 성공하지 않는다** (2026-09-12, 운영에서 겪었다).
+
+    종전은 `commit()` → `issue()` 순서였다. `issue()` 가 터지면 **500 인데 계정은
+    저장돼** 학부모가 **못 들어가는데 다시 가입하면 「이미 가입된 이메일」로 막혔다** —
+    자기가 만든 계정에 영영 못 들어간다. 화면에는 「잠깐 문제가 생겼어요」뿐이라
+    **그 상태를 아무도 못 본다.**
+
+    그때 원인은 `JWT_SECRET` 이 비어 있던 것이지만 **무엇이 터지든 같은 일**이라
+    순서로 막는다. 여기서는 원인을 흉내 내지 않고 **발급 자체를 터뜨린다.**
+    """
+    이메일 = f"{uuid.uuid4().hex}@example.test"
+
+    def _터진다(*_, **__):
+        raise RuntimeError("토큰을 못 만들었다")
+
+    monkeypatch.setattr(parents_router, "issue", _터진다)
+
+    응답 = 익명.post(
+        "/api/v1/parents/signup",
+        json={"email": 이메일, "password": "x", "consent": True},
+    )
+
+    assert 응답.status_code == 500
+    async with db.SessionLocal() as session:
+        assert await session.scalar(select(Parent).where(Parent.email == 이메일)) is None
+
+    # **그리고 다시 가입할 수 있어야 한다** — 막히는 자리가 여기였다.
+    monkeypatch.undo()
+    assert (
+        익명.post(
+            "/api/v1/parents/signup",
+            json={"email": 이메일, "password": "x", "consent": True},
+        ).status_code
+        == 201
+    )
 
 
 async def test_비밀번호가_평문으로_저장되지_않는다(익명: TestClient):
