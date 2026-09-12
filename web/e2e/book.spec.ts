@@ -354,3 +354,32 @@ test("아이 화면에 「제목」을 쓰지 않는다 — 낱말은 「책 이
     expect(화면).not.toContain(안쓰는말);
   }
 });
+
+test("책이 쌓였을 때도 모험으로 가는 문이 있다", async ({ page }) => {
+  await page.route(BOOK, (route) =>
+    route.fulfill({ status: 200, json: 책([페이지()]) }),
+  );
+  await page.goto("/book");
+
+  // **빈 책에만 있었다** (`문구.md` 1.17, 2026-09-12 실기기) — 한 장이라도 쌓이는 순간
+  // 그 문이 사라지고 **페이지 목록만 남았다.** 아이는 책을 보고 나서 나갈 길이 없었다.
+  await expect(page.locator("[data-쓰러가기]")).toBeVisible();
+  await page.locator("[data-쓰러가기]").click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("두 자리의 문은 같은 낱말을 쓴다 — 빈 책이든 쌓였든 모험으로 가는 것은 하나다", async ({
+  page,
+}) => {
+  // **1.13 재사용이다** (1.17 이 그렇게 정했다). 같은 화면·같은 동작이라 새 낱말을 안 만든다.
+  // **`빈책.버튼` 을 두 자리가 같이 쓴다** — 갈라지면 아이가 화면마다 다른 말을 배운다.
+  await page.route(BOOK, (route) =>
+    route.fulfill({ status: 200, json: 책([페이지()]) }),
+  );
+  await page.goto("/book");
+  await expect(page.locator("[data-쓰러가기]")).toHaveText(빈책.버튼);
+
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책([]) }));
+  await page.goto("/book");
+  await expect(page.getByRole("link", { name: 빈책.버튼 })).toBeVisible();
+});

@@ -138,11 +138,33 @@ export default function BookScreen() {
           ) : (
             // **한 장씩 세로로 쌓는다.** 태블릿 가로에서는 두 칸이다 —
             // 책장을 넘기는 연출을 넣지 않는다: 다시 보러 오는 자리지 머무는 자리가 아니다.
-            <div className="grid gap-8 tablet:grid-cols-2">
-              {screen.book.pages.map((page) => (
-                <BookPageFrame key={page.page_no} page={page} />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-8 tablet:grid-cols-2">
+                {screen.book.pages.map((page) => (
+                  <BookPageFrame key={page.page_no} page={page} />
+                ))}
+              </div>
+
+              {/* **쌓였을 때도 모험으로 가는 문이 있어야 한다** (`문구.md` 1.17,
+                  2026-09-12 실기기). **빈 책에만 있었다** — 한 장이라도 쌓이는 순간
+                  그 문이 사라지고 **페이지 목록만 남았다.**
+
+                  **「쓰러 가기」 그대로다** (1.13 재사용). 빈 책과 **같은 화면·같은 동작**이라
+                  새 낱말을 만들지 않는다 — 방향이 **모험으로 가는 것**이라 「가기」가 맞다.
+                  결과 화면이 「다음 장면 **열기**」인 것은 거기가 **이미 모험 안**이어서다.
+
+                  **목록 아래에 둔다** — 여기 온 아이가 하려던 일은 **다시 보는 것**이고,
+                  다 보고 나서 나가는 자리가 끝이다. 위에 두면 목록을 가린다. */}
+              <div className="flex justify-center">
+                <Link
+                  href="/"
+                  data-쓰러가기
+                  className="rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                >
+                  {빈책.버튼}
+                </Link>
+              </div>
+            </>
           )}
         </>
       )}

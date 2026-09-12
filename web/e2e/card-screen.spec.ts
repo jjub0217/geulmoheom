@@ -366,7 +366,19 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   // **누구 말인지 안 읽힌다** — 실기기에서 실제로 그랬고, 그러면 관찰 신호 7번을 못 잰다.
   // 지금 순서는 **내 책의 한 쪽과 같다**: 그림(여기서는 사라졌다) · 문장 · 배지.
   // **이 배열을 고칠 때는 화면 순서를 고치는 것**이라는 걸 알고 고쳐야 한다.
-  expect(줄들).toEqual([쓴것, 티어이름.rare, 결과가이드.line, 내책라벨]);
+  // **2026-09-12 에 「다음 장면 열기」가 들어왔다** (`문구.md` 1.17) — 결과 화면에
+  // **이어갈 길이 하나도 없었다.** 이 배열이 그 변경을 잡았다: 화면에 줄이 하나 늘어난 것을
+  // **아무도 안 시켰는데 빨간불로 알려준 자리**다. **그게 이 검사가 하는 일이다.**
+  //
+  // **문이 「내 책」보다 앞이다** — 그림을 막 받은 아이가 이어서 하는 일이 이쪽이고
+  // **더 흔한 길이 먼저**다. 이 순서를 바꾸는 것은 **화면을 바꾸는 것**이다.
+  expect(줄들).toEqual([
+    쓴것,
+    티어이름.rare,
+    결과가이드.line,
+    버튼.다음장면열기,
+    내책라벨,
+  ]);
   expect(화면).not.toContain(못닿음.보내기);
 });
 
@@ -1002,4 +1014,124 @@ test("이미 구워진 그림은 그 자리에서 뜬다 — 3초를 기다리�
   await expect(page.getByText(결과가이드.line)).toBeVisible();
 
   expect(물어봤나).toBe(false);
+});
+
+// ── 다음 장면으로 가는 문 (`문구.md` 1.17) ─────────────────────────────
+
+/**
+ * 한 장을 써서 결과 화면까지 간다. **문이 없어서 여기가 막다른 길이었다.**
+ *
+ * **그림을 끝까지 굽힌다.** 이 문은 `삽화.kind !== "기다림"` 안에 있다 —
+ * `문구.md` 1.17 이 자리를 **「그림을 받은 뒤」**로 정했기 때문이다. 굽는 동안 띄우면
+ * **등급 반응이 그림보다 먼저 뜨는 것과 같은 자리**가 하나 더 생긴다 (1.5).
+ */
+async function 결과화면까지(
+  page: Page,
+  카드응답 = CARD,
+  결과응답: AttemptResult = 결과(),
+) {
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: 결과응답 }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) => {
+    const artwork: components["schemas"]["Artwork"] = {
+      artwork_id: ARTWORK,
+      status: "ready",
+      url: ARTWORK_URL,
+      tier: "rare",
+      fallback: false,
+    };
+    return route.fulfill({ status: 200, json: artwork });
+  });
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(카드응답.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await expect(page.locator("[data-다음장면]")).toBeVisible();
+}
+
+/**
+ * **다음에 무엇이 오는지를 호출 횟수로 정하지 않는다.** `next dev` 는 StrictMode 라
+ * **마운트 효과가 두 번 돈다** — 「1회차면 카드, 2회차면 다음 것」으로 쓰면
+ * **첫 화면이 이미 2회차**가 되어 픽스처가 통째로 어긋난다 (2026-09-12 실측).
+ * **테스트가 직접 바꾸는 값**으로 둔다: 무엇을 줄지는 **횟수가 아니라 상태**가 정한다.
+ */
+test("결과 화면에서 다음 장면을 연다 — 앱을 껐다 켜지 않아도 된다", async ({ page }) => {
+  // **카드를 두 장 준비한다.** 한 장만 주면 **두 번째가 첫 번째와 같아도 통과**해서
+  // 「새로 불렀다」와 「화면이 안 바뀌었다」가 안 갈린다.
+  const 다음카드 = {
+    ...CARD,
+    card_id: "c100",
+    situation: "무너진 다리 앞에서 강물이 빠르게 흐른다.",
+  };
+  let 줄카드: CardResponse = CARD;
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: 줄카드 }),
+  );
+
+  await 결과화면까지(page);
+
+  줄카드 = 다음카드;
+  await page.locator("[data-다음장면]").click();
+
+  // **두 번째 카드가 온다.** 2026-09-12 전에는 이 길이 아예 없어서
+  // 사용자가 **앱을 껐다 켜서** 두 번째 장을 했다 — standalone 은 새로고침 버튼조차 없다.
+  await expect(page.getByText(다음카드.situation)).toBeVisible();
+
+  // **앞 장면이 남아 있지 않다.** 결과가 그대로면 아이는 자기가 뭘 눌렀는지 모른다.
+  await expect(page.locator("[data-다음장면]")).toHaveCount(0);
+  await expect(page.getByText(CARD.situation)).toHaveCount(0);
+});
+
+test("다 썼어도 버튼을 숨기지 않는다 — 끝은 가이드가 말한다", async ({ page }) => {
+  const 종료대사 = "오늘 모험은 여기까지! 내일 또 보자";
+  // **호출 횟수로 가르지 않는다** — 위 주석 참조. StrictMode 가 마운트 효과를 두 번 돌린다.
+  let 다썼다 = false;
+  await page.route(CARDS_NEXT, (route) =>
+    다썼다
+      ? route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: errorBody("DAILY_CAP_REACHED", "오늘 카드를 다 썼어요", {
+            guide: { expression: "session_end", line: 종료대사 },
+          }),
+        })
+      : route.fulfill({ status: 200, json: CARD }),
+  );
+
+  // **마지막 장을 쓴 상태로 둔다.** 픽스처가 `cards_done: 2` 면 **다 쓴 자리가 아니라서**,
+  // 누가 「상한에 닿으면 문을 숨기자」로 고쳐도 **이 검사가 안 문다** (2026-09-12 뒤집다 잡았다).
+  // **지키려는 것이 바로 그 자리**다 — 5장을 채운 아이가 그 문을 본다.
+  await 결과화면까지(page, CARD, {
+    ...결과(),
+    today: { cards_done: 5, cap: 5, locked: true },
+  });
+  다썼다 = true;
+
+  // **미리 숨기지 않는다** (1.17) — 숨기면 아이가 「왜 없지」를 묻는다.
+  // **눌러서 듣는 편이 끝을 가이드가 말하는 것**이 된다 (1.10 이 세운 자리).
+  // **상한에 닿았어도 문이 그대로 있다**를 먼저 적는다 — 눌러서 됐다는 것만으로는
+  // 「보였다」가 단언으로 안 남는다.
+  await expect(page.locator("[data-다음장면]")).toBeVisible();
+  await page.locator("[data-다음장면]").click();
+
+  await expect(page.getByText(종료대사)).toBeVisible();
+  await expect(page.locator('img[src="/guide/session_end.png"]')).toBeVisible();
+  // **오류 화면으로 때우지 않는다.** 상한은 고장이 아니라 가드레일이다.
+  await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
+});
+
+test("이어가는 문에 재촉하는 말을 쓰지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await 결과화면까지(page);
+
+  // **하루 5장은 상한이지 할당량이 아니다** — 아이가 그만두는 것이 정상인 설계다
+  // (도파민 가드레일). 「또」·「한 번 더」는 재촉으로 읽힌다 (`문구.md` 1.17).
+  const 문 = await page.locator("[data-다음장면]").innerText();
+  for (const 안쓰는말 of ["또", "한 번 더", "더 해", "신나", "계속"]) {
+    expect(문).not.toContain(안쓰는말);
+  }
 });
