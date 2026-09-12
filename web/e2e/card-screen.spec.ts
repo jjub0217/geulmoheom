@@ -1135,3 +1135,30 @@ test("이어가는 문에 재촉하는 말을 쓰지 않는다", async ({ page }
     expect(문).not.toContain(안쓰는말);
   }
 });
+
+test("쓰는 도중 세션이 끊기면 인증 화면으로 보낸다 — 막다른 화면에 두지 않는다", async ({
+  page,
+}) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+
+  // **보내는 그 순간에 끊긴다.** 2026-09-12 파일럿에서 실제로 도는 경로다 — 학부모가
+  // **접속 코드를 재발급하면 `token_version` 이 올라 남아 있는 기기가 전부 끊긴다**
+  // (`공통규약.md` 「폐기」). **자녀 삭제도 같은 401 이고 아이 쪽에서는 구분되지 않는다.**
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: errorBody("UNAUTHORIZED", "다시 한 번 들어와 주세요"),
+    }),
+  );
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // **문구만 띄우면 아이는 갇힌다** — 「나가기」도 인증 확인 뒤에만 그려서 **누를 것이 하나도 없다.**
+  await expect(page).toHaveURL(/\/child\/auth$/);
+
+  // **마운트 때 401 과 같은 자리로 간다.** 갈래가 둘이면 한쪽만 고쳐지는 날이 온다.
+  await expect(page.locator("main")).not.toHaveText("");
+});
