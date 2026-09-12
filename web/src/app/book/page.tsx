@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { BookPageFrame } from "@/components/book-page";
+import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { BookTitle } from "@/components/book-title";
 import { ApiError, NetworkError, apiGet, 인증이풀렸다 } from "@/lib/api";
 
@@ -52,7 +53,9 @@ export default function BookScreen() {
         // **나가는 문조차 없었다** — 이 화면에는 「나가기」가 아예 없어서 뒤로 가기 말고는 길이 없다.
         // 아이가 결과 화면의 「내 책」을 눌렀는데 그 사이 쿠키가 죽으면 정확히 여기로 온다.
         if (인증이풀렸다(e)) {
-          router.replace("/child/auth");
+          // **끊겼다는 표식을 달아 보낸다** (`문구.md` 3.3). 내 책을 열었다는 것은
+          // **들어와 있었다**는 뜻이다 — 결과 화면에서 보내는 쪽과 같은 확신이다.
+          router.replace(끊겨서보낼곳);
           return;
         }
         if (e instanceof ApiError) {
@@ -110,7 +113,7 @@ export default function BookScreen() {
             onChanged={(title) =>
               setScreen((s) => (s.kind === "book" ? { ...s, book: { ...s.book, title } } : s))
             }
-            onUnauthorized={() => router.replace("/child/auth")}
+            onUnauthorized={() => router.replace(끊겨서보낼곳)}
           />
 
           {/* **`onMasked` 를 안 넘긴다.** `pii_masked` 이벤트는 카드 화면에서

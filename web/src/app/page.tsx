@@ -14,6 +14,7 @@ import { TierBadge } from "@/components/tier-badge";
 import { WrittenLine } from "@/components/written-line";
 import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
 import { useArtwork } from "@/lib/artwork";
+import { 끊겨서보낼곳 } from "@/lib/kicked";
 import type { PiiKind } from "@/lib/pii";
 
 import { 내책라벨 } from "./book/copy";
@@ -249,7 +250,10 @@ export default function Home() {
       // 아이 원문을 기기에 새로 보관하는 일이라 **결정할 사람이 따로 있고**(PRD 1.1b),
       // 지금은 결정 잠금 중이다 (`adr/0011` — 「더 낫다」는 여는 조건이 아니다).
       if (인증이풀렸다(e)) {
-        router.replace("/child/auth");
+        // **끊겼다는 표식을 달아 보낸다** (`문구.md` 3.3 · `lib/kicked.ts`).
+        // **여기는 확신이 있는 자리다** — 카드를 받아 쓰고 있었으니 **들어와 있었던 것이 확실하다.**
+        // **위 마운트 401 에는 안 단다**: `start_url` 이 `/` 라 **처음 온 아이도 그리로 온다.**
+        router.replace(끊겨서보낼곳);
         return;
       }
       if (e instanceof ApiError) {

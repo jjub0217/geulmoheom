@@ -145,6 +145,10 @@ test("책도 같은 뿌리다 — 401 이면 인증 화면으로 보낸다", asy
   // **이 화면에는 「나가기」가 아예 없어서 뒤로 가기 말고는 길이 없었다.**
   await page.goto("/book");
 
-  await page.waitForURL("**/child/auth");
+  // **표식이 붙는다** (2026-09-12, `문구.md` 3.3 · `lib/kicked.ts`) — 내 책을 열었다는 것은
+  // **들어와 있었다**는 뜻이라, 인증 화면이 「부모님이 새 접속 코드를 받으셨어요」를 말해도 된다.
+  // **`"**/child/auth"` 로 두면 물음표 뒤가 붙는 순간 안 맞는다** — 여기가 그래서 빨간불이었다.
+  await page.waitForURL("**/child/auth?kicked=1");
   await expect(본문(page).getByText(코드입력.제목)).toBeVisible();
+  await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toBeVisible();
 });

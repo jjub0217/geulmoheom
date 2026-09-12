@@ -146,3 +146,64 @@ test("닿지 못하면 아이 사정으로 말한다 — 「서버」가 화면�
     .innerText();
   expect(아이에게보이는것).not.toContain("서버");
 });
+
+// ── 쓰다가 끊겨서 왔을 때 (`문구.md` 3.3, 2026-09-12 신설) ──────────────
+
+const 안내줄 = (page: Page) => page.locator("[data-안내]");
+
+test("쓰다가 끊겨서 오면 주어가 부모인 한 줄을 말한다", async ({ page }) => {
+  await 안들어온상태(page);
+  await 홈화면앱으로(page);
+
+  await page.goto("/child/auth?kicked=1");
+
+  // **아이는 왜 끊겼는지도, 무엇을 해야 하는지도 몰랐다.**
+  await expect(안내줄(page)).toHaveText(코드입력.끊겨서왔을때);
+  await expect(안내줄(page)).not.toHaveText(코드입력.안내);
+
+  const 화면 = await page.locator("main").innerText();
+  // **⛔ 아이에게 자기 계정이 사라졌다고 화면이 말하게 두지 않는다** — 그건 어른이 할 말이다.
+  for (const 안쓰는말 of ["지워졌", "삭제", "계정이 없", "없어졌"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
+  // **쓰던 문장을 잃는다는 말을 안 한다** — 못 되살리는 것을 굳이 알리면 상실만 키운다.
+  for (const 안쓰는말 of ["잃었", "사라진 문장", "저장되지 않"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
+});
+
+test("처음 온 아이에게는 그 줄을 말하지 않는다 — 받은 적 없는 코드를 찾게 된다", async ({
+  page,
+}) => {
+  await 안들어온상태(page);
+  await 홈화면앱으로(page);
+
+  // **표식 없이 온다.** `start_url` 이 `/` 라 **처음 온 아이도 마운트 401 로 여기 온다** —
+  // 그래서 마운트 쪽에는 표식을 안 단다 (`lib/kicked.ts`).
+  // **틀리는 방향이 대칭이 아니다**: 끊겼는데 기본 안내를 보는 것은 오늘과 같지만,
+  // 안 끊겼는데 이 줄을 보면 **아이에게 거짓을 말한다.**
+  await page.goto("/child/auth");
+
+  await expect(안내줄(page)).toHaveText(코드입력.안내);
+  await expect(안내줄(page)).not.toHaveText(코드입력.끊겨서왔을때);
+});
+
+test("코드를 틀려도 끊겼다는 안내가 그대로 남는다", async ({ page }) => {
+  await 안들어온상태(page);
+  await 홈화면앱으로(page);
+  const 서버문구 = "코드가 맞지 않아요. 부모님께 다시 물어볼까요";
+  await page.route(AUTH, (route) =>
+    route.fulfill({
+      status: 401,
+      json: { error: { code: "UNAUTHORIZED", message: 서버문구 } },
+    }),
+  );
+
+  await page.goto("/child/auth?kicked=1");
+  await page.getByLabel(코드입력.라벨).fill("123456");
+  await page.getByRole("button", { name: 코드입력.버튼 }).click();
+
+  // **오타 한 번에 안내가 기본으로 돌아가면** 아이가 읽던 줄을 잃는다.
+  await expect(page.locator("[data-오류]")).toHaveText(서버문구);
+  await expect(안내줄(page)).toHaveText(코드입력.끊겨서왔을때);
+});

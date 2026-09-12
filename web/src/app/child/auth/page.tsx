@@ -9,6 +9,8 @@ import { useDisplayMode } from "@/lib/standalone";
 
 import { 상태표시 } from "@/app/status-copy";
 
+import { 끊겨서왔나 } from "@/lib/kicked";
+
 import { 못닿음, 설치안내, 코드길이, 코드입력 } from "./copy";
 
 type ChildAuthRequest = components["schemas"]["ChildAuthRequest"];
@@ -37,8 +39,13 @@ type ChildMe = components["schemas"]["ChildMe"];
 type Screen =
   /** 인증 확인 전. **여기서 코드 입력칸을 그리지 않는다** — 보이면 누른다 (`문구.md` 3.2) */
   | { kind: "확인중" }
-  /** 홈 화면 앱이고 아직 안 들어왔다. `line` 은 **서버가 준 오류**이지 화면이 지은 말이 아니다 */
-  | { kind: "코드입력"; line: string | null }
+  /**
+   * 홈 화면 앱이고 아직 안 들어왔다. `line` 은 **서버가 준 오류**이지 화면이 지은 말이 아니다.
+   *
+   * `끊김` 은 **쓰다가 끊겨서 왔는가**다 (`문구.md` 3.3) — 참이면 기본 안내 대신
+   * **「부모님이 새 접속 코드를 받으셨어요」**를 쓴다. **판정은 `lib/kicked.ts` 에 있다.**
+   */
+  | { kind: "코드입력"; line: string | null; 끊김: boolean }
   /** 서버가 형식을 갖춰 거절했고 폼을 다시 줄 수 없는 경우 (역할 불일치 등) */
   | { kind: "거절"; line: string }
   | { kind: "못닿음"; hints: string[] };
@@ -70,7 +77,9 @@ export default function ChildAuth() {
         if (!alive) return;
         // **401 은 「아직 안 들어왔다」다.** 오류가 아니라 이 화면의 정상 출발점이다.
         if (인증이풀렸다(e)) {
-          setScreen({ kind: "코드입력", line: null });
+          // **효과 안에서 한 번 읽는다.** 렌더 중에 `location` 을 보면 정적 빌드의
+          // 첫 HTML 과 하이드레이션이 어긋난다 — `실행형태판정` 이 서버 스냅샷을 둔 것과 같은 자리다.
+          setScreen({ kind: "코드입력", line: null, 끊김: 끊겨서왔나() });
           return;
         }
         if (e instanceof ApiError) {
@@ -107,7 +116,13 @@ export default function ChildAuth() {
         // **서버가 준 문구를 그대로 쓴다.** 없는 코드·만료된 코드·이미 쓴 코드가 전부
         // 같은 401 이라 **화면이 나눠 말할 수 없다** — 나눠 말하면 코드를 찍어보는 쪽에
         // 신호가 샌다. 아이 탓으로 읽히는 말도 짓지 않는다.
-        setScreen({ kind: "코드입력", line: e.서버문구 });
+        // **`끊김` 을 유지한다.** 여기서 떨구면 **오타 한 번에 안내가 기본으로 돌아가**
+        // 아이가 「부모님이 새 코드를 받으셨어요」를 읽다가 그 줄을 잃는다.
+        setScreen((prev) => ({
+          kind: "코드입력",
+          line: e.서버문구,
+          끊김: prev.kind === "코드입력" ? prev.끊김 : false,
+        }));
         return;
       }
       if (e instanceof NetworkError) {
@@ -157,7 +172,12 @@ export default function ChildAuth() {
             <h1 className="text-3xl font-semibold">{코드입력.제목}</h1>
             {/* 무엇을 넣어야 하는지 모양을 미리 알려준다 — 오류를 나눠 말할 수 없으니
                 **엉뚱한 것을 넣기 전에 막는 것**이 유일한 수단이다. */}
-            <p className="opacity-80">{코드입력.안내}</p>
+            {/* **끊겨서 왔으면 기본 안내 대신 이 줄이다** (`문구.md` 3.3).
+                주어가 **부모**인 것이 전부다 — 「다시 한 번 들어와 주세요」는
+                **아이가 뭘 잘못한 것처럼 읽히는데 실제로 끊은 쪽은 어른**이다. */}
+            <p data-안내 className="opacity-80">
+              {screen.끊김 ? 코드입력.끊겨서왔을때 : 코드입력.안내}
+            </p>
           </div>
 
           <label className="flex flex-col gap-1">

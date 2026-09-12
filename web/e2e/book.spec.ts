@@ -341,7 +341,10 @@ test("이름을 바꾸다 인증이 풀리면 인증 화면으로 보낸다", as
   await 책이름칸(page).fill("바꾸다 끊긴 이름");
   await 보내기(page).click();
 
-  await expect(page).toHaveURL(/\/child\/auth$/);
+  // **표식을 달고 간다** (`문구.md` 3.3 · `lib/kicked.ts`). 내 책을 열었다는 것은
+  // **들어와 있었다**는 뜻이라, 인증 화면이 「부모님이 새 접속 코드를 받으셨어요」를 말해도 된다.
+  // **마운트 401 에는 안 단다** — `start_url` 이 `/` 라 처음 온 아이도 그리로 온다.
+  await expect(page).toHaveURL(/\/child\/auth\?kicked=1$/);
 });
 
 test("아이 화면에 「제목」을 쓰지 않는다 — 낱말은 「책 이름」이다", async ({ page }) => {

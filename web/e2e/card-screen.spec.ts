@@ -1157,7 +1157,9 @@ test("쓰는 도중 세션이 끊기면 인증 화면으로 보낸다 — 막다
   await page.getByRole("button", { name: 버튼.보내기 }).click();
 
   // **문구만 띄우면 아이는 갇힌다** — 「나가기」도 인증 확인 뒤에만 그려서 **누를 것이 하나도 없다.**
-  await expect(page).toHaveURL(/\/child\/auth$/);
+  // **표식을 달고 간다** (`문구.md` 3.3) — 인증 화면이 **왜 왔는지**를 알아야
+  // 「부모님이 새 접속 코드를 받으셨어요」를 말할 수 있다. 쿠키가 `HttpOnly` 라 **출처가 유일한 단서**다.
+  await expect(page).toHaveURL(/\/child\/auth\?kicked=1$/);
 
   // **마운트 때 401 과 같은 자리로 간다.** 갈래가 둘이면 한쪽만 고쳐지는 날이 온다.
   await expect(page.locator("main")).not.toHaveText("");
