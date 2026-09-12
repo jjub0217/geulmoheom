@@ -90,7 +90,11 @@ asyncio_default_test_loop_scope = "session"
 # 남의 가용성에 묶이고 **네트워크가 흔들린 것과 코드가 깨진 것이 같은 빨간불**이 된다.
 # 도는 자리는 **느린 잡**이다 — `uv run pytest -m 실물` (`주차계획/W5.md` 백엔드 1번).
 # 명령줄에서 준 `-m` 이 여기 값을 덮는다.
-addopts = "-q -m 'not 실물'"
+addopts = "-q -m 'not 실물 and not 느린'"
 markers = [
     "실물: 진짜 Gemini 로 나간다. 뒤집기 전용이고 기본 실행에서 빠진다",
+    # **빠른 잡과 섞지 않는다.** 서버를 띄우고 기다리는 값이 있어 매 저장마다 돌 것이
+    # 아니고, 섞으면 그 느림이 **다음에 또 미루는 이유**가 된다 (`주차계획/W5.md` 1번).
+    # 도는 자리: `uv run pytest -m 느린` · CI 의 느린 잡.
+    "느린: uvicorn 을 진짜로 띄운다. Postgres·Redis 가 필요하고 기본 실행에서 빠진다",
 ]
