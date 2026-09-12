@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { CompassGlow } from "@/components/compass-glow";
-import { PII_MASK, maskPii, type PiiKind } from "@/lib/pii";
+import { PII_MASK, maskPii, 가림안내, type PiiKind } from "@/lib/pii";
 
 /**
  * 자유 입력창. **선택지는 없다** — Stage 0 이 검증하는 것이 「직접 쓴다」이기 때문이다.
@@ -17,18 +17,14 @@ import { PII_MASK, maskPii, type PiiKind } from "@/lib/pii";
  */
 
 /**
- * 가렸을 때 아이가 받는 유일한 설명이다. **혼내는 톤이 아닌 것**이 규칙이다 —
- * 「안 돼」가 아니라 「안 써도 돼」다.
+ * **`lib/pii.ts` 로 옮겼다** (2026-09-12). 가리는 자리가 **둘이 됐다** — 카드 입력창과
+ * 책 이름(`문구.md` 1.16)이다. 여기 두면 **책 화면이 카드 입력창을 import 해야** 하는데,
+ * 그건 문구가 이 위젯의 것이라는 뜻이 돼 버린다. **문구는 `PiiKind` 의 것**이다.
  *
- * **확정본은 `docs/문구.md` 1.1** 이다 (2026-09-07). 클라이언트가 가리는 자리라 서버 값이 없어
- * 여기 있지만, **SSOT 는 문서고 코드가 따라온다.** 여기서 새로 지어내지 않는다.
+ * **다시 내보내는 것은 부르는 쪽을 안 깨뜨리려는 것이 아니다** — `PII_MASK` 와 나란히
+ * 있어야 「가린 글자」와 「가렸다는 말」이 한자리에서 보인다. 이 줄은 **읽는 사람을 위한 이정표**다.
  */
-export const 가림안내: Record<PiiKind, string> = {
-  phone: "전화번호는 안 써도 돼서 가렸어!",
-  email: "메일 주소는 안 써도 돼서 가렸어!",
-  address: "사는 곳은 안 써도 돼서 가렸어!",
-  school: "학교 이름은 안 써도 돼서 가렸어!",
-};
+export { 가림안내 };
 
 /**
  * **쓰는 자리 하나가 한 덩어리다** (2026-09-09, 실기기에서 사용자가 보고 고침).

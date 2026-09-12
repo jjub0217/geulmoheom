@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { BookPageFrame } from "@/components/book-page";
+import { BookTitle } from "@/components/book-title";
 import { ApiError, NetworkError, apiGet, 인증이풀렸다 } from "@/lib/api";
 
 import { 버튼, 못닿음 } from "../copy";
@@ -20,8 +21,11 @@ type Book = components["schemas"]["Book"];
  * **비전 2장이 파는 것이 이 화면이다** — 쓰기는 수단이고 **책과 독자가 목적**이다.
  * 결과 화면이 「이 장면이 네 책에 남아」라고 말한 그 책이 여기 있다.
  *
- * **제목은 서버가 준다** (`book.title`). **고치는 자리를 만들지 않는다** — 제목 바꾸기는 W5 이고
- * A0-4 완료 조건에 없다. 프리테스트가 보는 것은 **「자기 것을 다시 여는가」**다.
+ * **책 이름은 서버가 준다** (`book.title`). **아이가 바꿀 수 있다** — 2026-09-12 에 섰다
+ * (`문구.md` 1.16 · `PATCH /book`). 종전 주석은 「고치는 자리를 만들지 않는다 — 제목 바꾸기는
+ * W5 이고 A0-4 완료 조건에 없다」였고 **그 W5 가 지금이다.**
+ *
+ * **⛔ 아이 화면에 「제목」을 쓰지 않는다** — 낱말은 **「책 이름」**이다 (`용어사전.md` 1장).
  */
 type Screen =
   | { kind: "loading" }
@@ -94,6 +98,25 @@ export default function BookScreen() {
               {지은이(screen.book.author)}
             </p>
           )}
+
+          {/* **표지 아래에 둔다** (`문구.md` 1.16). 이름과 지은이가 표지이고
+              바꾸는 자리는 그 다음이다 — **표지 안에 넣으면 표지가 도구처럼 보인다.**
+
+              **`book` 상태를 갈아끼운다.** 다시 불러오지 않는 것은 응답의 `title` 이
+              **서버가 실제로 저장한 값**이라 그것만으로 충분하기 때문이다. 다시 부르면
+              **한 판 분량을 또 받아오고** 그 사이 화면이 「책 펼치는 중」으로 돌아간다. */}
+          <BookTitle
+            title={screen.book.title}
+            onChanged={(title) =>
+              setScreen((s) => (s.kind === "book" ? { ...s, book: { ...s.book, title } } : s))
+            }
+            onUnauthorized={() => router.replace("/child/auth")}
+          />
+
+          {/* **`onMasked` 를 안 넘긴다.** `pii_masked` 이벤트는 카드 화면에서
+              **묘사 입력**에 붙은 것이고(`Stage0.md` 7절), 책 이름은 그 자리가 아니다.
+              **종류만 나가는 값이라도 계약에 없는 자리를 만들지 않는다** —
+              필요해지면 `Stage0.md` 에 먼저 적는다 (축 ⑮). */}
 
           {screen.book.pages.length === 0 ? (
             // **빈 책은 오류가 아니다.** 처음 들어온 아이는 아직 안 썼을 뿐이다 —

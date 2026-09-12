@@ -125,6 +125,23 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 /**
+ * **본문에 아이 원문이 실린다** — `apiPost` 와 같은 이유로 body 를 어디에도 남기지 않는다.
+ * **책 이름도 아이가 쓰는 문장이다** (`PATCH /book`): 서버가 본문과 **같은 자리에서 PII 를
+ * 가리고**(`3dc4bd5`) 그 결과가 **표지에 인쇄된다.**
+ *
+ * **`apiPost` 를 재사용하지 않는다.** 메서드만 다른 게 아니라 **뜻이 다르다** —
+ * `PATCH` 는 부분 갱신이라 **보낸 필드만 바뀐다**는 약속이 붙는다. 한 함수에 메서드를
+ * 인자로 받게 만들면 부르는 쪽에서 그 약속이 안 보인다.
+ */
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
  * 본문 없이 부르는 POST. **로그아웃 두 개가 이 형태다** (`/parents/logout` · `/child/logout`).
  *
  * `Content-Type` 을 안 붙인다 — 보낼 본문이 없고, 붙이면 **불필요한 preflight** 가 생긴다.

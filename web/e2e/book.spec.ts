@@ -1,11 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { components, paths } from "../src/api/types.gen";
-// 문구는 박지 않는다 — `docs/문구.md` 1.13·2.4·2.5 가 SSOT 다.
-import { 빈책 } from "../src/app/book/copy";
+// 문구는 박지 않는다 — `docs/문구.md` 1.13·1.16·2.4·2.5 가 SSOT 다.
+import { 빈책, 책이름 } from "../src/app/book/copy";
 import { 버튼, 못닿음 } from "../src/app/copy";
 import { 상태표시 } from "../src/app/status-copy";
 import { 티어이름 } from "../src/components/tier-badge";
+// 가림 안내는 **1.1 하나뿐**이다 — 카드 화면과 책 이름이 같은 문장을 쓴다 (1.16).
+import { 가림안내 } from "../src/lib/pii";
 
 /**
  * 내 책 (A0-4). **문장은 전부 지어낸 것이다** — 실제 아이 문장을 테스트에 넣지 않는다
@@ -195,4 +197,160 @@ test("책 액자도 그림 비율이다 — 한 번 잘리면 잘린 채로 쌓�
   const 액자 = (await 삽화.locator("..").boundingBox())!;
   expect(액자.width / 액자.height).toBeCloseTo(계약비율, 2);
   await expect(삽화).toHaveCSS("object-fit", "contain");
+});
+
+// ── 책 이름 바꾸기 (A0-4 후속 · `문구.md` 1.16) ───────────────────────────
+
+const 책이름칸 = (page: Page) => page.locator("[data-책이름칸]");
+const 보내기 = (page: Page) => page.locator("[data-책이름보내기]");
+
+/** 열어 둔 상태로 시작한다. 여는 것 자체는 아래 첫 검사가 따로 잰다. */
+async function 이름고치기를연다(page: Page, 책내용 = 책([페이지()])) {
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책내용 }));
+  await page.goto("/book");
+  await page.locator("[data-책이름바꾸기]").click();
+  await expect(책이름칸(page)).toBeVisible();
+  return 책내용;
+}
+
+test("책 이름을 바꾸면 표지가 그 자리에서 바뀐다 — 다시 열지 않는다", async ({ page }) => {
+  const 책내용 = await 이름고치기를연다(page);
+
+  let 보낸것: unknown = null;
+  await page.route(BOOK, async (route) => {
+    if (route.request().method() !== "PATCH") {
+      return route.fulfill({ status: 200, json: 책내용 });
+    }
+    보낸것 = route.request().postDataJSON();
+    return route.fulfill({ status: 200, json: { title: "달빛 호수의 밤" } });
+  });
+
+  await 책이름칸(page).fill("달빛 호수의 밤");
+  await 보내기(page).click();
+
+  expect(보낸것).toEqual({ title: "달빛 호수의 밤" });
+  // **표지가 바뀐다.** 문자열을 박지 않는다 — 서버가 준 값과 대조한다.
+  await expect(page.locator("main h1")).toHaveText("달빛 호수의 밤");
+  // **바꾼 뒤 한 줄이 반드시 있다** (1.16). 없으면 성공과 실패가 화면에서 안 갈린다.
+  await expect(page.locator("[data-책이름알림]")).toBeVisible();
+});
+
+test("서버가 돌려준 이름을 그린다 — 내가 보낸 값이 아니다", async ({ page }) => {
+  await 이름고치기를연다(page);
+
+  // 서버도 본문과 같은 자리에서 가리고 120자에서 자른다 — **응답이 실제로 저장된 값**이고
+  // 표지에 인쇄되는 것도 그것이다. 내 값을 그리면 **화면과 책이 갈린다.**
+  await page.route(BOOK, (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({ status: 200, json: { title: "서버가 고친 이름" } })
+      : route.fallback(),
+  );
+
+  await 책이름칸(page).fill("내가 보낸 이름");
+  await 보내기(page).click();
+
+  await expect(page.locator("main h1")).toHaveText("서버가 고친 이름");
+  await expect(page.locator("main h1")).not.toHaveText("내가 보낸 이름");
+});
+
+test("다 지우면 못 보낸다 — 무슨 일인지 말한다", async ({ page }) => {
+  await 이름고치기를연다(page);
+
+  let PATCH가나갔나 = false;
+  await page.route(BOOK, (route) => {
+    if (route.request().method() === "PATCH") PATCH가나갔나 = true;
+    return route.fallback();
+  });
+
+  await 책이름칸(page).fill("");
+
+  // **버튼을 막는 것만으로는 왜 안 눌리는지를 안 말한다** (1.16).
+  await expect(보내기(page)).toBeDisabled();
+  await expect(page.locator("[data-책이름비었다]")).toBeVisible();
+
+  // **`Enter` 로도 안 나간다.**
+  //
+  // **⚠ 이 단언이 무엇을 재는지 정확히 적는다** — **막는 것은 위 `disabled` 이고**
+  // 컴포넌트 안의 `if (비었다) return;` 이 아니다. 기본 버튼이 `disabled` 면
+  // **HTML 이 암묵 제출 자체를 안 일으킨다.** 그 줄만 떼고 돌리면 **여기는 그대로 초록**이다
+  // (2026-09-12 뒤집어 확인). **그 줄은 「지금 안 도는 갈래」로 코드에 적어 뒀다.**
+  //
+  // **그래도 이 단언을 둔다** — 재는 것이 「아이가 빈 이름으로 보낼 길이 없다」이지
+  // 「어느 줄이 막았나」가 아니다. **막는 주체가 바뀌어도 이 사실은 지켜져야 한다.**
+  await 책이름칸(page).press("Enter");
+  expect(PATCH가나갔나).toBe(false);
+});
+
+test("입력칸이 30자에서 더 안 써진다 — 넘었다고 혼내지 않는다", async ({ page }) => {
+  await 이름고치기를연다(page);
+
+  // **계약이 아니라 우리가 정한 값이라 `문구.md` 6.y 를 여기 다시 적는다.**
+  // `책이름상한` 을 import 하면 그 상수를 120 으로 바꿔도 검사가 따라가 초록이다 (축 ⑭).
+  const 상한 = 30;
+  await 책이름칸(page).fill("가".repeat(상한 + 20));
+  expect((await 책이름칸(page).inputValue()).length).toBe(상한);
+
+  // **넘었을 때 문구를 두지 않는다** (6.y) — 「30자까지만」을 띄우면 그것이 혼내는 말이 된다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 안쓰는말 of ["30자", "글자", "너무", "최대", "까지만"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
+});
+
+test("책 이름에도 개인정보를 가린다 — 카드 화면과 같은 문장이다", async ({ page }) => {
+  await 이름고치기를연다(page);
+
+  await 책이름칸(page).fill("010-1234-5678 의 모험");
+
+  // **가린 뒤 값이 그대로 보인다** — 지우지 않고 자리에 남긴다.
+  await expect(책이름칸(page)).toHaveValue(/○○○/);
+  // **1.1 을 그대로 쓴다.** 여기서 새 분기를 만들지 않는다 — 문구를 import 로 잡는다.
+  await expect(page.locator("[data-책이름가림]")).toHaveText(가림안내.phone);
+});
+
+test("못 닿으면 바꾼 척하지 않는다 — 「바꿨어」를 말하지 않는다", async ({ page }) => {
+  const 책내용 = await 이름고치기를연다(page);
+  const 원래이름 = 책내용.title;
+
+  await page.route(BOOK, (route) =>
+    route.request().method() === "PATCH" ? route.abort() : route.fallback(),
+  );
+
+  await 책이름칸(page).fill("안 닿을 이름");
+  await 보내기(page).click();
+
+  // **표지는 안 바뀐다.**
+  await expect(page.locator("main h1")).toHaveText(원래이름);
+  // **그 한 줄이 성공과 실패를 가르는 유일한 표시라, 실패에 붙으면 거짓말이 된다.**
+  await expect(page.locator("[data-책이름알림]")).not.toHaveText(책이름.바꿨다);
+  await expect(page.locator("[data-책이름알림]")).toHaveText(못닿음.책이름);
+});
+
+test("이름을 바꾸다 인증이 풀리면 인증 화면으로 보낸다", async ({ page }) => {
+  await 이름고치기를연다(page);
+
+  await page.route(BOOK, (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({
+          status: 401,
+          json: { error: { code: "UNAUTHORIZED", message: "다시 들어와 줄래?" } },
+        })
+      : route.fallback(),
+  );
+
+  await 책이름칸(page).fill("바꾸다 끊긴 이름");
+  await 보내기(page).click();
+
+  await expect(page).toHaveURL(/\/child\/auth$/);
+});
+
+test("아이 화면에 「제목」을 쓰지 않는다 — 낱말은 「책 이름」이다", async ({ page }) => {
+  await 이름고치기를연다(page);
+
+  // `용어사전.md` 1장: 「제목」은 어른 말이고 이 자리는 아이가 자기 책에 이름을 붙이는 곳이다.
+  // **금지어 검사와 같은 모양**이다 — 다른 화면 어휘가 새는 것을 글자로 막는다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 안쓰는말 of ["제목", "저장", "확인", "점수", "앨범", "연습"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
 });
