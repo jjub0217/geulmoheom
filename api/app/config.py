@@ -142,6 +142,17 @@ class Settings(BaseSettings):
     client_ip_header: str = ""
 
     jwt_secret: SecretStr = SecretStr("")
+    # **부모 세션 수명(시간). 아이와 다르다** (`adr/0014` 결정 4 · 안전).
+    #
+    # 웹으로 열면서 집 데스크탑이 공용이 됐다 — 부모 세션이 길게 남으면 **아이가
+    # `/parents` 에서 자기 계정을 지울 수 있다.** 종전에는 `tokens.MAX_AGE` 하나를
+    # 둘이 같이 써서 **그 창이 30일**이었다.
+    #
+    # **아이는 30일 그대로다.** 아이까지 짧게 하면 **매주 학부모가 코드를 다시 뽑아야**
+    # 하고, 그건 이 제품에서 가드레일이 아니라 막힘이다.
+    #
+    # **⛔ 값을 코드에 박지 않는다.** 바꿀 근거가 생기면 이 기본값만 고친다.
+    parent_session_hours: int = 2
     daily_card_cap: int = 5
     daily_cost_alert_usd: float = 20.0
 

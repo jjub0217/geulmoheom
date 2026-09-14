@@ -5,13 +5,16 @@
 
 import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from app import tokens
 from app.api.v1 import attempts
-from app.auth import CHILD_COOKIE, MAX_AGE_SECONDS, PARENT_COOKIE
-from app.config import REPO_ROOT
+from app.auth import CHILD_COOKIE, PARENT_COOKIE
+from app.config import REPO_ROOT, get_settings
 from app.docs_md import 민, 읽기
 from app.evaluator import 평가결과
 from app.models import Parent
@@ -143,6 +146,14 @@ def test_토큰이_응답_body_에_없다(
     assert "token" not in str(body)
 
 
+def _토큰수명(구운것: str) -> timedelta:
+    """구운 쿠키에서 JWT 를 꺼내 `exp` 까지 남은 시간을 읽는다 — **초 단위로 자른다.**"""
+    토큰 = 구운것.split("=", 1)[1].split(";", 1)[0]
+    청구 = jwt.decode(토큰, get_settings().jwt_secret.get_secret_value(), algorithms=["HS256"])
+    남음 = datetime.fromtimestamp(청구["exp"], UTC) - datetime.now(UTC)
+    return timedelta(seconds=round(남음.total_seconds()))
+
+
 @pytest.mark.parametrize(("path", "이름", "쿠키이름"), 토큰을_굽는_곳)
 def test_인증_쿠키_속성이_확정본_그대로다(
     익명: TestClient, 굽는요청: dict, path: str, 이름: str, 쿠키이름: str
@@ -159,7 +170,17 @@ def test_인증_쿠키_속성이_확정본_그대로다(
     assert "Path=/" in 구운것
     assert "SameSite=Lax" in 구운것
     assert "Domain=" not in 구운것
-    assert f"Max-Age={MAX_AGE_SECONDS}" in 구운것
+    # **수명만 역할마다 다르다** (`adr/0014` 결정 4). 나머지 속성은 같아야 한다 —
+    # 하나라도 다르면 로그아웃의 삭제 쿠키가 발급분을 못 지운다.
+    #
+    # **`MAX_AGE_SECONDS` 하나로 재던 자리다.** 부모가 30일이면 **공용 데스크탑에서
+    # 아이가 학부모 화면에 닿는 창이 30일**이 된다 — 그것을 2시간으로 줄인 변경이다.
+    기대수명 = int(tokens.수명("parent" if 쿠키이름 == PARENT_COOKIE else "child").total_seconds())
+    assert f"Max-Age={기대수명}" in 구운것
+    # **JWT `exp` 와 어긋나면 안 된다** — 쿠키만 길면 브라우저가 **죽은 토큰을 계속
+    # 보내고 아이는 401 만 본다.** 발급과 측정 사이의 몇 초는 오차로 받는다 —
+    # **여기서 잡으려는 것은 초가 아니라 「둘이 다른 값을 쓴다」**이다(30일 대 2시간).
+    assert 0 <= 기대수명 - int(_토큰수명(구운것).total_seconds()) <= 5
 
 
 @pytest.mark.parametrize(("path", "이름", "쿠키이름"), 토큰을_굽는_곳)

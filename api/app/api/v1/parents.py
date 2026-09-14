@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app import tokens
 from app.accounts import (
     닉네임에PII가있나,
     닉네임길이가맞나,
@@ -95,7 +96,14 @@ async def signup(payload: SignupRequest, response: Response, session: Session) -
     토큰 = issue(학부모.id, "parent")
     await session.commit()
 
-    set_auth_cookie(response, PARENT_COOKIE, 토큰)
+    set_auth_cookie(
+        response,
+        PARENT_COOKIE,
+        토큰,
+        # **JWT `exp` 와 쿠키 `Max-Age` 가 어긋나면 안 된다** (`adr/0014` 결정 4).
+        # 쿠키만 길면 **브라우저가 죽은 토큰을 계속 보내고 아이는 401 만 본다.**
+        max_age=int(tokens.수명("parent").total_seconds()),
+    )
     return SignupResponse(parent_id=str(학부모.id), consent_at=학부모.consent_at)
 
 
@@ -117,7 +125,14 @@ async def login(payload: LoginRequest, response: Response, session: Session) -> 
     # **아이가 갇힌다**: 돌아올 길이 1회용 접속 코드뿐인데 이미 소진됐다.
     # 부모가 리포트 한 번 볼 때마다 아이가 튕기고 코드를 다시 뽑아야 한다.
     # 부모 쪽 위험은 **세션 수명**이 닫는다 (`adr/0014` 결정 4).
-    set_auth_cookie(response, PARENT_COOKIE, issue(학부모.id, "parent"))
+    set_auth_cookie(
+        response,
+        PARENT_COOKIE,
+        issue(학부모.id, "parent"),
+        # **JWT `exp` 와 쿠키 `Max-Age` 가 어긋나면 안 된다** (`adr/0014` 결정 4).
+        # 쿠키만 길면 **브라우저가 죽은 토큰을 계속 보내고 아이는 401 만 본다.**
+        max_age=int(tokens.수명("parent").total_seconds()),
+    )
     return LoginResponse(parent_id=str(학부모.id))
 
 

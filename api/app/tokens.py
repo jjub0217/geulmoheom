@@ -6,9 +6,12 @@
 
 **JWT 는 발급 후 회수할 수 없다.** 그래서 둘로 나눠 막는다.
 
-- `exp` 는 발급 시각 + 30일 **절대 고정**이다. 갱신하지 않는다 (`공통규약.md` 「수명」).
-  30일이 지나면 접속 코드를 다시 받는다 — 한 달에 한 번 학부모가 개입하는 것은
-  이 제품에서 비용이 아니라 가드레일 쪽이다
+- `exp` 는 발급 시각 + **역할이 정한 수명**이고 **절대 고정**이다. 갱신하지 않는다
+  (`공통규약.md` 「수명」). **아이는 30일, 부모는 설정값**(`parent_session_hours`,
+  기본 2시간 · `adr/0014` 결정 4) — **하나였을 때는 공용 데스크탑에서 부모 세션이
+  30일 살아 아이가 학부모 화면에 닿는 창이 30일이었다.**
+  아이 쪽 30일이 지나면 접속 코드를 다시 받는다 — 한 달에 한 번 학부모가 개입하는
+  것은 이 제품에서 비용이 아니라 가드레일 쪽이다
 - 그 안에서 끊어야 할 때는 `children.token_version` 을 1 올린다. 그 한 번으로
   그 자녀의 **모든 기기**가 끊긴다 (`공통규약.md` 「폐기」)
 
@@ -32,7 +35,8 @@ ALGORITHM: Final = "HS256"
 
 Role = Literal["parent", "child"]
 
-# `exp` 의 절대 상한. 쿠키 `Max-Age` 는 이 안에서만 슬라이딩한다.
+# `exp` 의 절대 상한 — **아이 기준**이다. 쿠키 `Max-Age` 는 이 안에서만 슬라이딩한다.
+# **부모는 `수명()` 이 설정에서 읽는다** (`adr/0014` 결정 4).
 MAX_AGE: Final = timedelta(days=30)
 
 # 쿠키를 다시 굽는 최소 간격 (`공통규약.md` 「수명」: 12시간에 최대 1회).
@@ -76,14 +80,32 @@ class Claims:
         return datetime.now(UTC) - self.issued_at >= REFRESH_AFTER
 
 
+def 수명(role: Role) -> timedelta:
+    """역할마다 다르다 (`adr/0014` 결정 4 · 안전).
+
+    **아이 30일 · 부모는 설정값**(기본 2시간). 하나로 두면 **공용 데스크탑에서 부모
+    세션이 30일 살아 아이가 학부모 화면에 닿는 창이 30일**이 된다 — 거기에 자녀 삭제와
+    접속 코드 재발급이 있다.
+
+    **쿠키 `Max-Age` 도 이 값을 쓴다** (`api/v1/parents.py`). 둘이 어긋나 쿠키만 길면
+    **브라우저가 죽은 토큰을 계속 보내고 아이는 401 만 본다.**
+    """
+    if role == "parent":
+        return timedelta(hours=get_settings().parent_session_hours)
+    return MAX_AGE
+
+
 def issue(subject: uuid.UUID, role: Role, *, token_version: int | None = None) -> str:
-    """토큰을 발급한다. `exp` 는 지금부터 30일 — **이 값은 이후 갱신되지 않는다.**"""
+    """토큰을 발급한다. **`exp` 는 역할이 정한다** — 아이 30일 · 부모 설정값.
+
+    **이 값은 이후 갱신되지 않는다.** 쿠키 `Max-Age` 만 그 안에서 밀린다.
+    """
     지금 = datetime.now(UTC)
     payload: dict[str, object] = {
         "sub": str(subject),
         "role": role,
         "iat": 지금,
-        "exp": 지금 + MAX_AGE,
+        "exp": 지금 + 수명(role),
     }
     if token_version is not None:
         payload["tv"] = token_version
