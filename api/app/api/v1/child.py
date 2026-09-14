@@ -17,7 +17,7 @@ from sqlalchemy import select
 from app.accounts import 접속코드해시, 코드가살아있나
 from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
-from app.auth import CHILD_COOKIE, clear_auth_cookie, set_auth_cookie
+from app.auth import CHILD_COOKIE, PARENT_COOKIE, clear_auth_cookie, set_auth_cookie
 from app.child_auth_limit import 클라이언트IP, 기기식별자, 기기풀기, 막을까, 실패기록
 from app.errors import AppError, ErrorCode
 from app.middleware import current_request_id
@@ -99,6 +99,16 @@ async def auth(
     set_auth_cookie(
         response, CHILD_COOKIE, issue(아이.id, "child", token_version=아이.token_version)
     )
+    # **부모 쿠키를 지운다** (`adr/0014` 결정 3 · 안전).
+    # 웹으로 열면서 기기 분리가 없어졌다 — 집 데스크탑 하나에 부모 쿠키와 아이 쿠키가
+    # 함께 살면 **아이가 `/parents` 에서 자기 계정을 지울 수 있다**(책이 사라진다).
+    #
+    # **⛔ 반대 방향은 하지 않는다** (`parents.py` login 참조). **위험이 한 방향**이다.
+    # **⛔ `token_version` 을 올리지 않는다.** 그것은 그 아이의 **모든 기기**를 끊는
+    # 장치이고(`공통규약.md` 「폐기」), 막으려는 범위는 **이 브라우저 하나**다.
+    # 쿠키는 `HttpOnly` 라 지워지면 이 브라우저에서 되살릴 방법이 없다 —
+    # **덜 안전하지도 않다.**
+    clear_auth_cookie(response, PARENT_COOKIE)
     return ChildAuthResponse(
         child=ChildIdentity(
             child_id=str(아이.id), nickname=아이.nickname, guide_name=아이.guide_name

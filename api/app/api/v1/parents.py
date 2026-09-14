@@ -112,6 +112,11 @@ async def login(payload: LoginRequest, response: Response, session: Session) -> 
     if 학부모 is None or not 비밀번호맞나(payload.password, 학부모.password_hash):
         raise AppError(ErrorCode.UNAUTHORIZED)
 
+    # **⛔ 아이 쿠키를 지우지 않는다** (`adr/0014` 결정 3). **대칭이 빠진 것이 아니다** —
+    # **위험이 한 방향**이다. 부모가 아이 글을 보는 것은 정상이고, 여기서 지우면
+    # **아이가 갇힌다**: 돌아올 길이 1회용 접속 코드뿐인데 이미 소진됐다.
+    # 부모가 리포트 한 번 볼 때마다 아이가 튕기고 코드를 다시 뽑아야 한다.
+    # 부모 쪽 위험은 **세션 수명**이 닫는다 (`adr/0014` 결정 4).
     set_auth_cookie(response, PARENT_COOKIE, issue(학부모.id, "parent"))
     return LoginResponse(parent_id=str(학부모.id))
 

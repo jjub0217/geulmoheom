@@ -99,8 +99,9 @@ def clear_auth_cookie(response: Response, name: str) -> None:
     204 를 돌려주는데 세션은 살아 있는, 화면에서 안 보이는 실패가 된다.
     속성을 여기 복사해 적지 않는 이유가 그것이다.
 
-    **이름을 받는다 — 한 번에 하나만 지운다.** 가족 태블릿에서 아이가 내려온다고
-    학부모까지 끊기면 안 된다.
+    **이름을 받는다 — 한 번에 하나만 지운다.** 아이가 `logout` 으로 **내려올** 때
+    학부모까지 끊기면 안 된다. **다만 아이가 `auth` 로 들어올 때는 일부러 학부모를
+    지운다** (`adr/0014` 결정 3) — **내려오는 것과 들어오는 것이 다르다.**
     """
     response.delete_cookie(name, **_ATTRS)  # type: ignore[arg-type]
     _캐시금지(response)

@@ -216,9 +216,16 @@ def _가족태블릿(client: TestClient, 이메일: str, 비밀번호: str, 코�
     **`cookies.set()` 으로 심지 않고 서버에게 굽게 한다.** 손으로 심은 쿠키는
     도메인이 비어 있어 서버가 보낸 삭제 `Set-Cookie` 와 짝이 안 맞는다 — 그러면
     로그아웃이 제대로 지우는지를 이 테스트가 영영 못 본다.
+
+    **⛔ 순서가 뒤집혔다** (2026-09-14, `adr/0014` 결정 3). 종전은 **부모 로그인 →
+    아이 입장**이었는데 이제 **아이 입장이 부모 쿠키를 지운다** — 그 순서로는 둘이
+    함께 앉는 상태가 **만들어지지 않는다.**
+
+    **거꾸로 하면 된다는 것 자체가 비대칭의 증거다** — **부모 로그인은 아이 쿠키를
+    안 건드린다.** 대칭으로 짰다면 **어느 순서로도 이 상태를 못 만든다.**
     """
-    client.post("/api/v1/parents/login", json={"email": 이메일, "password": 비밀번호})
     client.post("/api/v1/child/auth", json={"access_code": 코드})
+    client.post("/api/v1/parents/login", json={"email": 이메일, "password": 비밀번호})
 
 
 @pytest.mark.parametrize(("path", "지울것", "남길것"), 로그아웃)

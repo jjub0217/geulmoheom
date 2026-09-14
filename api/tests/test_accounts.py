@@ -377,6 +377,47 @@ async def test_남의_자녀는_404_다(client: TestClient, 자녀행: Child):
     assert 응답.status_code == 404
 
 
+# ── 공용 브라우저 — 아이가 들어오면 부모 세션이 끊긴다 (`adr/0014` 결정 3) ──
+
+
+def test_아이가_들어오면_부모_쿠키가_지워진다(
+    client: TestClient, 학부모행: Parent, 접속코드: str
+):
+    """**공용 브라우저에서 아이가 학부모 화면에 닿는 길을 닫는다** (`adr/0014` 결정 3).
+
+    웹으로 열면서 기기 분리가 없어졌다. 집 데스크탑 하나에 부모 쿠키와 아이 쿠키가
+    함께 살면 아이가 `/parents` 에서 **자기 계정을 지울 수 있다**(책이 사라진다).
+
+    **`token_version` 을 올리는 것으로 대신하지 않는다** — 그건 그 아이의 **모든
+    기기**를 끊는다. 막으려는 범위는 **이 브라우저 하나**이고 쿠키 삭제가 그 범위다.
+    """
+    응답 = client.post("/api/v1/child/auth", json={"access_code": 접속코드})
+
+    assert 응답.status_code == 200
+    지움 = [c for c in 응답.headers.get_list("set-cookie") if PARENT_COOKIE + "=" in c]
+    assert 지움, "부모 쿠키 삭제가 안 나갔다"
+    assert "Max-Age=0" in 지움[0]
+
+
+def test_부모가_로그인해도_아이_쿠키는_안_건드린다(
+    client: TestClient, 학부모행: Parent, 비밀번호: str, 자녀행: Child
+):
+    """**뒤집어 확인이다.** 대칭으로 지우면 **아이가 갇힌다** — 돌아올 길이 1회용
+    접속 코드뿐인데 이미 소진됐다. **부모가 리포트 한 번 볼 때마다 아이가 튕긴다.**
+
+    **이 검사가 없으면 그 버그가 초록으로 지나간다** — 위 검사는 「부모 쿠키가
+    죽는다」만 보므로 대칭으로 짜도 통과한다. PM 이 `adr/0014` 를 쓰는 도중에
+    실제로 그 설계를 냈다가 고쳤다.
+    """
+    응답 = client.post(
+        "/api/v1/parents/login", json={"email": 학부모행.email, "password": 비밀번호}
+    )
+
+    assert 응답.status_code == 200
+    건드림 = [c for c in 응답.headers.get_list("set-cookie") if CHILD_COOKIE + "=" in c]
+    assert not 건드림, "아이 쿠키를 건드렸다 — 대칭으로 만들면 안 된다"
+
+
 # ── 학부모 가입·로그인 ───────────────────────────────────
 
 
