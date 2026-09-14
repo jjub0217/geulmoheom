@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
-import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
+import { ApiError, NetworkError, apiGet, apiPost, 역할이다르다, 인증이풀렸다 } from "@/lib/api";
 
 import { 상태표시 } from "@/app/status-copy";
 
@@ -66,7 +66,19 @@ export default function ChildAuth() {
       .catch((e: unknown) => {
         if (!alive) return;
         // **401 은 「아직 안 들어왔다」다.** 오류가 아니라 이 화면의 정상 출발점이다.
-        if (인증이풀렸다(e)) {
+        // **401 은 「아직 안 들어왔다」이고, 여기서는 403 도 같은 뜻이다.**
+        //
+        // **⛔ 403 을 거절 화면으로 그리면 아이가 갇힌다** (2026-09-14, 서버까지 붙는 E2E 가 잡았다).
+        // 공용 브라우저에서 **부모가 로그인한 채로 코드를 받아 아이에게 넘기는 것이 정상 흐름**인데
+        // (`adr/0014` 결정 3), 그 브라우저에는 **부모 쿠키가 살아 있어 `/child/me` 가
+        // `403 FORBIDDEN_ROLE`** 로 답한다. 그러면 화면이 **「여기는 지금 들어갈 수 없어요」**를
+        // 띄우고 **코드 입력칸이 아예 안 뜬다** — 아이가 들어갈 길이 없다.
+        //
+        // **`역할이다르다` 를 401 로 뭉뚱그리는 것이 아니다.** 그 구분은 그대로 필요하다
+        // (`lib/api.ts`). **다만 이 화면에서는 둘이 같은 것을 뜻한다**: 「이 브라우저는
+        // 아직 들어온 아이가 아니다」. **부모 쿠키는 코드를 넣는 순간 서버가 지운다**
+        // (`adr/0014` 결정 3) — 그래서 여기서 코드 입력을 여는 것이 **덜 안전하지도 않다.**
+        if (인증이풀렸다(e) || 역할이다르다(e)) {
           // **효과 안에서 한 번 읽는다.** 렌더 중에 `location` 을 보면 정적 빌드의
           // 첫 HTML 과 하이드레이션이 어긋난다.
           setScreen({ kind: "코드입력", line: null, 끊김: 끊겨서왔나() });

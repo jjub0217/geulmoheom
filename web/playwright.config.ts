@@ -22,7 +22,7 @@ export default defineConfig({
   // 재는 조건이 제목과 다른 검사는 **있는 것만 못하다.**
   // 정적·Safari 하네스의 스펙과, **하네스 자체를 재는 단위 검사**는 여기서 안 돈다.
   // 후자는 vitest 몫이다 — Playwright 가 집으면 **테스트가 없는 파일**로 읽는다.
-  testIgnore: ["**/static-safari.spec.ts", "**/*.test.ts"],
+  testIgnore: ["**/static-safari.spec.ts", "**/server.spec.ts", "**/*.test.ts"],
   reporter: "list",
   // 코드를 고친 뒤 첫 실행은 Next 가 그 화면을 처음 컴파일하는 시간과 겹친다 —
   // 기본 5초로는 첫 한두 개가 애매하게 실패한다. 진짜 실패와 구분하기 위해 여유를 준다.

@@ -16,6 +16,7 @@ import { 내책라벨 } from "../src/app/book/copy";
 import { 티어이름 } from "../src/components/tier-badge";
 // 가림 안내도 같은 이유로 박지 않는다 — `docs/문구.md` **1.1** 이 SSOT 다.
 import { 가림안내 } from "../src/components/attempt-input";
+import { 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
 
 /**
@@ -1155,6 +1156,16 @@ test("쓰는 도중 세션이 끊기면 인증 화면으로 보낸다 — 막다
       body: errorBody("UNAUTHORIZED", "다시 한 번 들어와 주세요"),
     }),
   );
+  // **인증 화면이 물어볼 자리도 물려 둔다.** 안 물리면 그 화면이 **「못 닿음」 갈래**로 떨어져
+  // **아이가 들어갈 화면에 닿았는지를 못 본다** — 「무언가 그려졌다」만 재게 된다.
+  await page.route("**/api/v1/child/me", (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: errorBody("UNAUTHORIZED", "다시 한 번 들어와 주세요"),
+    }),
+  );
+
   await page.getByRole("button", { name: 버튼.보내기 }).click();
 
   // **문구만 띄우면 아이는 갇힌다** — 「나가기」도 인증 확인 뒤에만 그려서 **누를 것이 하나도 없다.**
@@ -1163,5 +1174,9 @@ test("쓰는 도중 세션이 끊기면 인증 화면으로 보낸다 — 막다
   await expect(page).toHaveURL(/\/child\/auth\?kicked=1$/);
 
   // **마운트 때 401 과 같은 자리로 간다.** 갈래가 둘이면 한쪽만 고쳐지는 날이 온다.
-  await expect(page.locator("main")).not.toHaveText("");
+  //
+  // **⚠ 「비어 있지 않다」로 재지 않는다** (2026-09-14 고침). 그 단언은 **화면이 무엇을
+  // 그렸는지 안 보고 「무언가 있다」만** 봐서, 부하가 걸리면 **아직 안 그린 한순간**을 잡아
+  // 흔들린다 — 격리하면 통과하고 전체 실행에서만 깨졌다. **구체적인 것을 본다.**
+  await expect(page.getByText(코드입력.제목)).toBeVisible();
 });

@@ -217,6 +217,66 @@ jobs:
       - if: steps.init.outputs.ready == 'true'
         run: cd web && pnpm e2e
 
+  # web 의 **느린 갈래** — **브라우저가 진짜 api 를 문다** (`주차계획/W6.md` 프론트 6번).
+  #
+  # **위 `web` 잡과 갈라 둔다.** 거기 e2e 200개는 **브라우저에서 응답을 가로채므로 api 가
+  # 죽어 있어도 초록**이고, 그래서 빠르다. **여기는 Postgres·Redis 와 진짜 uvicorn 이 필요해
+  # 느리다** — 섞으면 매 push 가 느려지고, **느려지면 다음에 또 미루는 이유**가 된다.
+  # `api-slow` 가 같은 판단으로 갈라져 있다.
+  #
+  # **⛔ 돈이 걸린 자리다.** api 를 진짜로 태우면 묘사 평가·그림이 **유료 호출**이 될 수 있고
+  # **그건 초록으로 지나간다**(응답이 오니까). 하네스가 **가짜 앞단으로 주소를 돌리고**
+  # **못 쓰는 키**를 넣는다 (`web/e2e/_서버하네스.mjs`) — 백엔드가 세운 둘을 그대로 쓴다.
+  web-slow:
+    needs: changes
+    # **api 가 바뀌어도 돈다.** 이 갈래가 잡는 것은 **둘 사이**라, 한쪽만 보면
+    # **서버가 바뀌어 화면이 깨진 날**을 놓친다.
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: geulmoheom
+          POSTGRES_USER: geulmoheom
+          POSTGRES_PASSWORD: geulmoheom
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U geulmoheom"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      # **Redis 가 없어도 초록이 뜬다** — 속도 제한·비용 기록이 전부 **열어 주는 쪽으로**
+      # 실패한다. **그래서 더 필요하다**: 없으면 이 잡이 재는 것이 제품이 아니라
+      # 「Redis 가 죽은 제품」이 된다 (`api-slow` 와 같은 이유).
+      redis:
+        image: redis:7-alpine
+        ports: ["6381:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://geulmoheom:geulmoheom@localhost:5433/geulmoheom
+      JWT_SECRET: ci-secret-not-used-outside-github-actions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: web/.nvmrc, cache: pnpm }
+      # **빈 DB 다.** 로컬은 백엔드 conftest 가 만들어 둔 DB 를 쓰지만 여기는 아무것도 없다 —
+      # **마이그레이션과 카드 시드를 안 하면 `/cards/next` 가 카드를 못 준다.**
+      - run: cd api && uv sync && uv run alembic upgrade head
+      # **정본은 `docs/장면카드_초안.md` 이고 DB 는 사본이다.** 안 뿌리면 `/readyz` 가 degraded 다.
+      - run: cd api && PYTHONPATH=. uv run python scripts/seed_cards.py
+      - run: pnpm install --frozen-lockfile
+      - run: cd web && pnpm exec playwright install --with-deps chromium
+      # 로컬에서 돌리는 것과 **같은 명령**이다.
+      - run: cd web && pnpm e2e:server
+
   # 계약 드리프트: api 의 OpenAPI 와 커밋된 web/src/api/types.gen.ts 가 갈라지면 빨개진다.
   # 완료 조건은 "명세를 바꾸고 make contracts 를 안 돌리면 CI 가 빨개진다" 하나다.
   #
@@ -258,7 +318,7 @@ jobs:
   # **⏳ 그래서 결제가 풀린 첫 실행에 이것이 빨개질 수 있다. 그것이 의도다** —
   # 안 보이는 것보다 빨간 것이 낫다.
   all-green:
-    needs: [changes, api, api-slow, web, contracts]
+    needs: [changes, api, api-slow, web, web-slow, contracts]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -266,7 +326,7 @@ jobs:
         run: |
           # **`needs.api-slow` 로 쓰면 안 된다** — 식 안에서 `-` 는 뺄셈이라
           # `needs.api` 에서 `slow` 를 빼려 들고 값이 조용히 빈다. 대괄호로 집는다.
-          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  api-slow=${{ needs['api-slow'].result }}  web=${{ needs.web.result }}  contracts=${{ needs.contracts.result }}"
+          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  api-slow=${{ needs['api-slow'].result }}  web=${{ needs.web.result }}  web-slow=${{ needs['web-slow'].result }}  contracts=${{ needs.contracts.result }}"
           if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
             echo "::error::실패한 잡이 있습니다"; exit 1
           fi

@@ -1,0 +1,213 @@
+// 브라우저가 **진짜 api 를 무는** 갈래를 위한 하네스 (`주차계획/W6.md` 프론트 6번).
+//
+// **운영과 같은 모양으로 세운다** — 한 오리진 프록시(`adr/0012`). `/api/*` 는 uvicorn 으로,
+// 나머지는 `next dev` 로 넘긴다. **cross-origin 으로 붙이는 길은 안 골랐다**: `__Host-` 쿠키가
+// `SameSite=Lax` 라 **cross-site fetch 에 안 실려 로그인 자체가 안 된다.** 운영이 프록시를
+// 필수로 두는 이유가 그것이고, **검사도 같은 조건이어야 같은 것을 잰다.**
+//
+// **⛔ 돈이 걸린 자리다.** api 를 진짜로 태우면 묘사 평가·그림이 **유료 호출**이 될 수 있고
+// **그건 초록으로 지나간다**(응답이 오니까). 그래서 백엔드가 세운 둘을 그대로 쓴다 —
+// ① 주소를 **가짜 앞단**으로 돌리고 ② `GEMINI_API_KEY` 에 **못 쓰는 값**을 넣는다.
+// 가짜를 안 지난 호출은 과금이 아니라 **거절로 죽는다**.
+//
+// **가짜를 여기서 다시 만들지 않는다.** `api/tests/fake_gemini.py` 를 **불러서 쓴다** —
+// 베끼면 한쪽만 고쳐지는 날 **둘이 다른 것을 잰다**(축 ⑨). 그래서 api 의 테스트 모듈에
+// 의존하는데, **그 이름이 바뀌면 여기가 깨진다. 깨지는 것이 맞다** — 조용히 진짜 구글을
+// 부르는 것보다 낫다.
+//
+// **⚠ `next dev` 는 프로젝트 디렉터리당 하나만 뜬다.** 빠른 e2e 와 **동시에 못 돈다** —
+// 나란히 돌리면 뒤엣것이 죽는다. 순서대로 돌린다.
+//
+// **⚠ DB 가 떠 있어야 한다** — `make db-up`. 없으면 api 가 뜨다 죽고, 아래가 그 이유를 보여준다.
+import { spawn } from "node:child_process";
+import { createServer, request as httpRequest } from "node:http";
+import { connect } from "node:net";
+import { resolve } from "node:path";
+
+const 저장소 = resolve(import.meta.dirname, "../..");
+const API = resolve(저장소, "api");
+
+const 프록시포트 = Number(process.env.E2E_PROXY_PORT ?? 3003);
+const 웹포트 = Number(process.env.E2E_WEB_PORT ?? 3004);
+
+const 자식들 = [];
+
+/** 죽일 때 하나도 안 남긴다 — 남으면 다음 실행이 포트에서 막힌다. */
+function 정리() {
+  for (const p of 자식들) {
+    try {
+      p.kill("SIGTERM");
+    } catch {
+      /* 이미 죽었다 */
+    }
+  }
+}
+process.on("SIGTERM", () => {
+  정리();
+  process.exit(0);
+});
+process.on("SIGINT", () => {
+  정리();
+  process.exit(0);
+});
+
+function 띄운다(이름, 명령, 인자, 옵션 = {}) {
+  const p = spawn(명령, 인자, { ...옵션, stdio: ["ignore", "pipe", "pipe"] });
+  자식들.push(p);
+  p.on("exit", (코드) => {
+    // **뜨다 죽으면 그 자리에서 멈춘다.** 안 그러면 「포트가 안 열린다」만 남고
+    // **왜 안 떴는지가 사라진다** — 백엔드가 같은 자리에서 겪은 것이다.
+    if (코드 !== 0 && 코드 !== null) {
+      console.error(`[하네스] ${이름} 이 죽었다 (exit ${코드})`);
+      정리();
+      process.exit(1);
+    }
+  });
+  p.stderr.on("data", (d) => process.stderr.write(`[${이름}] ${d}`));
+  return p;
+}
+
+/** 포트가 열릴 때까지. **고정 대기를 쓰지 않는다** — 느린 기계에서 그 값이 곧 거짓이 된다. */
+async function 열릴때까지(포트, 초 = 90) {
+  const 끝 = Date.now() + 초 * 1000;
+  while (Date.now() < 끝) {
+    const 됐나 = await new Promise((res) => {
+      const s = connect(포트, "127.0.0.1");
+      s.on("connect", () => (s.destroy(), res(true)));
+      s.on("error", () => res(false));
+    });
+    if (됐나) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`포트 ${포트} 가 ${초}초 안에 안 열렸다`);
+}
+
+// ── ① 가짜 앞단 — api 의 것을 불러서 쓴다 ────────────────────────────────
+const 가짜 = 띄운다(
+  "가짜앞단",
+  "uv",
+  [
+    "run",
+    "python",
+    "-c",
+    // `base_url` 을 찍고 죽지 않고 서 있는다. **여기서 주소를 만들지 않는다** —
+    // 포트를 고르는 것도 그쪽 몫이라 **우리가 아는 것은 찍힌 한 줄뿐**이다.
+    "import time\nfrom tests.fake_gemini import 가짜앞단\nwith 가짜앞단() as f:\n    print(f.base_url, flush=True)\n    while True:\n        time.sleep(3600)\n",
+  ],
+  { cwd: API, env: { ...process.env, PYTHONPATH: API } },
+);
+
+const 가짜주소 = await new Promise((res, rej) => {
+  const 시한 = setTimeout(() => rej(new Error("가짜 앞단이 주소를 안 찍었다")), 60_000);
+  가짜.stdout.on("data", (d) => {
+    const 줄 = String(d).trim().split("\n")[0];
+    if (줄.startsWith("http")) {
+      clearTimeout(시한);
+      res(줄);
+    }
+  });
+});
+console.log(`[하네스] 가짜 앞단 ${가짜주소}`);
+
+// ── ② 진짜 api ────────────────────────────────────────────────────────
+const api포트 = Number(process.env.E2E_API_PORT ?? 8010);
+띄운다(
+  "api",
+  "uv",
+  ["run", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(api포트)],
+  {
+    cwd: API,
+    env: {
+      ...process.env,
+      APP_ENV: "dev",
+      // **여기 둘이 이 하네스의 핵심이다.** 없으면 진짜 구글로 나간다.
+      GEMINI_BASE_URL: 가짜주소,
+      GEMINI_API_KEY: "fake-key-not-valid-anywhere",
+      EVALUATOR_MODEL: "gemini-3.1-flash-lite",
+      // 가짜는 **모델 이름에 `image` 가 드는가**로 갈래를 나눈다 (`adr/0006`).
+      IMAGE_MODEL: "gemini-3.1-flash-lite-image",
+      DATABASE_URL:
+        process.env.DATABASE_URL ??
+        // **개발 DB 를 안 문다.** 거기엔 실제 자녀 계정이 있고, 이 갈래는 매 실행마다
+        // 학부모·자녀를 새로 만든다 — 쌓이면 그 DB 가 검사 쓰레기로 찬다.
+        //  는 백엔드 conftest 가 만들고 마이그레이션까지 해 둔 것이다.
+        "postgresql+asyncpg://geulmoheom:geulmoheom@localhost:5433/geulmoheom_test",
+      JWT_SECRET: process.env.JWT_SECRET ?? "e2e-secret-not-used-outside-tests",
+      PYTHONPATH: API,
+    },
+  },
+);
+await 열릴때까지(api포트);
+console.log(`[하네스] api 127.0.0.1:${api포트}`);
+
+// ── ③ 화면 ────────────────────────────────────────────────────────────
+// **`out/` 을 안 쓴다.** 그 폴더는 정적 하네스와 실기기가 같이 쓰는 하나의 상태라
+// (`web/CLAUDE.md`) 여기서 또 물면 **누가 마지막이냐**가 검사 결과를 정한다.
+// **배포 형태를 재는 것은 정적 하네스의 몫**이고, 여기가 재는 것은 **서버까지 닿는가**다.
+띄운다("web", "pnpm", ["exec", "next", "dev", "--port", String(웹포트)], {
+  cwd: resolve(저장소, "web"),
+  env: { ...process.env, NEXT_PUBLIC_API_BASE_URL: "/api/v1" },
+});
+await 열릴때까지(웹포트);
+console.log(`[하네스] web 127.0.0.1:${웹포트}`);
+
+// ── ④ 한 오리진 프록시 — 운영의 `vercel.json` rewrites 와 같은 모양 ──────
+//
+// **생소켓으로 쓰지 않는다.** 직접 HTTP 를 써 보내면 청크 인코딩·연결 재사용을 우리가 떠안고,
+// **틀리면 제품이 아니라 하네스가 만든 실패**가 난다. `http.request` 가 그것을 안다.
+const 프록시 = createServer((요청, 응답) => {
+  const api로 = 요청.url.startsWith("/api/");
+  const 뒤 = httpRequest(
+    {
+      host: "127.0.0.1",
+      port: api로 ? api포트 : 웹포트,
+      method: 요청.method,
+      path: 요청.url,
+      // **헤더를 그대로 넘긴다.** `Host` 를 바꾸지 않는 것이 요점이다 — 서버가 삽화 주소를
+      // 만들 때 그 값을 보고, **바꾸면 `<img>` 가 딴 곳을 가리킨다**(`adr/0012` 따라오는 작업 ①).
+      headers: 요청.headers,
+    },
+    (뒤응답) => {
+      // **`Set-Cookie` 를 포함해 그대로 돌려준다.** 여기서 하나라도 떨구면
+      // **로그인이 안 되는 것을 하네스가 만든 것**이 된다.
+      응답.writeHead(뒤응답.statusCode ?? 502, 뒤응답.headers);
+      뒤응답.pipe(응답);
+    },
+  );
+  뒤.on("error", (e) => {
+    console.error(`[프록시] ${요청.method} ${요청.url} → ${e.message}`);
+    if (!응답.headersSent) 응답.writeHead(502);
+    응답.end();
+  });
+  요청.pipe(뒤);
+});
+// **업그레이드(웹소켓)를 따로 넘긴다.** `next dev` 의 HMR 이 그걸로 붙는데,
+// 일반 요청처럼 다루면 `Parse Error: Expected HTTP/` 가 나고 **화면이 통째로 안 산다** —
+// 2026-09-14 에 실제로 그랬다. **제품이 아니라 하네스가 만든 실패**라 여기서 막는다.
+프록시.on("upgrade", (요청, 소켓, 머리) => {
+  const 뒤 = httpRequest({
+    host: "127.0.0.1",
+    port: 웹포트,
+    method: 요청.method,
+    path: 요청.url,
+    headers: 요청.headers,
+  });
+  뒤.on("upgrade", (뒤응답, 뒤소켓, 뒤머리) => {
+    소켓.write(
+      `HTTP/1.1 101 Switching Protocols\r\n` +
+        Object.entries(뒤응답.headers)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}\r\n`)
+          .join("") +
+        "\r\n",
+    );
+    뒤소켓.write(뒤머리);
+    소켓.pipe(뒤소켓).pipe(소켓);
+  });
+  // **HMR 이 못 붙어도 검사는 돈다.** 여기서 죽이지 않는다 — 재려는 것이 HMR 이 아니다.
+  뒤.on("error", () => 소켓.destroy());
+  뒤.end(머리);
+});
+
+프록시.listen(프록시포트, "127.0.0.1", () => {
+  console.log(`[하네스] 프록시 http://127.0.0.1:${프록시포트} — /api/* → api, 나머지 → web`);
+});
