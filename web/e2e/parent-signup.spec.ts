@@ -273,3 +273,101 @@ test("로그아웃이 못 닿으면 나간 척하지 않는다 — 무엇이 안
   const 학부모가읽는것 = await page.locator("main > div > p").first().innerText();
   expect(학부모가읽는것).not.toContain("서버");
 });
+
+/**
+ * **⛔ 2026-09-14 저녁 — 사용자가 이 화면에 갇혔다** (`문구.md` 3.6 신설 근거).
+ *
+ * 이미 가입한 이메일로 다시 가입하면 서버가 **422 `VALIDATION_ERROR`** 를 낸다.
+ * **「이미 가입된 이메일」이라고 말하지 않는 것은 의도**이고(`api/app/api/v1/parents.py:93`)
+ * **그 결정은 옳다** — 그 문장 하나가 아무나 이메일 존재 여부를 확인하는 창구가 된다.
+ *
+ * **막다른 길이었던 것은 화면이다.** 뜨는 것은 한 줄뿐이고 **로그인으로 가는 길이 없었다.**
+ */
+
+test("가입 화면에 로그인으로 가는 길이 늘 있다 — 오류와 무관하다", async ({ page }) => {
+  await 로그아웃상태(page);
+  await page.goto("/parents/signup");
+
+  // **⛔ 오류가 났을 때만 띄우면 그것 자체가 이메일 존재 확인 창구가 된다.**
+  // 아무 일도 없는 지금 보여야 한다 — 3.10 의 「처음이신가요? 가입하기」와 **대칭**이다.
+  const 길 = page.getByRole("link", { name: 폼.로그인으로 });
+  await expect(길).toBeVisible();
+  await expect(길).toHaveAttribute("href", "/parents/login");
+
+  // 오류 문장은 아직 없다. **길만 있고 오류는 없는 상태가 정상 출발점**이다.
+  await expect(page.getByText(폼.제출거절)).toHaveCount(0);
+});
+
+test("이미 가입된 이메일로 막혀도 갇히지 않는다 — 폼이 남고 길이 보인다", async ({
+  page,
+}) => {
+  await 로그아웃상태(page);
+  await page.route(SIGNUP, (route) =>
+    route.fulfill({
+      status: 422,
+      json: {
+        error: {
+          code: "VALIDATION_ERROR",
+          // **아이 목소리다** (`errors.py` 의 `CHILD_MESSAGE`). 화면에 그대로 나오면 안 된다.
+          message: "잠깐 문제가 생겼어요. 다시 한 번 해볼까요",
+          detail: { fields: [{ field: "email" }] },
+        },
+      },
+    }),
+  );
+
+  await page.goto("/parents/signup");
+  await page.getByLabel(폼.이메일).fill("parent@example.com");
+  await page.getByLabel(폼.비밀번호).fill("pw12345678");
+  await page.locator('input[name="consent"]').check();
+  await page.getByRole("button", { name: 폼.가입하기 }).click();
+
+  await expect(page.locator("[data-오류]")).toHaveText(폼.제출거절);
+
+  // **⭐ 이것이 이 검사의 핵심이다.** 문장만 띄우고 폼을 치우면 **여전히 막다른 길**이다 —
+  // 「입력을 다시 확인해 주세요」는 **확인할 입력이 화면에 있어야** 참이 된다.
+  await expect(page.getByRole("button", { name: 폼.가입하기 })).toBeVisible();
+  await expect(page.getByLabel(폼.이메일)).toHaveValue("parent@example.com");
+  await expect(page.getByRole("link", { name: 폼.로그인으로 })).toBeVisible();
+
+  const 화면 = await page.locator("main").innerText();
+  expect(화면).not.toContain("잠깐 문제가 생겼어요");
+});
+
+test("가입 실패는 이유를 가리지 않는다 — 어느 코드든 같은 문장이다", async ({ page }) => {
+  // **갈라 쓰면 그 갈림이 곧 정보다** (`문구.md` 3.6). 중복 이메일(422)과 다른 실패가
+  // **다른 문장으로 나오면**, 남의 이메일을 넣고 **문장 모양만 보고** 계정 유무를 안다.
+  const 본것: string[] = [];
+
+  for (const [status, code] of [
+    [422, "VALIDATION_ERROR"],
+    [429, "RATE_LIMITED"],
+    [500, "INTERNAL_ERROR"],
+  ] as const) {
+    await 로그아웃상태(page);
+    await page.route(SIGNUP, (route) =>
+      route.fulfill({ status, json: { error: { code, message: "아무 말" } } }),
+    );
+
+    await page.goto("/parents/signup");
+    await page.getByLabel(폼.이메일).fill("parent@example.com");
+    await page.getByLabel(폼.비밀번호).fill("pw12345678");
+    await page.locator('input[name="consent"]').check();
+    await page.getByRole("button", { name: 폼.가입하기 }).click();
+
+    await expect(page.locator("[data-오류]")).toBeVisible();
+    본것.push(await page.locator("[data-오류]").innerText());
+    await page.unroute(SIGNUP);
+  }
+
+  expect(new Set(본것).size).toBe(1);
+  expect(본것[0]).toBe(폼.제출거절);
+  // **3.8 표를 이 자리에 쓰면 코드마다 문장이 갈린다.** 그 표가 여기 새는지 직접 본다.
+  expect(본것[0]).not.toBe(학부모오류문구("VALIDATION_ERROR"));
+  expect(본것[0]).not.toBe(학부모오류문구("RATE_LIMITED"));
+
+  // **어느 칸도 계정이 있다고 단정하지 않는다.** 「있으시면」은 조건문이라 아무것도 확인해 주지 않는다.
+  for (const 새면안되는말 of ["이미 가입된", "중복", "사용 중인", "존재하는"]) {
+    expect(폼.제출거절).not.toContain(새면안되는말);
+  }
+});

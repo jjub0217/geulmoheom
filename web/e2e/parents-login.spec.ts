@@ -128,13 +128,42 @@ test("틀려도 무엇이 틀렸는지 말하지 않는다", async ({ page }) =>
 
   // **화면에 머문다.** 넘어가면 로그인한 척하는 것이다.
   await expect(page).toHaveURL(/\/parents\/login$/);
-  // **`code` 로 고른 학부모 문구다** — `error.message` 는 아이 목소리라 그대로 안 쓴다 (`문구.md` 3.8).
-  await expect(page.locator("[data-오류]")).toHaveText(학부모오류문구("UNAUTHORIZED"));
+  // **이 화면에서만 `UNAUTHORIZED` 를 다르게 받는다** (`문구.md` 3.10, 2026-09-14).
+  // 3.8 표의 「다시 로그인해 주세요.」는 **방금 로그인을 시도한 사람에게 아무 말도 아니다.**
+  await expect(page.locator("[data-오류]")).toHaveText(로그인.실패);
 
   const 화면 = await page.locator("main").innerText();
   for (const 새면안되는말 of ["없는 계정", "가입되지", "비밀번호가 틀", "이메일이 없"]) {
     expect(화면).not.toContain(새면안되는말);
   }
+  // **동어반복으로 되돌아가지 않는다.** 한 줄만 되돌리면 언제든 돌아오고,
+  // **그때 화면은 멀쩡해 보인다** — 문장이 뜨긴 뜨니까.
+  expect(화면).not.toContain(학부모오류문구("UNAUTHORIZED"));
+});
+
+/**
+ * **`UNAUTHORIZED` 만 갈라 받는다.** 3.8 표를 이 화면이 통째로 버리면
+ * **새 코드가 생길 때마다 학부모가 「이메일 또는 비밀번호」를 의심한다** —
+ * 실제로는 요청이 많아서 막힌 것인데도.
+ */
+test("로그인 실패가 아닌 오류는 3.8 표를 그대로 쓴다", async ({ page }) => {
+  await page.route(LOGIN, (route) =>
+    route.fulfill({
+      status: 429,
+      json: { error: { code: "RATE_LIMITED", message: "조금만 천천히 가볼까요" } },
+    }),
+  );
+
+  await page.goto("/parents/login");
+  await page.getByLabel(로그인.이메일).fill(이메일);
+  await page.getByLabel(로그인.비밀번호).fill("올바른비밀번호");
+  await page.getByRole("button", { name: 로그인.버튼 }).click();
+
+  await expect(page.locator("[data-오류]")).toHaveText(학부모오류문구("RATE_LIMITED"));
+  // **비밀번호 탓으로 말하지 않는다.** 부모가 맞는 비밀번호를 계속 고쳐 넣게 된다.
+  await expect(page.locator("[data-오류]")).not.toHaveText(로그인.실패);
+  // **아이 목소리가 새지 않는다** (`문구.md` 3.8).
+  expect(await page.locator("main").innerText()).not.toContain("조금만 천천히 가볼까요");
 });
 
 test("못 닿으면 로그인한 척하지 않는다 — 비밀번호 탓으로 말하지도 않는다", async ({

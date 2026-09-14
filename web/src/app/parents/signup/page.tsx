@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
@@ -68,6 +69,16 @@ export default function ParentSignup() {
   const [labelingConsent, setLabelingConsent] = useState(false);
   const [보내는중, set보내는중] = useState(false);
 
+  /**
+   * **제출이 거절됐을 때** (`문구.md` **3.6**, 2026-09-14 신설).
+   *
+   * **⛔ `거절` 화면으로 넘기지 않는다.** 그 상태는 폼을 통째로 치우는데, 그러면
+   * **「입력을 다시 확인해 주세요」가 거짓**이 된다 — 확인할 입력이 화면에 없다.
+   * **2026-09-14 저녁 사용자가 갇힌 자리가 정확히 여기다.** 여기 남는 오류는
+   * **폼 곁의 한 줄**이고, `거절` 화면은 **`/parents/me` 가 403 일 때**(자녀 쿠키)로 남는다.
+   */
+  const [제출오류, set제출오류] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
 
@@ -108,6 +119,7 @@ export default function ParentSignup() {
 
   const 보내기 = async () => {
     set보내는중(true);
+    set제출오류(null);
     try {
       const body: SignupRequest = {
         email,
@@ -120,7 +132,14 @@ export default function ParentSignup() {
       setScreen({ kind: "가입됨", consentAt: res.consent_at });
     } catch (e) {
       if (e instanceof ApiError) {
-        setScreen({ kind: "거절", line: 학부모오류문구(e.code) });
+        // **⛔ `code` 를 안 가린다. 모든 가입 실패에 같은 문장이다** (`문구.md` 3.6).
+        // **갈라 쓰면 그 갈림이 곧 정보**다 — 이미 가입된 이메일을 서버가 **일부러**
+        // 422 로만 답하는데(`parents.py:93`), 화면이 코드별로 문장을 나누면
+        // **아무나 이메일 존재 여부를 확인**할 수 있다. 그래서 `학부모오류문구` 를 안 쓴다.
+        //
+        // **화면을 안 넘긴다.** 폼이 남아야 「입력을 다시 확인해 주세요」가 참이 되고,
+        // **로그인으로 가는 길도 같이 남는다.**
+        set제출오류(폼.제출거절);
         return;
       }
       if (e instanceof NetworkError) {
@@ -159,6 +178,8 @@ export default function ParentSignup() {
     setPassword("");
     setConsent(false);
     setLabelingConsent(false);
+    // 앞사람의 오류 한 줄도 같이 지운다 — **가족 태블릿이고 다음 사람이 그것을 자기 것으로 읽는다.**
+    set제출오류(null);
     setScreen({ kind: "가입전" });
   };
 
@@ -172,6 +193,7 @@ export default function ParentSignup() {
       {screen.kind === "확인중" && <p className="opacity-70">{상태표시.확인중}</p>}
 
       {screen.kind === "가입전" && (
+        <>
         <form
           className="flex flex-col gap-8"
           onSubmit={(e) => {
@@ -261,6 +283,14 @@ export default function ParentSignup() {
 <p className="pl-8 opacity-80">{폼.선택거부해도}</p>
           </section>
 
+          {/* **자리가 버튼 곁이다** — 방금 누른 것에 대한 대답이라, 폼 위로 올리면
+              부모가 무엇 때문에 나온 말인지 찾아야 한다. 로그인 화면과 같은 규칙이다. */}
+          {제출오류 !== null && (
+            <p data-오류 role="status" className="text-xl/relaxed">
+              {제출오류}
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={!보낼수있다}
@@ -270,6 +300,19 @@ export default function ParentSignup() {
             {폼.가입하기}
           </button>
         </form>
+
+        {/* **⛔ 오류와 무관하게 늘 보인다** (`문구.md` 3.6). 오류가 났을 때만 띄우면
+            **그것 자체가 이메일 존재 확인 창구**가 된다 — 서버가 `parents.py:93` 에서
+            막으려던 것을 화면이 도로 연다. 3.10 의 「처음이신가요? 가입하기」와 **대칭**이고,
+            **둘이 서로를 가리켜야 「어느 쪽으로 들어와도 반대편으로 갈 수 있다」가 선다.**
+            **학부모 홈은 여전히 없다** — `/` 는 아이 화면이고, 주소 정리는 `미룬것.md` 다. */}
+        <Link
+          href="/parents/login"
+          className="pressable self-center rounded-full px-6 py-3 underline underline-offset-4"
+        >
+          {폼.로그인으로}
+        </Link>
+        </>
       )}
 
       {screen.kind === "가입됨" && (
