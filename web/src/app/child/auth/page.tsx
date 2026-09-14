@@ -5,13 +5,12 @@ import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
-import { useDisplayMode } from "@/lib/standalone";
 
 import { 상태표시 } from "@/app/status-copy";
 
 import { 끊겨서왔나 } from "@/lib/kicked";
 
-import { 못닿음, 설치안내, 코드길이, 코드입력 } from "./copy";
+import { 못닿음, 코드길이, 코드입력 } from "./copy";
 
 type ChildAuthRequest = components["schemas"]["ChildAuthRequest"];
 type ChildAuthResponse = components["schemas"]["ChildAuthResponse"];
@@ -52,21 +51,12 @@ type Screen =
 
 export default function ChildAuth() {
   const router = useRouter();
-  /**
-   * **갈래는 상태가 아니라 형태가 정한다.** 브라우저 탭이라는 사실은 서버 응답과 무관하고,
-   * 실행 중에 바뀔 수도 있다(아이가 안내를 읽고 홈 화면에 추가한 뒤 돌아오는 경우).
-   */
-  const 형태 = useDisplayMode();
   const [screen, setScreen] = useState<Screen>({ kind: "확인중" });
   const [code, setCode] = useState("");
   const [보내는중, set보내는중] = useState(false);
 
   useEffect(() => {
     let alive = true;
-
-    // **판정이 먼저다.** 홈 화면 앱이 아니면 서버를 아예 부르지 않는다 —
-    // 이미 들어와 있든 아니든 **이 창에서는 코드를 열지 않는 것**이 계약이다.
-    if (형태 !== "홈화면앱") return;
 
     apiGet<ChildMe>("/child/me")
       .then(() => {
@@ -78,7 +68,7 @@ export default function ChildAuth() {
         // **401 은 「아직 안 들어왔다」다.** 오류가 아니라 이 화면의 정상 출발점이다.
         if (인증이풀렸다(e)) {
           // **효과 안에서 한 번 읽는다.** 렌더 중에 `location` 을 보면 정적 빌드의
-          // 첫 HTML 과 하이드레이션이 어긋난다 — `실행형태판정` 이 서버 스냅샷을 둔 것과 같은 자리다.
+          // 첫 HTML 과 하이드레이션이 어긋난다.
           setScreen({ kind: "코드입력", line: null, 끊김: 끊겨서왔나() });
           return;
         }
@@ -96,7 +86,7 @@ export default function ChildAuth() {
     return () => {
       alive = false;
     };
-  }, [router, 형태]);
+  }, [router]);
 
   /**
    * **실패해도 화면을 갈아치우지 않는다.** 입력칸을 그대로 두고 그 자리에 서버 문구만 얹는다 —
@@ -139,28 +129,11 @@ export default function ChildAuth() {
 
   return (
     <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-12">
-      {(형태 === "확인중" || (형태 === "홈화면앱" && screen.kind === "확인중")) && (
+      {screen.kind === "확인중" && (
         <p className="opacity-70">{상태표시.확인중}</p>
       )}
 
-      {형태 === "브라우저탭" && (
-        // **코드 입력칸을 흐리게라도 두지 않는다** (`문구.md` 3.2) — 보이면 누른다.
-        // 그래서 이 갈래에는 `<input>` 도 `<form>` 도 아예 없다.
-        <section data-설치안내 className="flex flex-col gap-6">
-          <h1 className="text-3xl/relaxed font-semibold">{설치안내.제목}</h1>
-          {/* **왜 안 되는지가 먼저다.** 이 줄이 빠지면 막는 화면으로만 읽힌다. */}
-          <p className="text-xl/relaxed">{설치안내.이유}</p>
-          <ul className="flex flex-col gap-3 rounded-2xl border-2 border-brass/40 p-5">
-            {설치안내.방법.map(({ 기기, 순서 }) => (
-              <li key={기기}>
-                <strong>{기기}</strong> — {순서}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {형태 === "홈화면앱" && screen.kind === "코드입력" && (
+      {screen.kind === "코드입력" && (
         <form
           className="flex flex-col gap-6"
           onSubmit={(e) => {
@@ -223,9 +196,9 @@ export default function ChildAuth() {
         </form>
       )}
 
-      {형태 === "홈화면앱" && screen.kind === "거절" && <p className="text-xl/relaxed">{screen.line}</p>}
+      {screen.kind === "거절" && <p className="text-xl/relaxed">{screen.line}</p>}
 
-      {형태 === "홈화면앱" && screen.kind === "못닿음" && (
+      {screen.kind === "못닿음" && (
         <div className="flex flex-col gap-6">
           {/* **`문구.md` 2.4 다.** 서버가 아무 말도 못 했으므로 화면이 고르지만,
               그렇다고 화면이 짓는 것은 아니다 — 문서에 자리가 있다. */}

@@ -1,16 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { 못닿음, 설치안내, 코드입력 } from "../src/app/child/auth/copy";
-// 흉내는 `_helpers.ts` 한 곳에 있다 — 복사하면 한쪽만 고쳐지는 날 둘이 다른 것을 잰다.
-import { 홈화면앱으로 } from "./_helpers";
+import { 못닿음, 코드입력 } from "../src/app/child/auth/copy";
 
 /**
  * 자녀 인증 화면 (E-3 프론트 짝).
  *
- * **여기 첫 검사가 이 화면이 존재하는 이유 그 자체다** — 브라우저 탭에 **코드 입력칸이 없어야
- * 한다.** 접속 코드는 1회용이고 iOS 홈 화면 앱은 Safari 와 쿠키를 공유하지 않아,
- * 탭에서 써버리면 **아이는 재발급 없이 못 들어온다.** 나중에 누가 「탭에서도 되게 해주자」로
- * 게이트를 열면 **이 테스트가 막는다.** 규칙을 문서에만 적어두면 아무도 안 막는다.
+ * **⛔ 2026-09-14 에 이 파일의 첫 검사가 뒤집혔다** (`adr/0014`).
+ *
+ * 종전 머리말은 이랬다 — 「여기 첫 검사가 **이 화면이 존재하는 이유 그 자체**다: 브라우저 탭에
+ * **코드 입력칸이 없어야 한다.** 나중에 누가 「탭에서도 되게 해주자」로 게이트를 열면
+ * **이 테스트가 막는다**」. **그 게이트를 지금 일부러 열었다.**
+ *
+ * **막던 이유는 하나뿐이었다** — 접속 코드가 1회용인데 **iOS 홈 화면 앱이 Safari 와 쿠키를
+ * 공유하지 않아**, 탭에서 써 버리면 아이가 재발급 없이 못 들어왔다. **웹만 쓰기로 하면서
+ * 그 이유가 통째로 사라졌다**: 쿠키 통이 하나뿐이라 **코드가 갈릴 데가 없다.**
+ *
+ * **검사가 규칙을 지켰고, 규칙이 바뀌자 검사가 막았다. 그게 맞는 순서다** —
+ * 문서만 고치고 검사를 안 고쳤으면 **어느 쪽이 참인지 모르는 채로 남았을 것**이다.
  *
  * **문구를 문자열로 박지 않는다.** `copy.ts` 를 import 한다 — 오늘 `[보안 필터]` 를 여섯 군데에
  * 박아둔 탓에 **문구를 바꾸는 날 테스트가 제품을 붙잡았다.**
@@ -29,35 +35,30 @@ async function 안들어온상태(page: Page) {
   );
 }
 
-test("브라우저 탭에서는 코드 입력칸이 아예 없다 — 보이면 누른다", async ({ page }) => {
-  await 안들어온상태(page);
-  // 흉내를 안 낸다 = 보통 탭이다.
-  await page.goto("/child/auth");
-
-  await expect(page.getByText(설치안내.제목)).toBeVisible();
-  // **왜 안 되는지가 먼저다.** 이 줄이 빠지면 막는 화면으로만 읽힌다.
-  await expect(page.getByText(설치안내.이유)).toBeVisible();
-
-  // **핵심.** 흐리게라도 두지 않는다 — 숨김이 아니라 **존재하지 않아야** 한다.
-  await expect(page.locator("input")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: 코드입력.버튼 })).toHaveCount(0);
-});
-
-test("홈 화면 앱에서는 코드 입력이 열린다", async ({ page }) => {
-  await 홈화면앱으로(page);
+test("브라우저 탭에서 코드 입력이 바로 열린다", async ({ page }) => {
   await 안들어온상태(page);
   await page.goto("/child/auth");
 
+  // **2026-09-14 에 뒤집힌 자리다** (`adr/0014`). 예전에는 **여기서 안내만 뜨고
+  // 입력칸이 아예 없었다** — 접속 코드가 1회용인데 iOS 홈 화면 앱이 Safari 와 쿠키를
+  // 공유하지 않아, 탭에서 써 버리면 **재발급 없이 못 들어왔기 때문**이다.
+  // **웹만 쓰기로 하면서 그 벽이 선 이유가 통째로 사라졌다** — 쿠키 통이 하나뿐이라
+  // 코드가 갈릴 데가 없다.
   await expect(page.getByText(코드입력.제목)).toBeVisible();
   // 무엇을 넣어야 하는지 모양을 미리 알려주는 줄. 오류를 나눠 말할 수 없으니 이것이 유일한 대응이다.
   await expect(page.getByText(코드입력.안내)).toBeVisible();
   await expect(page.getByLabel(코드입력.라벨)).toBeVisible();
-  // 설치 안내는 이 갈래에 없다 — 둘이 같이 뜨면 아이가 무엇을 할 차례인지 모른다.
-  await expect(page.getByText(설치안내.제목)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: 코드입력.버튼 })).toBeVisible();
+
+  // **설치를 요구하는 말이 화면에 없다.** 낱말로 막는다 — 안내를 지웠어도
+  // **다른 자리에서 「홈 화면에 추가」가 다시 새어 나오면** 유입을 깎는 그 문턱이 돌아온다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 안쓰는말 of ["홈 화면에 추가", "설치", "앱을 열고"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
 });
 
 test("6자리가 아니면 들어갈 수 없다", async ({ page }) => {
-  await 홈화면앱으로(page);
   await 안들어온상태(page);
   await page.goto("/child/auth");
 
@@ -72,7 +73,6 @@ test("6자리가 아니면 들어갈 수 없다", async ({ page }) => {
 });
 
 test("숫자가 아닌 것은 애초에 들어가지 않는다", async ({ page }) => {
-  await 홈화면앱으로(page);
   await 안들어온상태(page);
   await page.goto("/child/auth");
 
@@ -86,7 +86,6 @@ test("숫자가 아닌 것은 애초에 들어가지 않는다", async ({ page }
 test("코드가 틀리면 서버 문구를 그대로 보여주고 입력값을 지우지 않는다", async ({
   page,
 }) => {
-  await 홈화면앱으로(page);
   await 안들어온상태(page);
   await page.goto("/child/auth");
 
@@ -109,7 +108,6 @@ test("코드가 틀리면 서버 문구를 그대로 보여주고 입력값을 �
 });
 
 test("성공하면 화면을 하나 더 만들지 않고 모험 화면으로 간다", async ({ page }) => {
-  await 홈화면앱으로(page);
   await 안들어온상태(page);
   await page.goto("/child/auth");
 
@@ -130,7 +128,6 @@ test("성공하면 화면을 하나 더 만들지 않고 모험 화면으로 간
 });
 
 test("닿지 못하면 아이 사정으로 말한다 — 「서버」가 화면에 없다", async ({ page }) => {
-  await 홈화면앱으로(page);
   // 응답을 주지 않는다. 서버가 **아무 말도 못 한** 자리다 — `error.message` 가 없다.
   await page.route(ME, (route) => route.abort("failed"));
   await page.goto("/child/auth");
@@ -153,7 +150,6 @@ const 안내줄 = (page: Page) => page.locator("[data-안내]");
 
 test("쓰다가 끊겨서 오면 주어가 부모인 한 줄을 말한다", async ({ page }) => {
   await 안들어온상태(page);
-  await 홈화면앱으로(page);
 
   await page.goto("/child/auth?kicked=1");
 
@@ -176,7 +172,6 @@ test("처음 온 아이에게는 그 줄을 말하지 않는다 — 받은 적 �
   page,
 }) => {
   await 안들어온상태(page);
-  await 홈화면앱으로(page);
 
   // **표식 없이 온다.** `start_url` 이 `/` 라 **처음 온 아이도 마운트 401 로 여기 온다** —
   // 그래서 마운트 쪽에는 표식을 안 단다 (`lib/kicked.ts`).
@@ -190,7 +185,6 @@ test("처음 온 아이에게는 그 줄을 말하지 않는다 — 받은 적 �
 
 test("코드를 틀려도 끊겼다는 안내가 그대로 남는다", async ({ page }) => {
   await 안들어온상태(page);
-  await 홈화면앱으로(page);
   const 서버문구 = "코드가 맞지 않아요. 부모님께 다시 물어볼까요";
   await page.route(AUTH, (route) =>
     route.fulfill({

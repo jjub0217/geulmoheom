@@ -1,11 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { paths } from "../src/api/types.gen";
-import { 설치안내, 코드입력 } from "../src/app/child/auth/copy";
+import { 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
 import { 나가기문구 } from "../src/components/leave-copy";
-
-import { 홈화면앱으로 } from "./_helpers";
 
 /**
  * **들어가는 문** (2026-09-08 실기기에서 나왔다 · `주차계획/W4.md`).
@@ -52,11 +50,14 @@ async function 안들어온상태(page: Page) {
   await page.route(CHILD_ME, (route) => route.fulfill(거절));
 }
 
-test("홈 화면 앱으로 처음 열면 코드 입력까지 간다 — 막다른 화면이 아니다", async ({ page }) => {
-  await 홈화면앱으로(page);
+/**
+ * **검사 둘이 하나로 접혔다** (2026-09-14, `adr/0014`). 예전에는 **홈 화면 앱이면 코드 입력,
+ * 브라우저 탭이면 설치 안내**라 갈래마다 하나씩 있었다. **갈래가 없어졌다 — 어디서 열든 같다.**
+ */
+test("처음 열면 어디서 열든 코드 입력까지 간다 — 막다른 화면이 아니다", async ({ page }) => {
   await 안들어온상태(page);
 
-  // **매니페스트 `start_url` 이 `/` 다.** 아이는 여기로 온다.
+  // **아이는 여기로 온다.** 부모가 건넨 주소가 `/` 다.
   await page.goto("/");
 
   // **자녀 인증 화면이 나머지를 안다** — 새로 만든 화면이 없다.
@@ -68,18 +69,6 @@ test("홈 화면 앱으로 처음 열면 코드 입력까지 간다 — 막다�
   await expect(본문(page).getByText("다시 한 번 들어와 주세요")).toHaveCount(0);
 });
 
-test("브라우저 탭으로 처음 열면 설치 안내까지 간다 — 코드 입력칸은 없다", async ({ page }) => {
-  // 흉내를 안 낸다 = 보통 탭이다.
-  await 안들어온상태(page);
-
-  await page.goto("/");
-
-  await page.waitForURL("**/child/auth");
-  await expect(본문(page).getByText(설치안내.제목)).toBeVisible();
-  // **탭에서 코드를 써버리면 아이는 재발급 없이 못 들어온다.** 그 규칙이 여기서도 산다.
-  await expect(page.locator("input")).toHaveCount(0);
-});
-
 /**
  * **제목이 재는 것과 맞아야 한다** (2026-09-08, 뒤집기에서 걸렸다).
  * 처음엔 이 검사 제목이 **「들어오기 전에는 나가기가 없다」**였는데, **나가기 게이트를 떼도 통과했다** —
@@ -88,7 +77,6 @@ test("브라우저 탭으로 처음 열면 설치 안내까지 간다 — 코드
  * **단언 단위로 뒤집지 않았으면 「게이트에 검사가 있다」고 적고 넘어갔다.**
  */
 test("인증 화면에도 나가기가 없다 — 나가는 문만 남는 자리를 만들지 않는다", async ({ page }) => {
-  await 홈화면앱으로(page);
   await 안들어온상태(page);
 
   await page.goto("/");
@@ -100,7 +88,6 @@ test("인증 화면에도 나가기가 없다 — 나가는 문만 남는 자리
 });
 
 test("확인되기 전에는 나가기를 안 그린다 — 찰나에 아이가 누른다", async ({ page }) => {
-  await 홈화면앱으로(page);
   // 응답을 붙잡아 둔다. **로딩 상태를 실제로 만들어 본다** — 상상으로 두면 아무것도 안 잰다.
   let 풀기: (() => void) | null = null;
   await page.route(CARDS_NEXT, async (route) => {
@@ -127,7 +114,6 @@ test("확인되기 전에는 나가기를 안 그린다 — 찰나에 아이가 
 });
 
 test("책도 같은 뿌리다 — 401 이면 인증 화면으로 보낸다", async ({ page }) => {
-  await 홈화면앱으로(page);
   await page.route(CHILD_ME, (route) =>
     route.fulfill({
       status: 401,
