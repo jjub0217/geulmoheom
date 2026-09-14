@@ -30,8 +30,13 @@ router = APIRouter(prefix="/artworks", tags=["artworks"])
 Child = Annotated[ChildRow, Depends(require_child)]
 볼수있는것 = Annotated[set[uuid.UUID], Depends(볼수있는아이들)]
 
-# 하루. **`private` 이 핵심이다** — Cloudflare 가 앞단이라 `private` 이 아니면
-# **공유 캐시에 아이 창작물이 남고, 그 사고는 화면에 아무 증상이 없다.**
+# 하루. **`private` 이 핵심이다** — 앞단에 공유 캐시가 있으면 `private` 이 아닐 때
+# **거기에 아이 창작물이 남고, 그 사고는 화면에 아무 증상이 없다.**
+#
+# **업체 이름을 적지 않는다** (2026-09-14 훑기 ⑪). 종전은 「Cloudflare 가 앞단이라」였는데
+# **앞단이 Vercel 로 바뀌었다**(`adr/0012`). **규칙은 그대로 옳고 이유만 낡았던 것**이라,
+# 다음에 앞단이 또 바뀌어도 안 낡을 문장으로 적는다 — **이름이 틀린 전제를 담으면
+# 다음 사람이 그 전제로 판단한다.**
 캐시규칙 = "private, max-age=86400"
 
 

@@ -140,12 +140,16 @@ dev-web:
 		--experimental-https-cert ../$(CERT) --experimental-https-key ../$(KEY)
 
 # ── API 계약: api OpenAPI → web 타입 ─────────────────────
-# api가 떠 있어야 한다 (make dev-api). CI는 생성 결과가 커밋본과 다르면 실패시킨다.
-# --cacert 를 명시한다. mkcert 루트 CA 는 시스템 키체인에 있지만 curl 빌드에 따라
-# 그걸 안 보는 경우가 있어, 안 보면 여기서만 조용히 실패한다.
+# **서버를 띄우지 않는다.** `app.openapi()` 를 직접 뽑는다 (api/scripts/dump_openapi.py) —
+# 바로 아래 `contracts-check` 가 이미 그렇게 하고 있었다.
+#
+# **2026-09-14 훑기 ⑪ 로 고쳤다 — 저장소 안에 답이 있는데 이 타깃이 안 봤다.**
+# 종전에는 https 개발 서버(`make dev-api`)와 mkcert 인증서를 요구했다. 그래서
+# **명세를 고친 사람이 계약을 다시 뽑지 못해** 드리프트가 난 채로 커밋되는 자리였고,
+# 09-10·09-14 에 실제로 두 번 막혔다. **뽑는 쪽과 검사하는 쪽이 같은 출처를 봐야**
+# "재생성을 안 했다"와 "서버가 안 떠 있다"가 안 섞인다.
 contracts:
-	curl -sf --cacert "$$(mkcert -CAROOT)/rootCA.pem" \
-		https://$(API_HOST):8000/openapi.json -o /tmp/openapi.json
+	cd api && PYTHONPATH=. uv run python scripts/dump_openapi.py /tmp/openapi.json
 	cd web && $(PNPM) exec openapi-typescript /tmp/openapi.json -o src/api/types.gen.ts
 	@echo "→ web/src/api/types.gen.ts 갱신. 수동 편집 금지."
 

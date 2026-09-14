@@ -184,6 +184,10 @@ class Artwork(Base):
     )
     tier: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), default="pending")
+    # **이름이 낡았다. 일부러 그대로 둔다** (2026-09-12, `adr/0014` 이전 · S3 전환).
+    # 저장소가 **Cloudflare R2 → AWS S3** 로 바뀌었지만 **컬럼 이름을 바꾸면
+    # 마이그레이션**이고, 여기 들어가는 값은 처음부터 URL 이 아니라 **오브젝트 키**라
+    # 뜻은 안 틀린다. 판단 근거는 `app/config.py` 의 `s3_*` 주석에 있다.
     r2_key: Mapped[str | None] = mapped_column(String(255))
     # 15초를 넘기면 기본 에셋으로 확정한다 (Stage0.md 5절 B-3)
     fallback: Mapped[bool] = mapped_column(Boolean, default=False)
