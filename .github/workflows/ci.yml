@@ -86,8 +86,20 @@ jobs:
           fi
       - uses: astral-sh/setup-uv@v3
         if: steps.init.outputs.ready == 'true'
+      # **`ruff check` 과 `ruff format --check` 은 다른 것을 본다.** 앞은 규칙 위반,
+      # 뒤는 줄을 어떻게 감았는가다. 여기에 앞만 있던 동안 **드리프트가 조용히 쌓였다** —
+      # 2026-09-14 에 세 파일이 걸려 있었고 세 커밋이 전부 초록으로 지나갔다
+      # (`24c819f` · `4becf54` · `1160ec5`). 그것을 보는 곳은 `make lint` 하나였는데
+      # **그걸 도는 자리가 없었다.**
+      #
+      # **순서는 `make lint` 와 같다** — 그 타깃과 이 줄이 갈리면 「로컬에서 초록인데
+      # CI 가 빨갛다」가 난다.
+      #
+      # **⚠ 이 줄이 실질 관문은 아니다.** CI 는 09-09부터 결제로 안 돈다. 진짜로 막는
+      # 자리는 **커밋 전에 사람이 돌리는 줄**(`api/CLAUDE.md`)이고, 그건 이 파일이
+      # 아니라 거기서 고쳐야 한다 — 2026-09-14 에 사용자에게 올라갔다.
       - if: steps.init.outputs.ready == 'true'
-        run: cd api && uv sync && uv run ruff check . && uv run pytest
+        run: cd api && uv sync && uv run ruff check . && uv run ruff format --check . && uv run pytest
 
   # **느린 갈래다 — 여기서만 `uvicorn` 이 진짜로 뜬다** (api/tests/test_e2e_server.py).
   # 위 `api` 잡은 `TestClient` 로 앱 객체를 직접 부르고, `web` 잡은 브라우저에서 응답을
