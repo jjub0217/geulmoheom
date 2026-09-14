@@ -177,7 +177,7 @@ export function AttemptInput({
             type="button"
             disabled={!보낼수있나}
             onClick={onSend}
-            className="rounded-full bg-scarf px-10 py-3 text-xl text-markings
+            className="pressable rounded-full bg-scarf px-10 py-3 text-xl text-markings
               disabled:opacity-40"
           >
             {보내기라벨}

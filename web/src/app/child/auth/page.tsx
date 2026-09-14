@@ -215,7 +215,7 @@ export default function ChildAuth() {
           <button
             type="submit"
             disabled={!보낼수있다}
-            className="self-end rounded-full bg-scarf px-10 py-3 text-markings
+            className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
               disabled:opacity-40"
           >
             {코드입력.버튼}

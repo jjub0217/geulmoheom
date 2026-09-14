@@ -381,13 +381,13 @@ export default function Home() {
                   type="button"
                   data-다음장면
                   onClick={retry}
-                  className="rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                  className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
                 >
                   {버튼.다음장면열기}
                 </button>
                 <Link
                   href="/book"
-                  className="rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                  className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
                 >
                   {내책라벨}
                 </Link>
@@ -420,7 +420,7 @@ export default function Home() {
             <button
               type="button"
               onClick={retry}
-              className="rounded-full bg-scarf px-8 py-3 text-markings"
+              className="pressable rounded-full bg-scarf px-8 py-3 text-markings"
             >
               {버튼.다시열기}
             </button>

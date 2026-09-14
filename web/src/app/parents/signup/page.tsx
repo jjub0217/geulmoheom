@@ -264,7 +264,7 @@ export default function ParentSignup() {
           <button
             type="submit"
             disabled={!보낼수있다}
-            className="self-end rounded-full bg-scarf px-10 py-3 text-markings
+            className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
               disabled:opacity-40"
           >
             {폼.가입하기}
@@ -297,7 +297,7 @@ export default function ParentSignup() {
           <button
             type="button"
             onClick={() => void 로그아웃()}
-            className="mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
+            className="pressable mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
           >
             {폼.로그아웃}
           </button>

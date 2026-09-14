@@ -133,7 +133,7 @@ export default function BookScreen() {
               {/* **여기서 나가는 곳은 모험 화면 하나뿐이다.** 「첫 장을 만들러」가 가리키는 곳이다. */}
               <Link
                 href="/"
-                className="rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
               >
                 {빈책.버튼}
               </Link>
@@ -162,7 +162,7 @@ export default function BookScreen() {
                 <Link
                   href="/"
                   data-쓰러가기
-                  className="rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                  className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
                 >
                   {빈책.버튼}
                 </Link>
@@ -187,7 +187,7 @@ export default function BookScreen() {
               setScreen({ kind: "loading" });
               setAttempt((n) => n + 1);
             }}
-            className="rounded-full bg-scarf px-8 py-3 text-markings"
+            className="pressable rounded-full bg-scarf px-8 py-3 text-markings"
           >
             {버튼.다시열기}
           </button>

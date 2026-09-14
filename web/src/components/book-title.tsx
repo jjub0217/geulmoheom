@@ -129,7 +129,7 @@ export function BookTitle({
           type="button"
           data-책이름바꾸기
           onClick={연다}
-          className="rounded-full border-2 border-brass/40 px-5 py-2 text-lg opacity-80"
+          className="pressable rounded-full border-2 border-brass/40 px-5 py-2 text-lg opacity-80"
         >
           {책이름.바꾸기}
         </button>
@@ -194,7 +194,7 @@ export function BookTitle({
         type="submit"
         data-책이름보내기
         disabled={비었다 || 보내는중}
-        className="rounded-full bg-scarf px-8 py-3 text-xl text-markings disabled:opacity-50"
+        className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings disabled:opacity-50"
       >
         {책이름.이이름으로}
       </button>

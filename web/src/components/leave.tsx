@@ -79,7 +79,11 @@ export function LeaveButton() {
 
   return (
     <>
-      <button type="button" onClick={열기} className="underline underline-offset-4 opacity-70">
+      <button
+        type="button"
+        onClick={열기}
+        className="pressable underline underline-offset-4 opacity-70"
+      >
         {나가기문구.버튼}
       </button>
 
@@ -107,7 +111,10 @@ export function LeaveButton() {
             <form method="dialog">
               {/* `method="dialog"` 라 이 버튼은 **서버를 부르지 않고 창만 닫는다.**
                   머무는 것이 곧 아무 일도 안 일어나는 것이다. */}
-              <button type="submit" className="rounded-full px-6 py-3 underline underline-offset-4">
+              <button
+                type="submit"
+                className="pressable rounded-full px-6 py-3 underline underline-offset-4"
+              >
                 {나가기문구.확인.머문다}
               </button>
             </form>
@@ -118,7 +125,7 @@ export function LeaveButton() {
               type="button"
               disabled={나가는중}
               onClick={() => void 나간다()}
-              className="rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
+              className="pressable rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
             >
               {나가기문구.확인.나간다}
             </button>

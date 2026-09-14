@@ -208,7 +208,7 @@ export function ChildrenPanel() {
                     type="button"
                     disabled={재발급중 === 아이.child_id}
                     onClick={() => void 코드다시받기(아이.child_id)}
-                    className="self-start rounded-full border-2 border-brass/60 px-6 py-2
+                    className="pressable self-start rounded-full border-2 border-brass/60 px-6 py-2
                       disabled:opacity-40"
                   >
                     {재발급.버튼}
@@ -234,7 +234,7 @@ export function ChildrenPanel() {
                     set지웠다(null);
                     set지울아이(아이);
                   }}
-                  className="self-start underline underline-offset-4 opacity-70"
+                  className="pressable self-start underline underline-offset-4 opacity-70"
                 >
                   {지우기.버튼}
                 </button>
@@ -304,7 +304,7 @@ export function ChildrenPanel() {
         <button
           type="submit"
           disabled={nickname.trim() === "" || 보내는중}
-          className="self-end rounded-full bg-scarf px-10 py-3 text-markings
+          className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
             disabled:opacity-40"
         >
           {만들기.버튼}
@@ -435,7 +435,10 @@ function DeleteChildDialog({
         <div className="flex justify-end gap-3">
           <form method="dialog">
             {/* `method="dialog"` 라 **서버를 부르지 않고 창만 닫는다.** */}
-            <button type="submit" className="rounded-full px-6 py-3 underline underline-offset-4">
+            <button
+              type="submit"
+              className="pressable rounded-full px-6 py-3 underline underline-offset-4"
+            >
               {지우기.그대로둔다}
             </button>
           </form>
@@ -447,7 +450,7 @@ function DeleteChildDialog({
             data-지운다
             disabled={지우는중}
             onClick={() => void 지운다()}
-            className="rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
+            className="pressable rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
           >
             {지우기.지운다}
           </button>

@@ -114,7 +114,26 @@ body {
     calc(var(--spacing-gutter) + env(safe-area-inset-right, 0px));
 }
 
-/* 기준 폭 — 태블릿 가로 1280 에서 멈춰 가운데로 모인다. 모바일 세로에서는 폭을 다 쓴다. */
+/* ── 누를 수 있는 것의 공통 표시 ─────────────────────────────────────────
+   **화면마다 흩뿌리지 않는다 — 한 자리에서 정한다** (`adr/0014` 결정 6).
+   흩뿌리면 어긋나고, 어긋난 뒤에는 **어느 쪽이 맞는지 아무도 모른다.**
+
+   **2026-09-14 이전에 저장소 전체에 `hover:` 0개 · `focus-visible:` 0개였다.**
+   그게 **터치 전제로 만들어졌다는 증거**다 — 손가락은 올려놓을 수가 없어서
+   「올렸을 때」라는 상태 자체가 없었다. **데스크탑이 들어오면서 생겼다.**
+
+   **디자인이 아니라 「안 깨지게」의 일부다** — 마우스를 올려도 반응이 없으면
+   **누를 수 있는 건지가 안 보이고**, 그건 비전 4장 질문 4(어떤 아이는 못 즐기는가)에
+   걸린다. 키보드만 쓰는 아이도 같은 자리다.
+
+   **`outline` 을 쓰고 `border` 를 안 쓴다** — 테두리는 자리를 차지해서
+   **초점이 옮겨갈 때 화면이 밀린다.** */
+@utility pressable {
+  @apply transition-colors hover:bg-brass/10 focus-visible:outline-2
+    focus-visible:outline-offset-2 focus-visible:outline-brass;
+}
+
+/* 기준 폭 — 넓은 화면 1280 에서 멈춰 가운데로 모인다. 좁은 화면에서는 폭을 다 쓴다. */
 @utility page-frame {
   width: 100%;
   max-width: var(--container-frame);
