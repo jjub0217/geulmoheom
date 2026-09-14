@@ -44,6 +44,12 @@ jobs:
   #
   # Redis 는 넣지 않는다. 되묻기 카운터는 죽어도 아이가 계속 쓸 수 있게 만들어져 있고
   # (app/scaffold.py), 그 경로를 테스트가 직접 갈아끼운다.
+  #
+  # **`alembic check` 은 이 잡의 `pytest` 안에서 돈다** (api/tests/test_migrations.py) —
+  # 별도 단계로 두지 않았다. 그 검사는 **마이그레이션이 돌아간 DB** 위에서만 뜻이 있고,
+  # 그것을 세우는 곳이 `tests/conftest.py` 하나다. 단계로 빼면 여기서 DB 이름과
+  # `alembic upgrade head` 를 **두 번째로** 적게 되고, 둘이 갈리는 날 조용히 어긋난다.
+  # **찾는 사람을 위해 — `grep alembic ci.yml` 은 이 주석만 물린다.**
   api:
     needs: changes
     if: needs.changes.outputs.api == 'true'
@@ -82,6 +88,71 @@ jobs:
         if: steps.init.outputs.ready == 'true'
       - if: steps.init.outputs.ready == 'true'
         run: cd api && uv sync && uv run ruff check . && uv run pytest
+
+  # **느린 갈래다 — 여기서만 `uvicorn` 이 진짜로 뜬다** (api/tests/test_e2e_server.py).
+  # 위 `api` 잡은 `TestClient` 로 앱 객체를 직접 부르고, `web` 잡은 브라우저에서 응답을
+  # 가로챈다 — **둘 다 프로세스 경계를 안 지난다.** 기동 순서 · 설정 읽기 ·
+  # 쿠키가 실제 응답 헤더로 나가는 것 · 라우팅 접두사가 여기서만 잡힌다.
+  #
+  # **빠른 잡과 섞지 않는다.** 섞으면 매 push 가 느려지고, **느려지면 다음에 또 미루는
+  # 이유가 된다** — W3·W4 에서 두 번 미룬 방식이 정확히 그것이었다 (`주차계획/W5.md` 1번).
+  #
+  # **`실물` 을 같이 돈다** (`-m '느린 or 실물'`). 그 표시가 붙은 검사는 **진짜 Google 로
+  # 나가지만 못 쓰는 키로 나간다** — 돈이 아니라 거절을 받는 것을 재는 뒤집기라
+  # (api/tests/test_llm.py) **비용이 없고, 문서가 적어 둔 집이 이 잡이다**
+  # (`api/pyproject.toml` `markers`). 빠른 잡에 두면 **남의 가용성이 매 push 를 물든다.**
+  #
+  # **LLM 호출은 태우지 않는다** — 유료고 결과가 흔들린다. 서버 안에서 가짜 앞단으로
+  # **주소를 돌리고**(`GEMINI_BASE_URL`), `GEMINI_API_KEY` 에 **못 쓰는 값**을 넣어
+  # 가짜를 안 지난 호출이 **과금이 아니라 거절로 죽게** 한다. 그 둘은 테스트가 직접
+  # 세우므로 **여기에 키를 넣지 않는다 — 넣으면 그 뒤집기가 무의미해진다.**
+  #
+  # **⏳ 이 잡은 아직 한 번도 CI 에서 돈 적이 없다** (2026-09-14). CI 가 결제로 09-09부터
+  # 멈춰 있다. **로컬에서 초록인 것으로 「CI 에서 돈다」를 대신 말하지 않는다** —
+  # 결제가 풀린 첫 실행은 **잡 색이 아니라 로그에서 테스트 수를 세어** 확인한다.
+  api-slow:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    services:
+      # 포트를 로컬 compose 와 같은 값으로 맞춘다 — `api` 잡과 같은 이유로,
+      # conftest 기본값이 그대로 돈다 (infra/docker-compose.yml).
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: geulmoheom
+          POSTGRES_USER: geulmoheom
+          POSTGRES_PASSWORD: geulmoheom
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U geulmoheom"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      # **Redis 는 여기 있어야 한다.** `api` 잡과 갈리는 자리다 — 거기서는 테스트가
+      # Redis 경로를 직접 갈아끼우지만, **여기서는 진짜 서버가 뜨므로 아무것도 안 갈린다.**
+      # 없어도 초록이 뜬다(속도 제한·비용 기록이 전부 열어 주는 쪽으로 실패한다,
+      # app/child_auth_limit.py) — **그래서 더 필요하다. 없으면 이 잡이 재는 것이
+      # 제품이 아니라 「Redis 가 죽은 제품」이 된다.**
+      redis:
+        image: redis:7-alpine
+        ports: ["6381:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # conftest 가 여기에 `_test` 를 붙이고, **태운 서버에 그 주소를 그대로 넘긴다**
+      # (api/tests/test_e2e_server.py 86행). 개발 DB 이름을 쓰면 서버와 테스트가
+      # 다른 DB 를 문다.
+      DATABASE_URL: postgresql+asyncpg://geulmoheom:geulmoheom@localhost:5433/geulmoheom
+      JWT_SECRET: ci-secret-not-used-outside-github-actions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      # 로컬에서 돌리는 것과 **같은 명령**이다 (`api/pyproject.toml` `markers`).
+      - run: cd api && uv sync && uv run pytest -m '느린 or 실물'
 
   # web 의 **빠른 갈래**다 — lint · 단위 · **목을 태우는 E2E**. 셋 다 서버가 필요 없다.
   #
@@ -164,14 +235,23 @@ jobs:
   # 브랜치 보호에서 필수로 걸 유일한 체크.
   # api·web 은 변경 경로에 따라 skip 되므로 직접 필수로 걸면 안 된다 —
   # docs 만 바꾼 PR이 보고되지 않은 체크를 기다리며 영구히 막힐 수 있다.
+  #
+  # **느린 잡(`api-slow`)도 물린다.** 밖에 두면 **그 잡만 빨간 채로 몇 주가 갈 수 있다** —
+  # 여기가 유일한 집계 지점이고, 이 저장소가 반복해서 밟은 것이 「검사가 있다」와
+  # 「검사가 돌았다」의 차이였다. skip 은 failure·cancelled 가 아니라 그대로 통과하므로
+  # **경로 필터로 건너뛴 커밋은 여전히 초록**이다.
+  # **⏳ 그래서 결제가 풀린 첫 실행에 이것이 빨개질 수 있다. 그것이 의도다** —
+  # 안 보이는 것보다 빨간 것이 낫다.
   all-green:
-    needs: [changes, api, web, contracts]
+    needs: [changes, api, api-slow, web, contracts]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 잡 결과 집계
         run: |
-          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  web=${{ needs.web.result }}  contracts=${{ needs.contracts.result }}"
+          # **`needs.api-slow` 로 쓰면 안 된다** — 식 안에서 `-` 는 뺄셈이라
+          # `needs.api` 에서 `slow` 를 빼려 들고 값이 조용히 빈다. 대괄호로 집는다.
+          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  api-slow=${{ needs['api-slow'].result }}  web=${{ needs.web.result }}  contracts=${{ needs.contracts.result }}"
           if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
             echo "::error::실패한 잡이 있습니다"; exit 1
           fi
