@@ -128,3 +128,19 @@ test("마우스를 올리면 바탕이 바뀐다 — 올려도 아무 일이 없
   // **바뀌는 데 시간이 걸린다** — `transition-colors` 가 붙어 있다.
   await expect.poll(바탕).not.toBe(올리기전);
 });
+
+test("홈 화면 앱으로 열리지 않는다 — 매니페스트도 서비스워커도 없다", async ({ page }) => {
+  // **⭐ 셋 중 `appleWebApp` 이 핵심이다** (`adr/0014` 결정 1).
+  // **홈 화면 추가 자체는 못 막는다** — Safari 공유 메뉴는 무엇을 지우든 거기 있다.
+  // **막을 수 있는 것은 「그것이 격리된 컨텍스트로 열리는 것」**이고, 그 스위치가 이 메타다.
+  // 없으면 iOS 가 홈 화면 아이콘을 **Safari 탭으로 열어** 쿠키가 공유되고,
+  // **1회용 코드 함정이 존재하지 않게 된다.** 아이가 추가해도 **아무 일도 안 일어나는 상태**가 목표다.
+  await page.goto("/");
+
+  await expect(page.locator('link[rel="manifest"]')).toHaveCount(0);
+  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveCount(0);
+  // **`mobile-web-app-capable` 도 본다** — Next 가 `appleWebApp` 과 함께 내던 짝이고,
+  // 하나만 지우면 **안드로이드 쪽에서 같은 일이 남는다.**
+  await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveCount(0);
+  expect((await page.request.get("/sw.js")).status()).toBe(404);
+});

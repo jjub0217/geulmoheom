@@ -17,9 +17,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// 매니페스트는 src/app/manifest.ts 가 만들고 <link rel="manifest"> 도 Next 가 넣는다.
-// 여기에는 매니페스트가 덮지 못하는 것만 둔다 — iOS 는 홈 화면 추가에 매니페스트가 아니라
-// apple-* 메타 태그와 apple-touch-icon 을 본다. 태블릿에 iPad 가 포함되므로 필요하다.
+// **매니페스트도 apple-* 메타도 없다** (2026-09-14, `adr/0014`).
+// 홈 화면 추가 자체는 못 막는다 — Safari 공유 메뉴는 무엇을 지우든 거기 있다.
+// **막을 수 있는 것은 「그것이 격리된 컨텍스트로 열리는 것」**이고 그 스위치가 `appleWebApp` 이었다.
+// 없으면 iOS 가 홈 화면 아이콘을 **Safari 탭으로 열어 쿠키가 공유되고**,
+// **1회용 코드 함정이 존재하지 않게 된다.** 추가해도 **아무 일도 안 일어나는 상태**가 목표다.
+//
+// **아이콘은 남긴다** — 탭 파비콘과 링크 미리보기에 쓰이고, 그건 설치와 무관하다.
 export const metadata: Metadata = {
   title: {
     default: 앱.이름,
@@ -27,11 +31,6 @@ export const metadata: Metadata = {
   },
   description: 앱.설명,
   applicationName: 앱.이름,
-  appleWebApp: {
-    capable: true,
-    title: 앱.이름,
-    statusBarStyle: "default",
-  },
   icons: {
     icon: [
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
@@ -42,13 +41,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // 상태바 색은 실제 배경과 맞춘다 — globals.css 의 --background 와 같은 값이다.
-  // 어긋나면 홈 화면에서 띄웠을 때 상태바만 다른 색으로 뜨며 경계선이 보인다.
+  // 상태바·브라우저 크롬 색을 실제 배경과 맞춘다 — globals.css 의 --background 와 같은 값이다.
+  // **홈 화면 앱을 버린 뒤에도 남긴다** — 모바일 브라우저가 주소창을 이 색으로 칠한다.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#F6EADB" },
     { media: "(prefers-color-scheme: dark)", color: "#1B527A" },
   ],
-  // 홈 화면에서 띄운 iPad 의 노치·홈 인디케이터 영역까지 배경을 깔기 위한 것.
+  // 노치·홈 인디케이터 영역까지 배경을 깔기 위한 것. **가로 모드 탭에서도 그대로 걸린다.**
   viewportFit: "cover",
   // 확대를 막지 않는다.
   initialScale: 1,
