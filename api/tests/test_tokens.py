@@ -19,9 +19,7 @@ from app.tokens import ALGORITHM, issue, 수명
 
 
 def _남은시간(토큰: str) -> timedelta:
-    청구 = jwt.decode(
-        토큰, get_settings().jwt_secret.get_secret_value(), algorithms=[ALGORITHM]
-    )
+    청구 = jwt.decode(토큰, get_settings().jwt_secret.get_secret_value(), algorithms=[ALGORITHM])
     return datetime.fromtimestamp(청구["exp"], UTC) - datetime.now(UTC)
 
 

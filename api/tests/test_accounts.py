@@ -380,9 +380,7 @@ async def test_남의_자녀는_404_다(client: TestClient, 자녀행: Child):
 # ── 공용 브라우저 — 아이가 들어오면 부모 세션이 끊긴다 (`adr/0014` 결정 3) ──
 
 
-def test_아이가_들어오면_부모_쿠키가_지워진다(
-    client: TestClient, 학부모행: Parent, 접속코드: str
-):
+def test_아이가_들어오면_부모_쿠키가_지워진다(client: TestClient, 학부모행: Parent, 접속코드: str):
     """**공용 브라우저에서 아이가 학부모 화면에 닿는 길을 닫는다** (`adr/0014` 결정 3).
 
     웹으로 열면서 기기 분리가 없어졌다. 집 데스크탑 하나에 부모 쿠키와 아이 쿠키가

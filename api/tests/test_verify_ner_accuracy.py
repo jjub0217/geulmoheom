@@ -15,10 +15,7 @@ from scripts.verify_ner_accuracy import 가려야하는것, 경계, 맞았나, �
 def test_표적이_문장에_실제로_들어_있다():
     """**이 파일이 있는 이유다.** 표적이 문장에 없으면 그 사례는 늘 통과다."""
     엉터리 = [
-        f"{사례.출처}/{표}"
-        for 사례 in 가려야하는것
-        for 표 in 사례.표적
-        if 표 not in 사례.문장
+        f"{사례.출처}/{표}" for 사례 in 가려야하는것 for 표 in 사례.표적 if 표 not in 사례.문장
     ]
 
     assert 엉터리 == []
