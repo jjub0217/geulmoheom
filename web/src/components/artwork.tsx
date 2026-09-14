@@ -62,7 +62,7 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
         <p
           data-대기대사
           className="absolute inset-0 flex items-center justify-center p-6
-            text-center text-xl/relaxed tablet:text-2xl/relaxed"
+            text-center text-xl/relaxed wide:text-2xl/relaxed"
         >
           {대기대사}
         </p>

@@ -25,7 +25,7 @@ export function GuideFigure({ guide }: { guide: Guide }) {
         // 배경이 옅은 회색 단색(알파 없음)이라 액자처럼 둥근 사각형 안에 그대로 둔다.
         // 알파본은 W3 에서 뽑는다 (`compass_bright` 는 빛이 배경으로 번져 있어 재생성이 필요할 수 있다).
         className="size-28 shrink-0 rounded-2xl border-2 border-brass/30 object-cover
-          tablet:size-44"
+          wide:size-44"
         priority
       />
       {/* 말풍선이 아니라 그냥 대사다 — 서버 문자열을 그대로 읽는다. */}

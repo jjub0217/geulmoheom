@@ -142,7 +142,7 @@ export default function BookScreen() {
             // **한 장씩 세로로 쌓는다.** 태블릿 가로에서는 두 칸이다 —
             // 책장을 넘기는 연출을 넣지 않는다: 다시 보러 오는 자리지 머무는 자리가 아니다.
             <>
-              <div className="grid gap-8 tablet:grid-cols-2">
+              <div className="grid gap-8 wide:grid-cols-2">
                 {screen.book.pages.map((page) => (
                   <BookPageFrame key={page.page_no} page={page} />
                 ))}

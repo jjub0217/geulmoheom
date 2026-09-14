@@ -29,7 +29,7 @@ export function SceneCard({
 }) {
   return (
     <section className="flex flex-col gap-8">
-      <p className="text-2xl/relaxed tablet:text-3xl/relaxed">{card.situation}</p>
+      <p className="text-2xl/relaxed wide:text-3xl/relaxed">{card.situation}</p>
       {children}
     </section>
   );
