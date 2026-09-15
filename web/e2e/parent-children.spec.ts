@@ -139,7 +139,7 @@ test("아이를 추가하면 접속 코드가 그 자리에서 뜬다", async ({
   // **본 그 순간에 말해야 한다.** 나중에 다시 열어보려 하는 것이 실제 실패 모드다.
   await expect(코드칸(page)).toContainText(접속코드.한번만);
   // 아이 화면(3.2)이 막아주지만 **먼저 알면 아이가 그 벽을 안 만난다.**
-  await expect(코드칸(page)).toContainText(접속코드.홈화면앱);
+  await expect(코드칸(page)).toContainText(접속코드.같은주소);
 });
 
 test("재발급 경고는 누르기 전에 보인다 — 끊기는 것이 기기라 버튼 옆 한 줄이다", async ({
