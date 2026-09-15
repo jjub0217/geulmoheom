@@ -194,3 +194,39 @@ test("책도 같은 뿌리다 — 403 이면 표식 없이 인증 화면으로 �
   expect(new URL(page.url()).searchParams.has("kicked")).toBe(false);
   await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toHaveCount(0);
 });
+
+/**
+ * **⛔ 2026-09-15 운영에서 나왔다** (`주차계획/W6.md` **15번** · 잠금 조건 ①).
+ *
+ * **무료 티어가 15분 놀면 내려가고, 깨어나는 시간이 앞단이 기다려 주는 시간보다 길다** —
+ * 백엔드가 한 판 돌리다 **502 를 두 번** 밟았다(`POST /parents/children` · `POST /attempts`).
+ * **「느리다」가 아니라 「죽는다」**였고 **그날 첫 아이가 그것을 본다.**
+ *
+ * **여기서 재는 것은 「깨운다」가 아니라 「깨우다 죽어도 화면이 멀쩡하다」**다 —
+ * **502 로 죽는 것이 정상 경로**이고, 그것이 화면에 새면 **아이가 영문 모를 오류를 본다.**
+ */
+test("화면이 뜨면 식은 서버를 깨운다 — 그 요청이 502 로 죽어도 화면은 멀쩡하다", async ({
+  page,
+}) => {
+  const 깨움: string[] = [];
+  await page.route("**/healthz", (route) => {
+    깨움.push(route.request().method());
+    // **앞단이 기다리다 포기한 모양 그대로** 돌려준다.
+    return route.fulfill({ status: 502, contentType: "text/html", body: "Bad Gateway" });
+  });
+  await 안들어온상태(page);
+
+  await page.goto("/");
+
+  // **화면은 제 갈 길을 간다.** 깨우기가 죽은 것이 여기 새면 안 된다.
+  await page.waitForURL("**/child/auth");
+  await expect(page.getByLabel(코드입력.라벨)).toBeVisible();
+  await expect(본문(page).getByText("Bad Gateway")).toHaveCount(0);
+  for (const 새면안되는말 of ["502", "Gateway", "healthz"]) {
+    expect(await page.locator("body").innerText()).not.toContain(새면안되는말);
+  }
+
+  // **한 번은 쳤다.** `GET` 이다 — 깨우기가 무엇을 바꾸면 안 된다.
+  expect(깨움.length).toBeGreaterThanOrEqual(1);
+  expect(new Set(깨움)).toEqual(new Set(["GET"]));
+});

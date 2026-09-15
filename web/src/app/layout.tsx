@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
+import { Waker } from "@/components/wake";
 
 import { 앱 } from "./app-copy";
 
@@ -69,6 +70,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-dvh flex-col">
         {children}
         <ServiceWorkerRegistrar />
+        {/* **식은 서버를 깨운다** (`lib/wake.ts` · W6 15번). **아무것도 안 그린다.**
+            모든 화면에 붙는 이유는 **다음 요청이 502 로 죽는 것이 어느 화면에서나 같기** 때문이다. */}
+        <Waker />
       </body>
     </html>
   );

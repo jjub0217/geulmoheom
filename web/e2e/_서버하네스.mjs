@@ -194,7 +194,9 @@ console.log(`[하네스] web 127.0.0.1:${웹포트}`);
 // **생소켓으로 쓰지 않는다.** 직접 HTTP 를 써 보내면 청크 인코딩·연결 재사용을 우리가 떠안고,
 // **틀리면 제품이 아니라 하네스가 만든 실패**가 난다. `http.request` 가 그것을 안다.
 const 프록시 = createServer((요청, 응답) => {
-  const api로 = 요청.url.startsWith("/api/");
+  // **`/healthz` 도 api 로 넘긴다** — 운영 `vercel.json` 과 같은 모양이다 (2026-09-15).
+  // **로컬과 운영이 같은 길을 써야** 「깨우기가 안 간다」를 여기서 잡을 수 있다.
+  const api로 = 요청.url.startsWith("/api/") || 요청.url === "/healthz";
   const 뒤 = httpRequest(
     {
       host: "127.0.0.1",

@@ -167,6 +167,27 @@ export async function apiDelete(path: string): Promise<void> {
   await request<void>(path, { method: "DELETE" });
 }
 
+/**
+ * **식은 서버를 깨운다** (`src/lib/wake.ts` 에 이유가 있다 · `주차계획/W6.md` 15번).
+ *
+ * **⛔ 위 `api*` 들과 다른 함수인 것이 요점이다.** 그것들은 **응답을 읽고 오류를 던진다** —
+ * 그러면 화면이 그 오류를 그린다. **이건 깨우기라 응답을 안 보고 예외도 삼킨다.**
+ * **502 로 죽는 것이 정상 경로**다 (앞단이 기다려 주는 시간보다 기동이 길다).
+ *
+ * **⛔ 주소가 `/api/v1` 밖이다.** 이 하나만 **api 루트의 `/healthz`** 이고,
+ * 운영에서는 `vercel.json` 의 rewrite 가, 로컬에서는 `e2e/_서버하네스.mjs` 가 같은 모양으로 넘긴다.
+ * **`/api/v1/healthz` 는 없다** — 그쪽으로 쳐도 서버는 깨지만 **없는 주소를 부르는 코드는
+ * 다음 사람이 오타로 읽는다.**
+ *
+ * **아무것도 돌려주지 않는다** — 부르는 쪽이 기다릴 이유가 없다.
+ */
+export function apiWake(): void {
+  // **`credentials` 를 안 싣는다.** 깨우기에 쿠키가 갈 이유가 없다.
+  void fetch("/healthz", { method: "GET", cache: "no-store" }).catch(() => {
+    // **삼킨다.** 실패가 정상 경로이고, 여기서 남기면 **아이 화면에 오류가 생긴다.**
+  });
+}
+
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   // **try 밖에서 만든다.** 안에서 던지면 아래 catch 가 NetworkError 로 덮어써서
   // 「설정이 없다」가 「서버에 못 닿음」으로 둔갑한다 — 원인을 삼키는 그 모양 그대로다.
