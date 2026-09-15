@@ -1,4 +1,4 @@
-.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check test lint clean
+.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check check-prod test lint clean
 
 # ── 로컬 인프라 ──────────────────────────────────────────
 # -p geulmoheom 을 반드시 붙인다. compose 는 파일의 상위 폴더 이름을 프로젝트로 쓰는데,
@@ -165,6 +165,12 @@ contracts-check:
 		echo "명세가 바뀌었는데 재생성물이 커밋되지 않았다."; \
 		echo "→ make dev-api 를 띄운 뒤 make contracts, 그리고 web/src/api/types.gen.ts 를 커밋한다."; \
 		exit 1; }
+
+# 운영 두 곳이 지금 무엇을 내보내는지 잰다 (`주차계획/W6.md` 11번).
+# **배포 뒤에 사람이 부른다. CI 에 얹지 않는다** — 운영이 잠깐 잠든 새벽에 빨개지면
+# 아무도 안 본다. 기준은 W6 완료 판정 1·2·3 이고 **여기서 새로 정하는 것이 없다.**
+check-prod:
+	@bash infra/check-prod.sh
 
 # ── 품질 ────────────────────────────────────────────────
 test:
