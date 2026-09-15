@@ -226,6 +226,14 @@ test("코드를 보내는 동안 기다린다고 말한다 — 식은 서버는 
   // **보내는 동안 화면이 말한다.** 이 줄이 없으면 아이는 **눌렸는지조차 모른다.**
   await expect(page.locator("[data-확인중]")).toHaveText(상태표시.확인중);
 
+  // **⛔ 끝까지 붙어 있어야 한다** (백엔드 지적, 2026-09-15). 3초쯤 떴다 사라지면
+  // **33초짜리 침묵이 30초로 줄 뿐**이다. **6초를 실제로 기다려 본다** — 어딘가에
+  // 타임아웃이나 자동 숨김이 생기면 여기서 걸린다.
+  await page.waitForTimeout(6000);
+  await expect(page.locator("[data-확인중]")).toBeVisible();
+  // 그 동안 **쓴 코드도 그대로 남아 있다** — 사라지면 아이는 다시 쳐야 한다.
+  await expect(page.getByLabel(코드입력.라벨)).toHaveValue("123456");
+
   await expect.poll(() => 풀어준다 !== null).toBe(true);
   풀어준다!();
 
