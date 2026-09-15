@@ -38,7 +38,15 @@
 
 ## 커밋하기 전
 
-- `uv run ruff check . && uv run pytest` — **로컬에서 먼저 돌린다.** CI는 `main` push 후에 도는 사후 통보다
+- `make -C .. lint && uv run pytest` — **로컬에서 먼저 돌린다.** CI는 `main` push 후에 도는 사후 통보다
+  - **`ruff check` 를 직접 부르지 않는다.** 종전 줄에는 `ruff format --check` 이 빠져 있었고,
+    2026-09-14 에 **포맷만 틀린 커밋이 이 줄을 통과해** `main` 의 `make lint` 가 빨갰다.
+    같은 검사가 **Makefile · `ci.yml` · 여기 셋**에 따로 적혀 있어 한 곳이 빠진 것이라,
+    **한 곳(루트 Makefile `lint`)을 가리킨다** — 검사가 늘 때 고칠 자리가 하나다
+  - **`-C ..` 가 붙는 이유.** Makefile 은 저장소 루트에 있고 make 는 상위를 안 뒤진다 —
+    `api/` 에서 그냥 `make lint` 를 부르면 `No rule to make target` 로 죽는다 (2026-09-15 실측)
+  - **`web` 의 eslint 도 같이 돈다** (둘 합쳐 6초). 백엔드만 고쳤어도 그렇다 —
+    **타깃 하나를 가리키는 값**이고, 공용 `main` 이라 어차피 봐야 하는 것이다
 - `main`은 프론트와 공용이다. **반쯤 된 것을 올리지 않는다** — `api`가 깨지면 프론트의 `make contracts`가 실패한다
 
 ## api-requests — **휴면이다** (2026-09-06~)
