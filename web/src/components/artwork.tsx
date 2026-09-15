@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { 결과액자최대높이, 액자자리 } from "@/lib/artwork-frame";
+import { 결과액자최대높이, 빈자리비율, 액자자리 } from "@/lib/artwork-frame";
 import { useState } from "react";
 
 import { 대기대사하나 } from "@/components/artwork-copy";
@@ -34,6 +34,18 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
   const [대기대사] = useState(대기대사하나);
 
   /**
+   * **온 그림이 자기 비율을 말한다** (`Stage0.md` 5절, 2026-09-15 개정 · `adr/0015`).
+   *
+   * **두 모양이 공존한다** — 갓 구운 것은 `1024×1024`, **못 구웠을 때 조합 파일은 0.58** 이고
+   * **폴백은 버그가 아니라 설계된 경로**다. 그래서 **상수 하나로는 못 맞춘다** —
+   * 2026-09-15 운영 실측에서 **정사각형 그림이 세로 상자에 갇혀 위아래 빈 띠**가 생겼다.
+   *
+   * **잰 주소를 같이 들고 있는다** — 다음 그림이 오면 **앞 그림의 비율이 잠깐 남는 일**이
+   * 없어야 한다. 주소가 다르면 다시 `빈자리비율` 이다.
+   */
+  const [잰것, set잰것] = useState<{ url: string; 비율: number } | null>(null);
+
+  /**
    * **못 받았으면 자리를 통째로 뺀다.** 빈 액자를 남기면 아이가 「여기 그림이 있어야 하는데
    * 없다」로 읽는데, 그건 **실패 화면을 안 만든다는 결정을 연출로 뒤집는 것**이다.
    *
@@ -41,6 +53,9 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
    * 그때도 등급·가이드 대사는 그대로 그린다 — 그림만 없다.
    */
   if (상태.kind === "못받음") return null;
+
+  const 지금주소 = 상태.kind === "떴다" ? 상태.url : null;
+  const 비율 = 잰것 !== null && 잰것.url === 지금주소 ? 잰것.비율 : 빈자리비율;
 
   return (
     // **기다리는 동안에도 같은 크기의 자리를 잡아둔다.** 그림이 뜨는 순간 아래 것들이
@@ -52,7 +67,8 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
       data-삽화자리
       // **상자를 그림에 맞춘다** (`lib/artwork-frame.ts` · `Stage0.md` 5절).
       // 전에는 `aspect-4/3` 가로 상자였고 **위아래 각 28% 가 잘려 나갔다.**
-      style={액자자리(결과액자최대높이)}
+      // **오기 전에는 `빈자리비율`(1:1), 온 뒤에는 그 그림의 실제 비율**이다 (2026-09-15).
+      style={액자자리(비율, 결과액자최대높이)}
       // **`mx-auto` 가 필요하다** — 폭 상한이 걸리면 flex 열에서 왼쪽으로 붙는다.
       className="relative mx-auto w-full overflow-hidden rounded-3xl bg-vest/10"
     >
@@ -83,6 +99,14 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
           // 틀렸을 때 **눈에 보이는 쪽**을 고른다.
           className="object-contain"
           sizes="(min-width: 64rem) 50vw, 100vw"
+          // **그림이 자기 모양을 말하는 자리다.** 여기서 재지 않으면 상자가 계약 상수에
+          // 갇히고, **모양이 바뀌는 날 아이 그림이 빈 띠 사이에 작게 앉는다.**
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+              set잰것({ url: 상태.url, 비율: img.naturalWidth / img.naturalHeight });
+            }
+          }}
           priority
         />
       )}

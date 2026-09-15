@@ -1,8 +1,11 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { TierBadge } from "@/components/tier-badge";
-import { 액자자리 } from "@/lib/artwork-frame";
+import { 빈자리비율, 액자자리 } from "@/lib/artwork-frame";
 
 type BookPage = components["schemas"]["BookPage"];
 
@@ -19,6 +22,8 @@ type BookPage = components["schemas"]["BookPage"];
  * 책은 **문장 자체를 두는 자리**다. 계약도 `highlights` 를 여기 안 준다.
  */
 export function BookPageFrame({ page }: { page: BookPage }) {
+  /** **온 그림이 자기 비율을 말한다** — 오기 전에는 `빈자리비율`(1:1). 결과 화면과 같은 규칙이다. */
+  const [비율, set비율] = useState(빈자리비율);
   return (
     <article className="flex flex-col gap-5 rounded-3xl border-2 border-brass/30 p-5">
       {/* **`artwork_url` 은 `ready` 인 것만 온다** — 굽는 중에 책을 열면 `null` 이다.
@@ -28,7 +33,10 @@ export function BookPageFrame({ page }: { page: BookPage }) {
         // **결과 화면과 같은 액자다** (`lib/artwork-frame.ts`). 높이 상한은 안 건다 —
         // 여기는 세로로 넘기는 목록이라 **한 화면에 다 들어와야 하는 자리가 아니다.**
         <div
-          style={액자자리()}
+          // **결과 화면과 같은 규칙이다** — 오기 전 `빈자리비율`, 온 뒤 그 그림의 실제 비율
+          // (`Stage0.md` 5절, 2026-09-15). **책에는 두 모양이 섞여 쌓인다** —
+          // 갓 구운 것(1:1)과 못 구웠을 때의 조합 파일(0.58)이 같은 목록에 온다.
+          style={액자자리(비율)}
           className="relative w-full overflow-hidden rounded-2xl bg-vest/10"
         >
           <Image
@@ -42,6 +50,12 @@ export function BookPageFrame({ page }: { page: BookPage }) {
             // **한 번 잘린 그림이 계속 잘린 채로 쌓인다.**
             className="object-contain"
             sizes="(min-width: 64rem) 33vw, 100vw"
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                set비율(img.naturalWidth / img.naturalHeight);
+              }
+            }}
           />
         </div>
       )}

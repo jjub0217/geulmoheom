@@ -830,7 +830,16 @@ test("보내기가 못 닿으면 쓴 문장을 지킨다 — 화면을 넘기지
  * 검사가 같이 따라가서 **초록으로 지나간다** — 2026-09-08 에 실제로 그랬다.
  * **검사가 자기가 재려는 것을 자기한테서 가져오면 아무것도 안 재는 것이다.**
  */
-const 계약비율 = 784 / 1353;
+/**
+ * **⛔ 2026-09-15 에 바뀌었다** (`Stage0.md` 5절 개정 · `adr/0015`). 종전에는 **계약 상수
+ * 0.58** 을 기대했는데, **갓 구운 그림은 `1024×1024`(1:1)이고 조합 파일 폴백만 0.58** 이다.
+ * **한 상수로는 못 맞춘다** — 운영 실측에서 **정사각형 그림이 세로 상자에 갇혀 빈 띠**가 생겼다.
+ *
+ * **이제 규칙은 「온 그림의 실제 비율이 이긴다」**이고, 픽스처가 **1×1** 이라 여기서는 **1** 이다.
+ * **비정사각이 오면 어떻게 되는지는 아래 전용 검사**가 본다 — 정사각 픽스처만으로는
+ * **상수를 1 로 바꿔 박아도 통과**해서 아무것도 안 잰다.
+ */
+const 픽스처비율 = 1;
 
 /**
  * 액자 비율 (2026-09-08 · W4).
@@ -873,7 +882,7 @@ test("액자가 그림 비율이다 — 아이 그림을 자르지 않는다", a
   // `lib/artwork-frame.ts` 한 자리에만 있다.
   const 자리 = await 액자.boundingBox();
   expect(자리).not.toBeNull();
-  expect(자리!.width / 자리!.height).toBeCloseTo(계약비율, 2);
+  expect(자리!.width / 자리!.height).toBeCloseTo(픽스처비율, 2);
 
   // **`cover` 면 안 된다.** 상자가 그림 비율이라 지금은 결과가 같지만,
   // **계약이 비율을 강제하지 않으므로** 다른 비율이 오는 날 `cover` 는 말없이 자른다.
@@ -919,7 +928,7 @@ test("그림이 화면을 다 먹지 않는다 — 아래 것들이 접히면 �
 
   // **비율은 그대로다.** 높이를 `max-height` 로 자르면 상자가 옆으로 퍼져
   // 그림이 레터박스로 앉는다 — 그래서 폭 상한으로 환산해서 건다.
-  expect(자리.width / 자리.height).toBeCloseTo(계약비율, 2);
+  expect(자리.width / 자리.height).toBeCloseTo(픽스처비율, 2);
 
   // 액자 바로 아래 등급 배지가 **스크롤 없이 보인다.**
   const 배지 = (await page.locator("main [data-티어배지]").boundingBox())!;
@@ -964,7 +973,7 @@ test("낮은 화면에서도 액자가 비율을 지킨다 — 실기기가 여�
 
   // **높이가 눌리면 안 된다.** 액자 안에는 흐름에 있는 것이 없어서(`Image fill` 은 절대 배치)
   // **`min-height:auto` 가 0 으로 풀리고**, 세로 flex 가 꽉 차면 **비율을 이기고 찌그러뜨린다.**
-  expect(자리.width / 자리.height).toBeCloseTo(계약비율, 2);
+  expect(자리.width / 자리.height).toBeCloseTo(픽스처비율, 2);
 });
 
 test("이미 구워진 그림은 그 자리에서 뜬다 — 3초를 기다리지 않는다", async ({ page }) => {
@@ -1432,3 +1441,86 @@ async function 보낸것을받으며결과까지(page: Page, 되묻기 = { 할�
   await expect(page.locator("[data-다음장면]")).toBeVisible();
   return 보낸것;
 }
+
+/** **2×1 가로 그림.** 정사각 픽스처만으로는 「실제 비율을 따른다」를 못 잰다. */
+const PNG_2X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGM4UWEDRAALgwL5Z6uxbgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/**
+ * **⛔ 2026-09-15 운영 실측에서 나왔다** (`Stage0.md` 5절 개정 · `adr/0015` · W6 25번).
+ *
+ * **유료 한 판을 돌려 받은 그림이 `1024×1024` 정사각형**이었는데 **액자는 0.58 세로 상자**라
+ * **그림이 폭에 갇혀 위아래로 빈 띠**가 생겼다. **자르지는 않지만 보상이 눈에 띄게 작아진다** —
+ * 「그림이 보상 그 자체」를 하루 종일 지켜 놓고 **액자가 그것을 깎고 있었다.**
+ *
+ * **⛔ 1:1 로 상수만 갈면 안 된다** — **조합 파일 폴백(0.58)은 버그가 아니라 설계된 경로**라
+ * (`adr/0015`) **그때마다 틀린 액자에 앉는다. 결함이 반대로 뒤집힐 뿐**이다.
+ * **그래서 규칙은 「온 그림의 실제 비율이 이긴다」**이고, **이 검사가 그 규칙을 잰다.**
+ */
+test("액자가 온 그림의 비율을 따른다 — 상수를 박지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await page.route(ATTEMPTS, (route) => route.fulfill({ status: 200, json: 결과() }));
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  // **가로로 긴 그림을 준다.** 계약 상수(0.58)도 빈자리 값(1:1)도 아닌 모양이라,
+  // **둘 중 어느 것을 박아도 이 검사는 빨개진다.**
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_2X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  const 액자 = page.locator("main [data-삽화자리]");
+  await expect(액자).toBeVisible();
+  // **그림이 뜬 뒤에 잰다** — 오기 전에는 빈자리(1:1)가 맞다.
+  await expect(page.locator(`main img[src="${ARTWORK_URL}"]`)).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const 자리 = (await 액자.boundingBox())!;
+      return Math.round((자리.width / 자리.height) * 100) / 100;
+    })
+    .toBeCloseTo(2, 1);
+});
+
+test("그림이 오기 전 빈 자리는 1:1 이다 — 평시 경로의 모양이다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await page.route(ATTEMPTS, (route) => route.fulfill({ status: 200, json: 결과() }));
+  // **계속 굽는 중으로 둔다.** 이 상태가 「자리를 비워 두는」 그 자리다.
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "pending",
+        url: null,
+        tier: null,
+        fallback: null,
+      } as unknown as components["schemas"]["Artwork"],
+    }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  const 액자 = page.locator("main [data-삽화자리]");
+  await expect(액자).toBeVisible();
+  const 자리 = (await 액자.boundingBox())!;
+  // **레이아웃이 안 튀는 것이 목적이다** — 그림이 오면 그때 실제 비율로 바뀐다.
+  expect(자리.width / 자리.height).toBeCloseTo(1, 2);
+});
