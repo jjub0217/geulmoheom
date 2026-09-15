@@ -1,4 +1,5 @@
-.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check check-prod check-copy test lint clean
+.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check check-prod check-copy \
+	test test-api test-api-slow test-web lint lint-api lint-web clean
 
 # ── 로컬 인프라 ──────────────────────────────────────────
 # -p geulmoheom 을 반드시 붙인다. compose 는 파일의 상위 폴더 이름을 프로젝트로 쓰는데,
@@ -179,13 +180,35 @@ check-copy:
 	@node infra/check-copy.mjs
 
 # ── 품질 ────────────────────────────────────────────────
-test:
-	cd api && uv run pytest
-	cd web && $(PNPM) test
+# **검사를 여기 한 번만 적는다.** 같은 명령이 `Makefile`·`.github/workflows/ci.yml`·
+# `api/CLAUDE.md` 셋에 따로 적혀 있었고, 2026-09-14 에 **한 곳에서 `ruff format --check`
+# 이 빠진 채로 포맷만 틀린 커밋 둘이 관문을 통과했다.** `main` 의 `make lint` 가 빨갰고
+# **사람이 찾기 전까지 아무 빨간불도 없었다.**
+#
+# **그래서 패키지별 타깃을 따로 둔다** — CI 는 잡이 갈려 있어(`api` 잡에 node·pnpm 이
+# 없다) `lint` 를 통째로 못 부른다. **갈래를 CI 가 자기 명령으로 적는 대신 여기서 준다.**
+# 사람이 부르는 것은 여전히 `make lint` · `make test` 하나다.
+lint: lint-api lint-web
 
-lint:
+lint-api:
 	cd api && uv run ruff check . && uv run ruff format --check .
+
+lint-web:
 	cd web && $(PNPM) lint
+
+test: test-api test-web
+
+test-api:
+	cd api && uv run pytest
+
+# **빠른 갈래와 섞지 않는다** (`api/pyproject.toml` `markers` · `ci.yml` 의 `api-slow`).
+# `느린` 은 uvicorn 을 진짜로 띄우고(Postgres·Redis 필요), `실물` 은 진짜 Google 로
+# 나가지만 **못 쓰는 키로** 나가 **거절을 재는 것이라 돈이 안 든다.**
+test-api-slow:
+	cd api && uv run pytest -m '느린 or 실물'
+
+test-web:
+	cd web && $(PNPM) test
 
 clean:
 	rm -rf web/.next api/.pytest_cache api/.ruff_cache
