@@ -34,7 +34,12 @@ jobs:
             # 조용히 낡고, 그때 깨진 것을 잡을 장치가 다시 없어진다. 실제로 2026-09-07 에
             # 목록을 세어 보니 셋인 줄 알았던 것이 다섯이었고 `MVP_PRD.md` 는 두 모듈이
             # 읽고 있었다. 문서 커밋마다 api 테스트가 도는 값이 그 위험보다 싸다.
-            api: ['api/**', 'infra/**', 'docs/**']
+            # **`Makefile` 과 이 파일도 넣는다** (2026-09-15). `api`·`api-slow` 잡이
+            # **검사 명령을 `make` 타깃으로 부르게 되면서** 그 타깃이 여기 밖에서 바뀔 수
+            # 있게 됐다 — 안 넣으면 **타깃을 깨뜨린 커밋에서 이 잡이 아예 안 돌고**,
+            # 다음에 누가 `api/` 를 건드릴 때까지 깨진 줄 모른다.
+            # **`contracts` 가 같은 이유로 이미 그렇게 하고 있다**(바로 아래 줄).
+            api: ['api/**', 'infra/**', 'docs/**', 'Makefile', '.github/workflows/ci.yml']
             web: ['web/**']
             contracts: ['api/**', 'web/**', 'Makefile', '.github/workflows/ci.yml']
             # **`docs/문구.md` 를 넣는다.** 문서가 먼저 바뀌는 것이 정상 순서이고,
@@ -43,7 +48,12 @@ jobs:
             # 건드릴 때까지 아무도 모른다. **그게 우리가 고치려는 실패 그 자체다.**
             # **⚠ 대신 검사는 절대 「문서를 고쳐라」라고 말하지 않는다** — 빨간불의 뜻은
             # 언제나 「코드가 아직 안 따라왔다」다 (infra/check-copy.mjs 머리말).
-            copy: ['web/src/**', 'api/app/errors.py', 'docs/문구.md', 'infra/check-copy.mjs']
+            # **`Makefile` 이 여기에도 들어간다** — 이 잡은 `make check-copy` 를 **이름으로**
+            # 부른다. 이름이 바뀌면 `No rule to make target` 으로 죽는데, **이 잡은 경로
+            # 필터에 걸려 안 도는 날이 많아** 깨진 줄 모르고 며칠 간다. **그게 이 검사가
+            # 막으려던 실패와 같은 모양**이다 (2026-09-15 프론트·PM 지적).
+            copy:
+              ['web/src/**', 'api/app/errors.py', 'docs/문구.md', 'infra/check-copy.mjs', 'Makefile']
 
   # api 테스트는 **진짜 Postgres 를 쓴다** (2026-09-07, E-3). 계정·접속 코드·폐기가
   # DB 위에 서 있어, DB 없이 도는 테스트만 남기면 그 셋이 CI 에서 안 돈다.
