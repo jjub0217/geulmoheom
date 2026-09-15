@@ -19,6 +19,7 @@ jobs:
       api: ${{ steps.f.outputs.api }}
       web: ${{ steps.f.outputs.web }}
       contracts: ${{ steps.f.outputs.contracts }}
+      copy: ${{ steps.f.outputs.copy }}
     steps:
       - uses: actions/checkout@v4
       - id: f
@@ -36,6 +37,13 @@ jobs:
             api: ['api/**', 'infra/**', 'docs/**']
             web: ['web/**']
             contracts: ['api/**', 'web/**', 'Makefile', '.github/workflows/ci.yml']
+            # **`docs/문구.md` 를 넣는다.** 문서가 먼저 바뀌는 것이 정상 순서이고,
+            # **그 순간부터 화면은 옛말을 한다** — 넷 다 그 상태로 며칠에서 일주일 갔다.
+            # 여기서 빼면 **문서만 고친 커밋은 조용히 지나가고**, 다음에 누가 문구 파일을
+            # 건드릴 때까지 아무도 모른다. **그게 우리가 고치려는 실패 그 자체다.**
+            # **⚠ 대신 검사는 절대 「문서를 고쳐라」라고 말하지 않는다** — 빨간불의 뜻은
+            # 언제나 「코드가 아직 안 따라왔다」다 (infra/check-copy.mjs 머리말).
+            copy: ['web/src/**', 'api/app/errors.py', 'docs/문구.md', 'infra/check-copy.mjs']
 
   # api 테스트는 **진짜 Postgres 를 쓴다** (2026-09-07, E-3). 계정·접속 코드·폐기가
   # DB 위에 서 있어, DB 없이 도는 테스트만 남기면 그 셋이 CI 에서 안 돈다.
@@ -307,6 +315,25 @@ jobs:
       # 로컬에서 돌리는 것과 같은 타깃이다 (Makefile). uv sync 는 uv run 이 알아서 한다.
       - run: make contracts-check
 
+  # 화면 문구가 `docs/문구.md` 를 벗어났는지 (`주차계획/W6.md` 13번).
+  #
+  # **나흘에 넷이고 둘이 운영까지 갔다** — 하나는 **대표 승인된 프라이버시 고지**, 하나는
+  # **일주일째** 화면에 떠 있었다. **넷 다 사람이 우연히 찾았다.**
+  #
+  # **잡이 가볍다** — 의존성이 없고(노드 표준 라이브러리만) 파일 열한 개를 읽는다.
+  # 그래서 `web` 잡 안에 넣지 않고 갈라 둔다: **`api/app/errors.py` 와 `docs/문구.md` 가
+  # 바뀔 때도 돌아야 하는데**, `web` 잡의 경로 필터는 `web/**` 다.
+  copy:
+    needs: changes
+    if: needs.changes.outputs.copy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: web/.nvmrc }
+      # 로컬에서 돌리는 것과 **같은 타깃**이다 (Makefile).
+      - run: make check-copy
+
   # 브랜치 보호에서 필수로 걸 유일한 체크.
   # api·web 은 변경 경로에 따라 skip 되므로 직접 필수로 걸면 안 된다 —
   # docs 만 바꾼 PR이 보고되지 않은 체크를 기다리며 영구히 막힐 수 있다.
@@ -318,7 +345,7 @@ jobs:
   # **⏳ 그래서 결제가 풀린 첫 실행에 이것이 빨개질 수 있다. 그것이 의도다** —
   # 안 보이는 것보다 빨간 것이 낫다.
   all-green:
-    needs: [changes, api, api-slow, web, web-slow, contracts]
+    needs: [changes, api, api-slow, web, web-slow, contracts, copy]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -326,7 +353,7 @@ jobs:
         run: |
           # **`needs.api-slow` 로 쓰면 안 된다** — 식 안에서 `-` 는 뺄셈이라
           # `needs.api` 에서 `slow` 를 빼려 들고 값이 조용히 빈다. 대괄호로 집는다.
-          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  api-slow=${{ needs['api-slow'].result }}  web=${{ needs.web.result }}  web-slow=${{ needs['web-slow'].result }}  contracts=${{ needs.contracts.result }}"
+          echo "changes=${{ needs.changes.result }}  api=${{ needs.api.result }}  api-slow=${{ needs['api-slow'].result }}  web=${{ needs.web.result }}  web-slow=${{ needs['web-slow'].result }}  contracts=${{ needs.contracts.result }}  copy=${{ needs.copy.result }}"
           if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
             echo "::error::실패한 잡이 있습니다"; exit 1
           fi

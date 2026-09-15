@@ -1,4 +1,4 @@
-.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check check-prod test lint clean
+.PHONY: dev db-up db-down docker-있나 certs contracts contracts-check check-prod check-copy test lint clean
 
 # ── 로컬 인프라 ──────────────────────────────────────────
 # -p geulmoheom 을 반드시 붙인다. compose 는 파일의 상위 폴더 이름을 프로젝트로 쓰는데,
@@ -171,6 +171,12 @@ contracts-check:
 # 아무도 안 본다. 기준은 W6 완료 판정 1·2·3 이고 **여기서 새로 정하는 것이 없다.**
 check-prod:
 	@bash infra/check-prod.sh
+
+# 화면 문구가 `docs/문구.md` 를 벗어났는지 (`주차계획/W6.md` 13번).
+# **방향은 코드 → 문서 한쪽**이고, **빨간불의 뜻은 언제나 「코드가 아직 안 따라왔다」**다 —
+# 이 검사는 문서를 고치라고 말하지 않는다. 자세한 것은 스크립트 머리말.
+check-copy:
+	@node infra/check-copy.mjs
 
 # ── 품질 ────────────────────────────────────────────────
 test:
