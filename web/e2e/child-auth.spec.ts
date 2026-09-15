@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { 못닿음, 코드입력 } from "../src/app/child/auth/copy";
+import { 상태표시 } from "../src/app/status-copy";
 
 /**
  * 자녀 인증 화면 (E-3 프론트 짝).
@@ -200,4 +201,35 @@ test("코드를 틀려도 끊겼다는 안내가 그대로 남는다", async ({ 
   // **오타 한 번에 안내가 기본으로 돌아가면** 아이가 읽던 줄을 잃는다.
   await expect(page.locator("[data-오류]")).toHaveText(서버문구);
   await expect(안내줄(page)).toHaveText(코드입력.끊겨서왔을때);
+});
+
+/**
+ * **⛔ 2026-09-15 백엔드 실측에서 나왔다** — **식은 서버의 첫 요청이 33.3초**다
+ * (502 가 아니라 200 이었다). 그 33초 동안 이 화면이 **아무 말도 안 하고 있었다** —
+ * 아이가 보는 것은 **흐려진 버튼 하나**였고, **그날 첫 아이가 정확히 그 화면을 본다.**
+ *
+ * **⭐ 문구는 이미 있었다** (`문구.md` **2.5** 「접속 코드를 확인하는 중 — 확인하는 중…」).
+ * **없는 말이 아니라 자리가 비어 있었다** — 화면이 마운트 때만 그 말을 쓰고 있었다.
+ */
+test("코드를 보내는 동안 기다린다고 말한다 — 식은 서버는 33초가 걸린다", async ({ page }) => {
+  await 안들어온상태(page);
+  let 풀어준다: (() => void) | null = null;
+  await page.route(AUTH, async (route) => {
+    await new Promise<void>((res) => (풀어준다 = res));
+    return route.fulfill({ status: 200, json: { child_id: "c1", nickname: "은빛나침반" } });
+  });
+
+  await page.goto("/child/auth");
+  await page.getByLabel(코드입력.라벨).fill("123456");
+  await page.getByRole("button", { name: 코드입력.버튼 }).click();
+
+  // **보내는 동안 화면이 말한다.** 이 줄이 없으면 아이는 **눌렸는지조차 모른다.**
+  await expect(page.locator("[data-확인중]")).toHaveText(상태표시.확인중);
+
+  await expect.poll(() => 풀어준다 !== null).toBe(true);
+  풀어준다!();
+
+  // 끝나면 그 말이 사라진다 — 남아 있으면 **끝난 뒤에도 기다리는 것처럼 보인다.**
+  await page.waitForURL("**/");
+  await expect(page.locator("[data-확인중]")).toHaveCount(0);
 });
