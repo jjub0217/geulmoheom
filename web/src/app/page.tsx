@@ -329,7 +329,21 @@ export default function Home() {
 
         {screen.kind === "sent" && (
           // **그림이 먼저 오는 자리다.** 등급·하이라이트·「다음 장면」은 아직 없다 (A0-3 다음 조각).
-          <div className="flex flex-col gap-8">
+          //
+          // **⛔ 가로로 들면 2열이다** (2026-09-15, 아동 3명 관찰 ③ · 잠금 조건 ①).
+          // **아이 셋이 다 기기를 가로로 들었고 셋 다 「내 책」을 못 열었다** — 한 열로 쌓으면
+          // 1024×768 에서 문서가 **1089px** 가 되어 **321px 가 첫 화면 밖**이었다.
+          //
+          // **`landscape:` 다. `wide:` 가 아니다** — 막은 것은 **폭이 아니라 높이**이고,
+          // `wide:`(1024px)로 가르면 **폰 가로(844×390)가 빠진다.** 「기기를 가로로 들었다」가
+          // 관찰이 적어 둔 사실 그대로이고, 그것이 곧 `orientation: landscape` 다.
+          //
+          // **세로는 한 열 그대로다** — 세로로 든 화면에서 옆으로 가르면 줄이 짧아지고,
+          // **짧은 칸은 짧게 쓰게 만든다**(입력창을 전폭으로 둔 것과 같은 이유).
+          <div
+            className="flex flex-col gap-8 landscape:flex-row landscape:items-center
+              landscape:justify-center landscape:gap-10"
+          >
             <ArtworkFrame 상태={삽화} />
             {/* **굽는 동안에는 안 그린다.** 표정도 대사도 서버가 준 것 그대로인데,
                 결과 응답의 `guide` 는 **이미 등급 반응**이라 그림보다 먼저 뜨면
@@ -339,7 +353,12 @@ export default function Home() {
                 **못 받았을 때는 그린다.** 그림만 없고 나머지는 그대로다 (1.7) — 아이는
                 자기 문장이 통했다는 것을 알아야 하고, 그림은 「내 책」에서 다시 본다. */}
             {삽화.kind !== "기다림" && (
-              <div className="flex flex-col items-center gap-6">
+              // **가로에서 오른쪽 열이 된다.** `max-w` 로 한 줄이 너무 길어지는 것을 막는다 —
+              // 넓은 데스크탑에서 2열이 되면 오른쪽이 600px 를 넘어 **읽는 눈이 되돌아온다.**
+              <div
+                className="flex flex-col items-center gap-6 landscape:min-w-0 landscape:flex-1
+                  landscape:max-w-xl"
+              >
                 {/* **아이 문장이 그림 바로 아래다** (2026-09-09, 실기기에서 사용자가 보고 고침).
                     전에는 **가이드 그림 아래**에 있어 **누구 말인지 안 읽혔다** — 가이드가 바로 위에서
                     말하고 있으니 그 말의 이어짐으로 보인다.
@@ -378,20 +397,27 @@ export default function Home() {
                     **「내 책」보다 앞에 둔다** — 방금 그림을 받은 아이가 이어서 하는 일이
                     이쪽이고, **더 흔한 길이 먼저**다. 둘 다 테두리 버튼이면 어느 쪽이
                     이어가는 길인지 안 읽히므로 **이쪽만 채운다.** */}
-                <button
-                  type="button"
-                  data-다음장면
-                  onClick={retry}
-                  className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
-                >
-                  {버튼.다음장면열기}
-                </button>
-                <Link
-                  href="/book"
-                  className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
-                >
-                  {내책라벨}
-                </Link>
+                {/* **둘을 한 줄에 둔다** (2026-09-15). 세로로 쌓으면 **80px 를 더 먹는데**,
+                    세 뷰포트 전부에서 모자란 것이 그만큼이었다. **순서는 그대로다** —
+                    이어가는 길이 왼쪽(먼저)이고 「내 책」이 그다음이다.
+                    **`flex-wrap` 을 둔다**: 글자가 커지는 설정에서 둘이 한 줄에 안 들어가면
+                    **밀려나는 대신 접힌다.** */}
+                <div className="flex flex-wrap items-center justify-center gap-4">
+                  <button
+                    type="button"
+                    data-다음장면
+                    onClick={retry}
+                    className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                  >
+                    {버튼.다음장면열기}
+                  </button>
+                  <Link
+                    href="/book"
+                    className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                  >
+                    {내책라벨}
+                  </Link>
+                </div>
               </div>
             )}
           </div>
