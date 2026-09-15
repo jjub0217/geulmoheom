@@ -139,6 +139,37 @@ GUIDE = (
 }
 
 
+def _행동절(아이문장: str) -> str:
+    """아이 문장을 **동작 절**로 감싼다. **주체를 못 박는 것이 이 함수의 전부다.**
+
+    **9장을 눈으로 세고 나온 결함이다** (`benchmarks/W6-artwork-text-bench.md` 2절).
+    종전에는 `Action: <문장>.` 한 줄이었는데 **6/9 에서 가이드(래서판다)나 장면 속
+    동물이 그 동작을 했다** — `c07` 셋 다 가이드가 막대를 끼웠다. 모델은 동작을
+    **그림 안에 있는 인물**에게 붙인다. **PRD B-5 는 「아이의 1인칭 시점이고 주인공을
+    그리지 않는다」**이고, 카드 스케치도 전부 `the viewer` 기준으로 쓰여 있다.
+
+    **`c20` 만 손이 나온 것이 그 증거다** — 그 카드 스케치에 이미 `open palm` 이 있었다.
+    **1인칭이 지켜지던 것은 카드가 우연히 손을 들고 있을 때뿐**이었다.
+
+    **그래서 둘을 말한다** — ① 동작의 주체는 **보는 사람**이고 화면에 들어오는 것은
+    **많아야 손**이다 ② **장면 속 다른 인물은 그 동작을 하지 않는다.** ②가 없으면 ①을
+    적어도 가이드가 대신 한다 — `구도` 절이 가이드를 「장면 안에 선 인물」로 세워 두기
+    때문에 **모델에게는 그 인물이 가장 자연스러운 주어**다.
+
+    **⛔ ②에서 「red panda guide」를 이름으로 부르지 않는다.** 처음에는
+    `The red panda guide never performs this action.` 이라고 적었는데 **`c07` 에 가이드가
+    둘 나왔다** — `구도` 절이 「Exactly one … never two」라고 못 박아 둔 바로 그 실패다
+    (`c13` 에서 한 번 났다). **이름을 한 번 더 부르는 것이 복제를 부른다**는 것이
+    이 저장소가 이미 아는 모양이고(레퍼런스 시트 복제와 뿌리가 같다), 그래서
+    **주어를 지우고 「다른 인물은 안 한다」로 돌렸다.**
+    """
+    return (
+        f"Action by the viewer, from the viewer's own point of view, with at most the "
+        f"viewer's hands entering the frame: {아이문장.strip()}. "
+        f"No other character in the scene performs it."
+    )
+
+
 def 프롬프트(card_id: str, tier: Tier, 아이문장: str | None = None) -> str | None:
     """카드 하나의 삽화 프롬프트. **모르는 카드·빈 스케치 프롬프트면 `None`.**
 
@@ -167,7 +198,7 @@ def 프롬프트(card_id: str, tier: Tier, 아이문장: str | None = None) -> s
     장면 = 카드(card_id)
     if 장면 is None or not 장면.스케치프롬프트:
         return None
-    행동 = f" Action: {아이문장.strip()}." if 아이문장 and 아이문장.strip() else ""
+    행동 = f" {_행동절(아이문장)}" if 아이문장 and 아이문장.strip() else ""
     return f"{STYLE}. Scene: {장면.스케치프롬프트}.{행동} {접미어[tier]}. {구도} {GUIDE} {글자금지}"
 
 

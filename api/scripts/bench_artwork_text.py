@@ -16,10 +16,13 @@
 
 **돈이 나간다** — 장당 $0.0336 곱하기 9장 = **약 $0.30**. 2026-09-15 사용자 승인.
 실행: `PYTHONPATH=. uv run python scripts/bench_artwork_text.py`
+**골라 뽑기**: `... bench_artwork_text.py c07:legendary c18:rare` — 프롬프트를 고치고
+**몇 장만 다시 재는** 자리다. 아홉 장을 매번 다시 뽑으면 그 값이 곧 안 재는 이유가 된다.
 생성물은 `benchmarks/out/` (gitignore). 문서에는 판정만 남긴다.
 """
 
 import asyncio
+import sys
 from pathlib import Path
 
 from app.artwork import 생성
@@ -49,16 +52,18 @@ OUT = Path(__file__).resolve().parents[1] / "benchmarks" / "out" / "W6-0015"
 티어들 = ("basic", "rare", "legendary")
 
 
-async def 돈다() -> None:
+async def 돈다(고른것: set[tuple[str, str]] | None = None) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     잰것: list[tuple[str, str, str, float, int]] = []
 
     for card_id, 문장, 왜 in 재료:
         장면 = 카드(card_id)
-        print(f"\n── {card_id} — {장면.상황문 if 장면 else "?"}")
+        print(f"\n── {card_id} — {장면.상황문 if 장면 else '?'}")
         print(f"   회차: {왜}")
         print(f"   넣는 문장: {문장}")
         for tier in 티어들:
+            if 고른것 is not None and (card_id, tier) not in 고른것:
+                continue
             결과 = await 생성(card_id, tier, 문장)
             if 결과.image is None:
                 print(f"   {tier:10} ❌ {결과.사유}")
@@ -80,4 +85,6 @@ async def 돈다() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(돈다())
+    # `c07:legendary` 꼴. 없으면 아홉 장 전부.
+    고름 = {tuple(인자.split(":", 1)) for 인자 in sys.argv[1:]} or None
+    asyncio.run(돈다(고름))

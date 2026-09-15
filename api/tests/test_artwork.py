@@ -15,7 +15,7 @@ import logging
 import pytest
 
 from app import artwork, moderation
-from app.artwork import GUIDE, STYLE, 내보내도되나, 레퍼런스바이트, 생성, 접미어, 프롬프트
+from app.artwork import GUIDE, STYLE, _행동절, 내보내도되나, 레퍼런스바이트, 생성, 접미어, 프롬프트
 from app.evaluator import TIER_BY_GRADE
 from app.logging_config import SAFE_EXTRA_KEYS
 from app.moderation import 검사
@@ -94,6 +94,36 @@ def test_문장을_안_넘기면_종전과_같다():
     만들면 벤치가 재던 것이 바뀐다."""
     assert 프롬프트("c01", "rare") == 프롬프트("c01", "rare", None)
     assert 아이문장 not in 프롬프트("c01", "rare")
+
+
+def test_아이_문장의_주체가_아이다():
+    """**9장을 눈으로 세고 나온 결함이다** (`benchmarks/W6-artwork-text-bench.md` 2절).
+
+    `Action: <문장>` 만 붙였더니 **6/9 에서 가이드(래서판다)나 장면 속 동물이 그 동작을
+    했다** — `c07` 셋 다 가이드가 막대를 끼웠다. **PRD B-5 는 「아이의 1인칭 시점이고
+    주인공을 그리지 않는다」**인데, 모델은 동작을 **그림 안에 있는 인물**에게 붙인다.
+
+    **`c20` 만 손이 나온 이유가 그 증거다** — 카드 스케치에 이미 `open palm` 이 있었다.
+    **즉 1인칭이 지켜지던 것은 카드가 우연히 손을 들고 있을 때뿐**이었다.
+
+    **이 검사는 문장이 서 있는지만 본다.** 실제로 고쳐졌는지는 **그림을 뽑아 눈으로
+    세야** 안다 — 프롬프트로 고치는 것은 이 저장소에서 두 번 실패한 이력이 있다
+    (`글자금지` 주석). **그래서 재고 나서 적었다.**
+    """
+    절 = _행동절(아이문장)
+
+    assert 아이문장 in 절
+    # **주체가 보는 사람이다.**
+    assert "viewer" in 절
+    # **장면 속 인물이 대신 하는 것을 막는다.** 이것이 빠지면 6/9 가 돌아온다.
+    assert "No other character in the scene performs it" in 절
+    # **⛔ 가이드를 이름으로 부르지 않는다.** 처음에는 `The red panda guide never performs
+    # this action.` 이었는데 **`c07` 에 가이드가 둘 나왔다** — `구도` 절이 「Exactly one …
+    # never two」로 못 박아 둔 그 실패다. **이름을 한 번 더 부르는 것이 복제를 부른다.**
+    assert "red panda" not in 절
+
+    # **프롬프트 안에 실제로 들어간다** — 절만 맞고 안 끼워지면 아무것도 안 바뀐다.
+    assert 절 in 프롬프트("c01", "rare", 아이문장)
 
 
 def test_카드_스케치는_아이_문장이_있어도_남는다():
