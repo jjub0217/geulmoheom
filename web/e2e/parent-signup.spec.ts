@@ -381,3 +381,32 @@ test("가입 실패는 이유를 가리지 않는다 — 어느 코드든 같은
     expect(폼.제출거절).not.toContain(새면안되는말);
   }
 });
+
+/**
+ * **⛔ W6 14번 훑기에서 나왔다** (2026-09-15 · PM 판정).
+ *
+ * **그 화면에 온 사람이 해야 할 일은 첫 화면에 있어야 한다.** 어제 ⑥ 을 고치며 낸
+ * 「이미 계정이 있으신가요? 로그인」이 **동의 폼 전체 뒤**라 360×640 에서 **1308px**,
+ * **태블릿 가로에서도 1077px** 로 **첫 화면 밖**이었다 — **보이지 않으면 없는 것**이다.
+ *
+ * **⛔ 「가입하기」는 일부러 안 잰다.** **동의는 읽고 나서 누르는 것**이고, 버튼이 고지 앞에
+ * 오면 **읽기 전에 동의**하게 된다 (`문구.md` 3.1·7.3 「숨기지 않고 고지한다」).
+ * **그 버튼이 첫 화면 밖인 것은 결함이 아니라 결정**이다 (PM). **여기에 그 검사를 더하지 마라.**
+ */
+test("로그인으로 가는 길이 첫 화면 안에 있다 — 돌아온 부모는 고지를 다시 읽지 않는다", async ({
+  page,
+}) => {
+  // **가장 좁은 것 하나.** 그게 통과하면 위는 따라온다.
+  await page.setViewportSize({ width: 360, height: 640 });
+  await 로그아웃상태(page);
+  await page.goto("/parents/signup");
+
+  const 길 = page.getByRole("link", { name: 폼.로그인으로 });
+  await expect(길).toBeVisible();
+
+  // **아이도 부모도 안 한 것을 검사도 안 한다** — `toBeVisible` 은 뷰포트 안인지 안 보고
+  // `click()` 은 스크롤한다. **③ 이 그 눈에 지나갔다.**
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  const 자리 = (await 길.boundingBox())!;
+  expect(Math.round(자리.y + 자리.height), "로그인 길이 첫 화면 밖이다").toBeLessThanOrEqual(640);
+});

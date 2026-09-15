@@ -545,3 +545,27 @@ test("시간이 지나 풀려도 같은 곳으로 간다 — 다만 안내는 �
   // **표식도 안 붙는다.** 붙이면 3.11 문장이 뜨고 **그건 이 경우에 거짓**이다.
   expect(new URL(page.url()).searchParams.has("child_entered")).toBe(false);
 });
+
+/**
+ * **⛔ W6 14번 훑기에서 나왔다** (2026-09-15 · PM 판정).
+ *
+ * **부모가 이 화면에 오는 이유는 접속 코드**다. 그런데 **동의 기록과 로그아웃이 위에 있어**
+ * 360×640 에서 **「아이 추가로 가는 길」이 29px 밖**이었고, **자녀가 늘수록 더 멀어진다.**
+ *
+ * **⛔ 재는 것은 「목록」과 「길」이지 폼 전체가 아니다** (PM). 「아이 추가하기」 버튼까지
+ * 첫 화면에 넣으려 하지 마라 — **그러려면 폼을 접어야 하고 그건 이 항목이 아니다.**
+ */
+test("첫 화면에 자녀 목록과 아이 추가로 가는 길이 있다", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await 관리화면(page, [아이]);
+
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  for (const [이름, 것] of [
+    ["자녀 목록", page.locator("[data-자녀]").first()],
+    ["아이 추가로 가는 길", page.getByText(만들기.제목)],
+  ] as const) {
+    const 자리 = (await 것.boundingBox())!;
+    expect(Math.round(자리.y + 자리.height), `${이름}이 첫 화면 밖이다`).toBeLessThanOrEqual(640);
+  }
+});

@@ -212,7 +212,21 @@ export default function ParentSignup() {
         >
           <div className="flex flex-col gap-2">
             <h1 className="text-3xl font-semibold">{폼.제목}</h1>
-<p className="opacity-80">{폼.안내}</p>
+            <p className="opacity-80">{폼.안내}</p>
+            {/* **⛔ 제목 바로 아래다. 폼 뒤가 아니다** (2026-09-15, W6 14번 PM 판정).
+                **돌아온 부모는 고지를 다시 읽을 이유가 없다** — 그런데 이 길이 **동의 폼
+                전체 뒤**라 360×640 에서 **1308px**, 태블릿 가로에서도 **1077px** 로
+                **첫 화면 밖**이었다. 어제 ⑥ 을 고치며 낸 길인데 **보이지 않으면 없는 것**이다.
+                **「가입하기」는 안 올린다** — **동의는 읽고 나서 누르는 것**이고,
+                버튼이 고지 앞에 오면 **읽기 전에 동의**하게 된다 (3.1·7.3).
+                **오류와 무관하게 늘 보인다**: 오류 때만 띄우면 그것 자체가
+                **이메일 존재 확인 창구**가 된다(`parents.py:93`). */}
+            <Link
+              href="/parents/login"
+              className="pressable self-start rounded-full py-2 underline underline-offset-4"
+            >
+              {폼.로그인으로}
+            </Link>
           </div>
 
           <div className="flex flex-col gap-4">
@@ -310,17 +324,6 @@ export default function ParentSignup() {
           </button>
         </form>
 
-        {/* **⛔ 오류와 무관하게 늘 보인다** (`문구.md` 3.6). 오류가 났을 때만 띄우면
-            **그것 자체가 이메일 존재 확인 창구**가 된다 — 서버가 `parents.py:93` 에서
-            막으려던 것을 화면이 도로 연다. 3.10 의 「처음이신가요? 가입하기」와 **대칭**이고,
-            **둘이 서로를 가리켜야 「어느 쪽으로 들어와도 반대편으로 갈 수 있다」가 선다.**
-            **학부모 홈은 여전히 없다** — `/` 는 아이 화면이고, 주소 정리는 `미룬것.md` 다. */}
-        <Link
-          href="/parents/login"
-          className="pressable self-center rounded-full px-6 py-3 underline underline-offset-4"
-        >
-          {폼.로그인으로}
-        </Link>
         </>
       )}
 
@@ -331,32 +334,39 @@ export default function ParentSignup() {
         // `문구.md` 에 그 자리가 없다.
         <div className="flex w-full flex-col items-start gap-2">
           <h1 className="text-3xl font-semibold">{폼.가입됨}</h1>
-          {/* **기계가 준 값을 그대로 내지 않는다** (`문구.md` 6장). 한때 여기에
-              `2026-09-08T01:00:00Z` 가 그대로 나갔다 — **문장은 3.6 에 등록돼 있었는데
-              값의 형식이 어디에도 없었다.** 못 읽는 값이면 **줄을 통째로 안 그린다**:
-              「NaN년」을 내보내느니 없는 편이 낫다.
-              `dateTime` 속성에는 기계 값이 남는다 — 화면에 안 보이고 의미론상 맞는 자리다. */}
-          {날짜시각(screen.consentAt) !== null && (
-            <p className="opacity-80">
-              {폼.동의기록}{" "}
-              <time dateTime={screen.consentAt}>{날짜시각(screen.consentAt)}</time>
-            </p>
-          )}
-          {/* **「모든 기기에서 로그아웃됩니다」 같은 말을 쓰지 않는다** — 지금은 거짓말이다.
-              `token_version` 은 컬럼만 있고 올리는 코드가 없다(E-3/E-4).
-              **「전부 로그아웃」처럼 보이게 만들지도 않는다** — 이 호출은 자녀 쿠키를 안 건드리고,
-              가족 태블릿에서 **아이 세션은 살아 있어야 한다.** 그래서 주장 없이 이름만 둔다. */}
-          <button
-            type="button"
-            onClick={() => void 로그아웃()}
-            className="pressable mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
-          >
-            {폼.로그아웃}
-          </button>
 
-          {/* 자녀 관리 (E-4 프론트 짝). **아이에게 건넬 접속 코드가 여기서 나온다.** */}
-          <div className="mt-8 w-full border-t-2 border-brass/30 pt-8">
+          {/* **⛔ 자녀 관리가 위다** (2026-09-15, W6 14번 PM 판정 — 「그 화면에 온 사람이
+              해야 할 일은 첫 화면에 있어야 한다」). **부모가 여기 오는 이유는 접속 코드**이고,
+              **동의 기록과 로그아웃은 확인·마무리**다. 종전에는 그 둘이 위에 있어
+              360×640 에서 **「아이 추가로 가는 길」이 29px 밖**이었다.
+              **폼 전체를 올리는 것이 아니다** — 첫 화면에 **목록과 길**이 있으면 된다. */}
+          <div className="w-full">
             <ChildrenPanel />
+          </div>
+
+          <div className="mt-8 w-full border-t-2 border-brass/30 pt-8">
+            {/* **기계가 준 값을 그대로 내지 않는다** (`문구.md` 6장). 한때 여기에
+                `2026-09-08T01:00:00Z` 가 그대로 나갔다 — **문장은 3.6 에 등록돼 있었는데
+                값의 형식이 어디에도 없었다.** 못 읽는 값이면 **줄을 통째로 안 그린다**:
+                「NaN년」을 내보내느니 없는 편이 낫다. **학부모는 자기가 무엇에 동의했는지
+                확인하러 온다** — 그래서 **없애지 않고 자리만 내린다.** */}
+            {날짜시각(screen.consentAt) !== null && (
+              <p className="opacity-80">
+                {폼.동의기록}{" "}
+                <time dateTime={screen.consentAt}>{날짜시각(screen.consentAt)}</time>
+              </p>
+            )}
+            {/* **「모든 기기에서 로그아웃됩니다」 같은 말을 쓰지 않는다** — 지금은 거짓말이다.
+                `token_version` 은 컬럼만 있고 올리는 코드가 없다(E-3/E-4).
+                **「전부 로그아웃」처럼 보이게 만들지도 않는다** — 이 호출은 자녀 쿠키를 안 건드리고,
+                가족 태블릿에서 **아이 세션은 살아 있어야 한다.** 그래서 주장 없이 이름만 둔다. */}
+            <button
+              type="button"
+              onClick={() => void 로그아웃()}
+              className="pressable mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
+            >
+              {폼.로그아웃}
+            </button>
           </div>
         </div>
       )}
