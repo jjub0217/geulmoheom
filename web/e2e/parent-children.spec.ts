@@ -510,3 +510,38 @@ test("목록을 다시 부르다 풀려도 같은 곳으로 간다 — 자리마
     학부모오류문구("FORBIDDEN_ROLE"),
   );
 });
+
+/**
+ * **401 도 같은 자리다** (`문구.md` **3.11** 의 401 절, 2026-09-15). **시간이 지나 풀린 경우**다 —
+ * 종전에는 「다시 로그인해 주세요.」 **한 줄**이고 **거기서 로그인으로 가는 길이 없었다.**
+ *
+ * **⭐ 새 글자를 만들지 않는다.** 403 은 **원인이 시간이 아니라서** 안내를 갈았고,
+ * **401 은 원인이 정말 시간이라** 3.10 기본 안내가 **이 경우를 위해 쓰인 문장**이다.
+ */
+test("시간이 지나 풀려도 같은 곳으로 간다 — 다만 안내는 기본 그대로다", async ({ page }) => {
+  let 풀렸다 = false;
+  await page.route(ME, (route) =>
+    풀렸다
+      ? route.fulfill({
+          status: 401,
+          json: { error: { code: "UNAUTHORIZED", message: "다시 한 번 들어와 주세요" } },
+        })
+      : route.fulfill({ status: 200, json: 가입됨([아이]) }),
+  );
+  await page.goto("/parents/signup");
+  await expect(page.getByText(폼.가입됨)).toBeVisible();
+  await expect(page.locator("[data-자녀]").first()).toBeVisible();
+
+  풀렸다 = true;
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+
+  await expect(확인창(page)).toHaveCount(0);
+  await page.waitForURL("**/parents/login");
+
+  // **기본 안내 그대로다.** 여기서 새 말을 지으면 **같은 사실을 두 곳에서 다르게 쓰는 것**이 된다.
+  await expect(page.locator("[data-안내]")).toHaveText(로그인.안내);
+  // **아이 탓을 하지 않는다** — 아이가 들어온 것이 아니라 시간이 지난 것이다.
+  expect(await page.locator("main").innerText()).not.toContain(로그인.아이가들어왔다);
+  // **표식도 안 붙는다.** 붙이면 3.11 문장이 뜨고 **그건 이 경우에 거짓**이다.
+  expect(new URL(page.url()).searchParams.has("child_entered")).toBe(false);
+});
