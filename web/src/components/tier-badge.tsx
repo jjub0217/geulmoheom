@@ -38,7 +38,9 @@ export function TierBadge({ tier }: { tier: Tier }) {
   return (
     <span
       data-티어배지
-      className={`rounded-full px-6 py-2 text-xl ${색[tier]}`}
+      // **작은 화면에서 한 단계 작다** (2026-09-15). `text-lg` 는 18px 라 **16px MUST 위**이고,
+      // 배지는 **낱말 하나**라 줄어도 읽는 데 값이 안 든다 — 아이 문장·나가는 길이 먼저다.
+      className={`rounded-full px-5 py-1.5 text-lg sm:px-6 sm:py-2 sm:text-xl ${색[tier]}`}
     >
       {티어이름[tier]}
     </span>

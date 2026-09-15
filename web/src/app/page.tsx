@@ -406,7 +406,7 @@ export default function Home() {
       )}
       {/* **`py-6` 이다** — `justify-center` 라 여백은 **화면이 넉넉할 때만** 보이고,
           빠듯할 때는 그만큼이 그대로 넘침이 된다. 줄여도 넓은 화면의 모양이 안 바뀐다. */}
-      <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-6">
+      <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-3 sm:py-6">
         {screen.kind === "loading" && (
           // 글자만 둔다. 여기에 가이드 캐릭터를 세우면 표정을 프론트가 고르는 것이 된다
           // (`docs/api/Stage0.md` 3절 — 표정 4종은 서버가 정한다).
@@ -460,7 +460,7 @@ export default function Home() {
           // 넘쳤는데**, 액자를 더 접는 것은 답이 아니고(첫 화면 30% 하한이 막으려던 것이 그것이다)
           // 문구·위계는 PM 몫이라 **여백으로만 맞췄다.** 가로는 2열이라 여유가 200px 넘는다.
           <div
-            className="flex flex-col gap-6 landscape:flex-row landscape:items-center
+            className="flex flex-col gap-4 sm:gap-6 landscape:flex-row landscape:items-center
               landscape:justify-center landscape:gap-10"
           >
             <ArtworkFrame 상태={삽화} />
@@ -475,8 +475,8 @@ export default function Home() {
               // **가로에서 오른쪽 열이 된다.** `max-w` 로 한 줄이 너무 길어지는 것을 막는다 —
               // 넓은 데스크탑에서 2열이 되면 오른쪽이 600px 를 넘어 **읽는 눈이 되돌아온다.**
               <div
-                className="flex flex-col items-center gap-4 landscape:min-w-0 landscape:flex-1
-                  landscape:max-w-xl"
+                className="flex flex-col items-center gap-3 sm:gap-4 landscape:min-w-0
+                  landscape:flex-1 landscape:max-w-xl"
               >
                 {/* **아이 문장이 그림 바로 아래다** (2026-09-09, 실기기에서 사용자가 보고 고침).
                     전에는 **가이드 그림 아래**에 있어 **누구 말인지 안 읽혔다** — 가이드가 바로 위에서
@@ -521,7 +521,7 @@ export default function Home() {
                     이어가는 길이 왼쪽(먼저)이고 「내 책」이 그다음이다.
                     **`flex-wrap` 을 둔다**: 글자가 커지는 설정에서 둘이 한 줄에 안 들어가면
                     **밀려나는 대신 접힌다.** */}
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
                   {/* **순서는 `MVP_PRD.md` 72행이 정해 둔 것이다** — `[다시 써보기 | 다음 카드]`.
                       **스펙 층이 정한 것을 화면이 뒤집지 않는다.**
                       **⛔ 앞에 있다고 재촉이 아니다** — 1.17 이 「또」·「한 번 더」를 금지한 것과
@@ -531,7 +531,8 @@ export default function Home() {
                     type="button"
                     data-다시써보기
                     onClick={() => 다시쓰기(screen.card, screen.result.attempt_id)}
-                    className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                    className="pressable rounded-full border-2 border-brass/50 px-6 py-2.5
+                      text-lg sm:px-8 sm:py-3 sm:text-xl"
                   >
                     {버튼.다시써보기}
                   </button>
@@ -539,13 +540,15 @@ export default function Home() {
                     type="button"
                     data-다음장면
                     onClick={retry}
-                    className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                    className="pressable rounded-full bg-scarf px-6 py-2.5 text-lg text-markings
+                      sm:px-8 sm:py-3 sm:text-xl"
                   >
                     {버튼.다음장면열기}
                   </button>
                   <Link
                     href="/book"
-                    className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                    className="pressable rounded-full border-2 border-brass/50 px-6 py-2.5
+                      text-lg sm:px-8 sm:py-3 sm:text-xl"
                   >
                     {내책라벨}
                   </Link>
