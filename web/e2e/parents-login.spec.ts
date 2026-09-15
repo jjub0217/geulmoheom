@@ -148,10 +148,13 @@ test("틀려도 무엇이 틀렸는지 말하지 않는다", async ({ page }) =>
  * 실제로는 요청이 많아서 막힌 것인데도.
  */
 test("로그인 실패가 아닌 오류는 3.8 표를 그대로 쓴다", async ({ page }) => {
+  // **`errors.py` 의 `CHILD_MESSAGE` 그대로다** (`문구.md` 2.1). **아이 목소리인 것이 요점**이라
+  // 학부모 화면에 그대로 나오면 안 된다.
+  const 아이목소리 = "지금은 코드를 넣을 수 없어요. 15분 뒤에 다시 해볼까요";
   await page.route(LOGIN, (route) =>
     route.fulfill({
       status: 429,
-      json: { error: { code: "RATE_LIMITED", message: "조금만 천천히 가볼까요" } },
+      json: { error: { code: "RATE_LIMITED", message: "지금은 코드를 넣을 수 없어요. 15분 뒤에 다시 해볼까요" } },
     }),
   );
 
@@ -164,7 +167,7 @@ test("로그인 실패가 아닌 오류는 3.8 표를 그대로 쓴다", async (
   // **비밀번호 탓으로 말하지 않는다.** 부모가 맞는 비밀번호를 계속 고쳐 넣게 된다.
   await expect(page.locator("[data-오류]")).not.toHaveText(로그인.실패);
   // **아이 목소리가 새지 않는다** (`문구.md` 3.8).
-  expect(await page.locator("main").innerText()).not.toContain("조금만 천천히 가볼까요");
+  expect(await page.locator("main").innerText()).not.toContain(아이목소리);
 });
 
 test("못 닿으면 로그인한 척하지 않는다 — 비밀번호 탓으로 말하지도 않는다", async ({
