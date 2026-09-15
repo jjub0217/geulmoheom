@@ -62,7 +62,12 @@ type Screen =
    *
    * **아직 그리는 것은 삽화와 가이드뿐이다.** 등급·하이라이트는 다음 조각이다.
    */
-  | { kind: "sent"; result: AttemptResult }
+  /**
+   * **카드를 같이 들고 있는다** (2026-09-15, 「다시 써보기」가 붙으면서).
+   * **결과에서 같은 장면으로 돌아가려면 그 장면이 있어야 한다** — 다시 부르면
+   * **다른 카드가 오고**, 그건 「다시 써보기」가 아니라 「다음 장면」이다.
+   */
+  | { kind: "sent"; card: Card; result: AttemptResult }
   /**
    * 오늘 카드를 다 썼다 (409 `DAILY_CAP_REACHED`). 서버가 함께 준 **가이드 그대로** 보여준다 —
    * 대사도 **표정도**다. 종료 인사는 `expression: "session_end"` 로 오고, 표정 4종 중
@@ -158,6 +163,19 @@ export default function Home() {
   const [보내기못닿음, set보내기못닿음] = useState(false);
   /** 이미 올린 종류. **세션 안에서 종류마다 한 번만** 보낸다 — 한 글자마다 보내면 폭주한다. */
   const 올린종류 = useRef(new Set<PiiKind>());
+
+  /**
+   * **다시 쓰는 중이면 앞 시도의 `attempt_id`** (`Stage0.md` 4절 · `문구.md` 2.2).
+   *
+   * **일일 카운트가 이 값에 걸려 있다.** 비워 보내면 서버가 카운트를 올려
+   * **아이가 오늘 카드를 한 장 더 쓴 셈**이 된다 — 재시도는 **카드를 소모하지 않는 것**이
+   * 설계다 (`MVP_PRD.md` 75행).
+   *
+   * **되묻기가 와도 안 비운다.** 되묻기는 **시도가 끝난 것이 아니라 같은 시도의 연장**이고
+   * (`Stage0.md` 4절), **그 연장도 여전히 재시도**다. 비우는 자리는 **결과를 받았을 때와
+   * 다음 장면으로 갈 때** 둘뿐이다.
+   */
+  const [재시도원본, set재시도원본] = useState<string | null>(null);
 
   /**
    * **지금 누구인지** (`문구.md` **2.6**, 2026-09-15 신설 · 결과 ⑨).
@@ -263,11 +281,12 @@ export default function Home() {
       const outcome = await apiPost<AttemptOutcome>("/attempts", {
         card_id: card.card_id,
         text,
-        // **항상 `null` 이다.** 일일 카운트가 이 값에 걸려 있어서, 되묻기를 거친 카드에
-        // 이전 `attempt_id` 를 채우면 그 카드만 하루 5장에서 안 빠진다 — 카드는 푼 것이 맞는데도.
-        // H2 도 같다: 되묻기 전 짧은 입력을 별도 회차로 세면 **되묻기가 잘 될수록 회당 평균이 내려간다**.
-        // 채우는 것은 결과를 받은 뒤 같은 카드를 다시 풀 때뿐이고 그건 W4 다 (`Stage0.md` 4절).
-        retry_of: null,
+        // **되묻기 뒤 고쳐 보낼 때는 비운다** — 되묻기는 시도가 끝난 것이 아니라
+        // **같은 시도의 연장**이라, 채우면 그 카드만 하루 5장에서 안 빠진다.
+        // **채우는 것은 결과를 받은 뒤 같은 카드를 다시 풀 때다** (`Stage0.md` 4절) —
+        // **2026-09-15 에 그 자리가 생겼다.** 그전에는 항상 `null` 이었고
+        // 주석은 「그건 W4 다」였는데 **W4 는 지났고 버튼이 없어서 아무도 못 눌렀다**(결과 ④).
+        retry_of: 재시도원본,
         prompted: false,
       });
 
@@ -275,7 +294,9 @@ export default function Home() {
       // 입력창이 그대로 있고 **쓴 문장도 그대로 있다.** 차단도 마찬가지다: 이유도 모른 채
       // 공들여 쓴 글이 사라지면 그것 자체가 벌이 된다 (`Stage0.md` 4절).
       if (outcome.outcome === "result") {
-        setScreen({ kind: "sent", result: outcome });
+        // **결과를 받았으면 재시도가 끝났다.** 안 비우면 **다음에 보내는 것이 또 앞 시도에 붙는다.**
+        set재시도원본(null);
+        setScreen({ kind: "sent", card, result: outcome });
       } else {
         setScreen({ kind: "card", card, guide: outcome.guide });
       }
@@ -328,9 +349,39 @@ export default function Home() {
    */
   const 삽화 = useArtwork(screen.kind === "sent" ? screen.result.artwork : null);
 
+  /**
+   * **다음 장면을 받는다.**
+   *
+   * **⛔ 입력칸을 비운다** (2026-09-15 결함). 안 비우면 **앞 장면에 쓴 글이 새 장면 아래
+   * 그대로 붙어 있다** — `copy.ts` 의 「다시 열기」 주석이 **바로 그 위험을 적어 두고 있었는데**
+   * 2026-09-12 에 붙은 이 문이 **같은 자리를 다시 밟았다.** 검사로 잡았다.
+   *
+   * **재시도 표식도 비운다** — 새 카드를 앞 시도의 재시도로 실어 보내면
+   * 그 카드가 **하루 5장에서 빠지지 않는다.**
+   */
   const retry = () => {
+    setText("");
+    set재시도원본(null);
     setScreen({ kind: "loading" });
     setAttempt((n) => n + 1);
+  };
+
+  /**
+   * **같은 장면을 다시 쓴다** (`문구.md` **2.2** · `adr/0015` ②).
+   *
+   * **쓴 문장을 남긴다** — 되묻기·차단이 그 자리에 머무는 것과 같은 규칙이다.
+   * 태블릿에서 **처음부터 다시 치게 하면 아이는 그냥 그만둔다.**
+   *
+   * **카드를 다시 부르지 않는다** — 부르면 **다른 장면**이 오고 그건 「다음 장면」이다.
+   * 그래서 `sent` 가 카드를 들고 있다.
+   *
+   * **가이드는 그 장면의 것으로 돌아간다** — 결과 대사는 **방금 받은 등급에 대한 반응**이라,
+   * 다시 쓰는 화면에 그대로 두면 **아직 안 보낸 문장에 미리 반응하는 얼굴**이 된다.
+   */
+  const 다시쓰기 = (card: Card, 앞시도: string) => {
+    set재시도원본(앞시도);
+    set보내기못닿음(false);
+    setScreen({ kind: "card", card, guide: card.guide });
   };
 
   return (
@@ -353,7 +404,9 @@ export default function Home() {
           </p>
         </header>
       )}
-      <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-10">
+      {/* **`py-6` 이다** — `justify-center` 라 여백은 **화면이 넉넉할 때만** 보이고,
+          빠듯할 때는 그만큼이 그대로 넘침이 된다. 줄여도 넓은 화면의 모양이 안 바뀐다. */}
+      <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-6">
         {screen.kind === "loading" && (
           // 글자만 둔다. 여기에 가이드 캐릭터를 세우면 표정을 프론트가 고르는 것이 된다
           // (`docs/api/Stage0.md` 3절 — 표정 4종은 서버가 정한다).
@@ -403,8 +456,11 @@ export default function Home() {
           //
           // **세로는 한 열 그대로다** — 세로로 든 화면에서 옆으로 가르면 줄이 짧아지고,
           // **짧은 칸은 짧게 쓰게 만든다**(입력창을 전폭으로 둔 것과 같은 이유).
+          // **세로에서 `gap-6` 이다** (2026-09-15). 「다시 써보기」가 붙으면서 **세로가 45px
+          // 넘쳤는데**, 액자를 더 접는 것은 답이 아니고(첫 화면 30% 하한이 막으려던 것이 그것이다)
+          // 문구·위계는 PM 몫이라 **여백으로만 맞췄다.** 가로는 2열이라 여유가 200px 넘는다.
           <div
-            className="flex flex-col gap-8 landscape:flex-row landscape:items-center
+            className="flex flex-col gap-6 landscape:flex-row landscape:items-center
               landscape:justify-center landscape:gap-10"
           >
             <ArtworkFrame 상태={삽화} />
@@ -419,7 +475,7 @@ export default function Home() {
               // **가로에서 오른쪽 열이 된다.** `max-w` 로 한 줄이 너무 길어지는 것을 막는다 —
               // 넓은 데스크탑에서 2열이 되면 오른쪽이 600px 를 넘어 **읽는 눈이 되돌아온다.**
               <div
-                className="flex flex-col items-center gap-6 landscape:min-w-0 landscape:flex-1
+                className="flex flex-col items-center gap-4 landscape:min-w-0 landscape:flex-1
                   landscape:max-w-xl"
               >
                 {/* **아이 문장이 그림 바로 아래다** (2026-09-09, 실기기에서 사용자가 보고 고침).
@@ -465,7 +521,20 @@ export default function Home() {
                     이어가는 길이 왼쪽(먼저)이고 「내 책」이 그다음이다.
                     **`flex-wrap` 을 둔다**: 글자가 커지는 설정에서 둘이 한 줄에 안 들어가면
                     **밀려나는 대신 접힌다.** */}
-                <div className="flex flex-wrap items-center justify-center gap-4">
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {/* **순서는 `MVP_PRD.md` 72행이 정해 둔 것이다** — `[다시 써보기 | 다음 카드]`.
+                      **스펙 층이 정한 것을 화면이 뒤집지 않는다.**
+                      **⛔ 앞에 있다고 재촉이 아니다** — 1.17 이 「또」·「한 번 더」를 금지한 것과
+                      같은 자리다. **낱말로 안 부추기니 순서로도 안 부추긴다.** 앞에 있는 것은
+                      **먼저 권한다는 뜻이 아니라 방금 한 일에 가장 가깝다는 뜻**이다 (PM). */}
+                  <button
+                    type="button"
+                    data-다시써보기
+                    onClick={() => 다시쓰기(screen.card, screen.result.attempt_id)}
+                    className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                  >
+                    {버튼.다시써보기}
+                  </button>
                   <button
                     type="button"
                     data-다음장면

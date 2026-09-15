@@ -373,10 +373,13 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   //
   // **문이 「내 책」보다 앞이다** — 그림을 막 받은 아이가 이어서 하는 일이 이쪽이고
   // **더 흔한 길이 먼저**다. 이 순서를 바꾸는 것은 **화면을 바꾸는 것**이다.
+  // **2026-09-15 에 「다시 써보기」가 들어왔다** (`문구.md` 2.2 · 결과 문서 ④) —
+  // **이 배열이 또 그 변경을 잡았다.** 순서는 `MVP_PRD.md` 72행(`[다시 써보기 | 다음 카드]`)이다.
   expect(줄들).toEqual([
     쓴것,
     티어이름.rare,
     결과가이드.line,
+    버튼.다시써보기,
     버튼.다음장면열기,
     내책라벨,
   ]);
@@ -1296,3 +1299,132 @@ test("누구인지 모르면 아무 이름도 안 쓴다 — 지어내지 않는
   await expect(page.getByText(CARD.situation)).toBeVisible();
   await expect(page.locator("[data-탐험가이름]")).toHaveCount(0);
 });
+
+test("다음 장면으로 가면 입력칸이 비어 있다 — 앞 장면에 쓴 글이 따라오지 않는다", async ({
+  page,
+}) => {
+  const 다음카드 = { ...CARD, card_id: "c200", situation: "무너진 다리 앞에서 강물이 빠르게 흐른다." };
+  let 줄카드: CardResponse = CARD;
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: 줄카드 }));
+
+  await 결과화면까지(page);
+  줄카드 = 다음카드;
+  await page.locator("[data-다음장면]").click();
+  await expect(page.getByText(다음카드.situation)).toBeVisible();
+
+  // **앞 장면에 쓴 글이 새 장면 아래 붙어 있으면 아이는 자기가 쓴 것으로 읽는다.**
+  await expect(page.getByLabel(다음카드.prompt_label)).toHaveValue("");
+});
+
+/**
+ * **⛔ 2026-09-15 — 버튼이 없어서 아무도 안 눌렀다** (`프리테스트_결과_2026-09-14.md` ④ ·
+ * `문구.md` **2.2** 신설 · `adr/0015` ②).
+ *
+ * **`page.tsx` 가 `retry_of` 를 항상 `null` 로 보내고 있었다.** 주석은 「채우는 것은 같은 카드를
+ * 다시 풀 때뿐이고 그건 W4 다」였는데 **W4 는 지났다.** PM 이 결과 문서 ④ 를
+ * **「아이들이 안 누른 게 아니라 그 버튼이 없다」**로 고쳐 썼다.
+ *
+ * **⭐ 「구체적으로 쓸수록 더 좋은 그림」이 이 제품의 보상 구조인데 다시 시도할 문이 없었다.**
+ * `adr/0015` ②(등급이 올랐을 때만 다시 굽는다)도 **이 버튼이 있어야 성립한다.**
+ */
+test("다시 써보기는 같은 장면으로 돌아가고 쓴 문장을 남긴다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await 결과화면까지(page);
+
+  await page.getByRole("button", { name: 버튼.다시써보기 }).click();
+
+  // **같은 장면이다.** 새 카드를 부르면 그건 「다음 장면」이지 「다시 써보기」가 아니다.
+  await expect(page.getByText(CARD.situation)).toBeVisible();
+  // **쓴 문장이 남는다** — 되묻기·차단이 그 자리에 머무는 것과 같은 규칙이다.
+  // 태블릿에서 처음부터 다시 치게 하면 **아이는 그냥 그만둔다.**
+  await expect(page.getByLabel(CARD.prompt_label)).toHaveValue("등대 계단을 한 칸씩 올라간다");
+  // 결과 자리는 치운다 — 앞 결과가 남아 있으면 무엇이 방금 일어난 것인지 갈린다.
+  await expect(page.locator("[data-다음장면]")).toHaveCount(0);
+});
+
+test("다시 쓴 것은 앞 시도에 붙여 보낸다 — 카드를 한 장 더 쓰는 게 아니다", async ({ page }) => {
+  const 보낸것 = await 보낸것을받으며결과까지(page);
+  await page.getByRole("button", { name: 버튼.다시써보기 }).click();
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 천천히 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await expect(page.locator("[data-다음장면]")).toBeVisible();
+
+  // **첫 시도는 `null`, 다시 쓴 것은 앞 `attempt_id`** (`Stage0.md` 4절).
+  // **일일 카운트가 이 값에 걸려 있다** — 비워 보내면 아이가 **오늘 카드 한 장을 더 쓴 셈**이 된다.
+  expect(보낸것[0].retry_of).toBe(null);
+  expect(보낸것[1].retry_of).toBe(결과().attempt_id);
+
+  // **다음 장면으로 가면 다시 `null` 이다.** 안 비우면 **새 카드가 앞 시도의 재시도로 실린다.**
+  await page.locator("[data-다음장면]").click();
+  await page.getByLabel(CARD.prompt_label).fill("무너진 다리를 건넌다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  expect(보낸것[2].retry_of).toBe(null);
+});
+
+test("다시 쓰다 되묻기가 와도 앞 시도에 계속 붙인다", async ({ page }) => {
+  const 되묻기 = { 할차례: false };
+  const 보낸것 = await 보낸것을받으며결과까지(page, 되묻기);
+  await page.getByRole("button", { name: 버튼.다시써보기 }).click();
+
+  되묻기.할차례 = true;
+  await page.getByLabel(CARD.prompt_label).fill("빛이 있다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await expect(page.getByText("그 빛은 어떤 색이야?")).toBeVisible();
+
+  되묻기.할차례 = false;
+  await page.getByLabel(CARD.prompt_label).fill("파란 빛이 계단 끝에서 흔들린다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await expect(page.locator("[data-다음장면]")).toBeVisible();
+
+  // **되묻기는 시도가 끝난 것이 아니라 같은 시도의 연장이다** (`Stage0.md` 4절) —
+  // **재시도 중에 되묻기가 오면 그 연장도 여전히 재시도다.** 여기서 `null` 로 돌리면
+  // **서버가 일일 카운트를 올려** 아이가 오늘 카드 한 장을 더 쓴 셈이 된다.
+  expect(보낸것[1].retry_of).toBe(결과().attempt_id);
+  expect(보낸것[2].retry_of).toBe(결과().attempt_id);
+});
+
+/**
+ * 결과 화면까지 가되 **보낸 것을 모은다.**
+ *
+ * **⚠ `결과화면까지` 를 쓰고 그 앞에 라우트를 걸면 안 된다** — **Playwright 는 나중에 등록한
+ * 라우트가 이긴다.** 헬퍼가 자기 `ATTEMPTS` 라우트를 걸어 **앞서 건 수집기가 통째로 가려지고**,
+ * 증상은 **「요청이 하나도 안 잡힌다」**라 화면 코드를 뒤지게 된다 (2026-09-15 실측).
+ */
+async function 보낸것을받으며결과까지(page: Page, 되묻기 = { 할차례: false }) {
+  const 보낸것: Record<string, unknown>[] = [];
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+  await page.route(ATTEMPTS, (route) => {
+    보낸것.push(route.request().postDataJSON());
+    return 되묻기.할차례
+      ? route.fulfill({
+          status: 200,
+          json: {
+            outcome: "scaffold",
+            attempt_id: "a-scaffold",
+            guide: { expression: "compass_dim", line: "그 빛은 어떤 색이야?" },
+          },
+        })
+      : route.fulfill({ status: 200, json: 결과() });
+  });
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await expect(page.locator("[data-다음장면]")).toBeVisible();
+  return 보낸것;
+}
