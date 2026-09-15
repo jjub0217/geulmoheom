@@ -8,7 +8,7 @@ import type { components } from "@/api/types.gen";
 import { BookPageFrame } from "@/components/book-page";
 import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { BookTitle } from "@/components/book-title";
-import { ApiError, NetworkError, apiGet, 인증이풀렸다 } from "@/lib/api";
+import { ApiError, NetworkError, apiGet, 역할이다르다, 인증이풀렸다 } from "@/lib/api";
 
 import { 버튼, 못닿음 } from "../copy";
 import { 상태표시 } from "../status-copy";
@@ -56,6 +56,14 @@ export default function BookScreen() {
           // **끊겼다는 표식을 달아 보낸다** (`문구.md` 3.3). 내 책을 열었다는 것은
           // **들어와 있었다**는 뜻이다 — 결과 화면에서 보내는 쪽과 같은 확신이다.
           router.replace(끊겨서보낼곳);
+          return;
+        }
+        // **403 은 같은 곳으로 보내되 표식을 안 단다** (2026-09-15, 결과 ⑪).
+        // 부모 쿠키가 있는 브라우저라 **아이는 아직 한 번도 안 들어왔다** — 「부모님이 새
+        // 접속 코드를 받으셨어요」는 **받은 적 없는 코드를 찾게 만든다**(`lib/kicked.ts`
+        // 「확신이 있는 자리에만 단다」). **틀리는 방향이 대칭이 아니라서 그렇다.**
+        if (역할이다르다(e)) {
+          router.replace("/child/auth");
           return;
         }
         if (e instanceof ApiError) {

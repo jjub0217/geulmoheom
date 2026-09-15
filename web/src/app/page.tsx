@@ -12,7 +12,14 @@ import { LeaveButton } from "@/components/leave";
 import { SceneCard } from "@/components/scene-card";
 import { TierBadge } from "@/components/tier-badge";
 import { WrittenLine } from "@/components/written-line";
-import { ApiError, NetworkError, apiGet, apiPost, 인증이풀렸다 } from "@/lib/api";
+import {
+  ApiError,
+  NetworkError,
+  apiGet,
+  apiPost,
+  역할이다르다,
+  인증이풀렸다,
+} from "@/lib/api";
 import { useArtwork } from "@/lib/artwork";
 import { 끊겨서보낼곳 } from "@/lib/kicked";
 import type { PiiKind } from "@/lib/pii";
@@ -189,9 +196,16 @@ export default function Home() {
         // 문구만 띄우면 **들어갈 문이 없는 화면**이 된다 — 버튼도 없었다.
         // **`문구.md` 2.1 의 문장을 고치지 않는다.** 문장이 틀린 게 아니라 **보여주는 자리가 틀렸다** —
         // 고치면 자리 문제가 문장 문제로 위장된다.
-        if (인증이풀렸다(e)) {
-          // 인증 화면이 나머지를 안다 — 홈 화면 앱이면 코드 입력, 브라우저 탭이면 설치 안내.
-          // **둘 다 이미 서 있는 화면이라 새로 만들 것이 없다.**
+        // **⛔ 403 도 같이 받는다** (2026-09-15, 아동 3명 회차 준비에서 나왔다 — 결과 ⑪).
+        // **부모가 코드를 받아 아이에게 넘기고 아이가 링크(`/`)를 여는 것이 진짜 흐름**인데
+        // (`adr/0014` 결정 3), 그 브라우저에는 **부모 쿠키가 살아 있어 403** 이 온다.
+        // 그러면 「여기는 지금 들어갈 수 없어요」에서 끝나 **코드 입력으로 가는 길이 없었다.**
+        //
+        // **어제 `/child/auth` 만 고쳤다.** 정작 아이가 **먼저 닿는 화면이 여기**다 —
+        // **낱개로 고쳐서 다음이 또 나온 자리**이고, 그래서 `/book` 도 같이 고쳤다.
+        if (인증이풀렸다(e) || 역할이다르다(e)) {
+          // 인증 화면이 나머지를 안다 — 401 이든 403 이든 **코드 입력을 연다.**
+          // **이미 서 있는 화면이라 새로 만들 것이 없다.**
           router.replace("/child/auth");
           return;
         }

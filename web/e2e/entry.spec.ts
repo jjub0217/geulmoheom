@@ -138,3 +138,59 @@ test("책도 같은 뿌리다 — 401 이면 인증 화면으로 보낸다", asy
   await expect(본문(page).getByText(코드입력.제목)).toBeVisible();
   await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toBeVisible();
 });
+
+/**
+ * **⛔ 2026-09-14 아동 3명 회차 준비에서 나왔다** (`프리테스트_결과_2026-09-14.md` 3장 ⑪).
+ *
+ * **이쪽이 진짜 흐름이다** — 부모가 접속 코드를 받아 아이에게 넘기고 **아이는 링크(`/`)를
+ * 연다.** `/child/auth` 를 직접 치는 아이는 없다. 그런데 그 브라우저에는 **부모 쿠키가
+ * 살아 있어** `/cards/next` 가 **403 `FORBIDDEN_ROLE`** 로 답한다.
+ *
+ * **어제 고친 것은 `/child/auth` 하나뿐이었다** — 정작 아이가 먼저 닿는 `/` 는
+ * 「여기는 지금 들어갈 수 없어요」에서 끝나고 **코드 입력으로 가는 길이 없었다.**
+ * **낱개로 고쳐서 다음이 또 나온 자리다.**
+ */
+async function 부모쿠키가있는상태(page: Page) {
+  const 역할거절 = {
+    status: 403,
+    json: { error: { code: "FORBIDDEN_ROLE", message: "여기는 지금 들어갈 수 없어요" } },
+  };
+  await page.route(CARDS_NEXT, (route) => route.fulfill(역할거절));
+  await page.route(CHILD_ME, (route) => route.fulfill(역할거절));
+  await page.route("**/api/v1/book", (route) => route.fulfill(역할거절));
+}
+
+test("부모가 로그인한 브라우저에서 열어도 코드 입력까지 간다 — 403 도 401 과 같다", async ({
+  page,
+}) => {
+  await 부모쿠키가있는상태(page);
+
+  // **부모가 건넨 주소가 `/` 다.** 아이는 여기로 온다.
+  await page.goto("/");
+
+  await page.waitForURL("**/child/auth");
+  await expect(본문(page).getByText(코드입력.제목)).toBeVisible();
+  await expect(page.getByLabel(코드입력.라벨)).toBeVisible();
+
+  // **막다른 화면이 아니다.** 이 문장에서 끝나면 아이가 들어갈 길이 없다.
+  await expect(본문(page).getByText("여기는 지금 들어갈 수 없어요")).toHaveCount(0);
+
+  // **표식을 안 단다.** 「부모님이 새 접속 코드를 받으셨어요」는 **끊긴 아이**에게 하는 말인데
+  // (`문구.md` 3.3), 여기 온 아이는 **아직 한 번도 안 들어왔다** — 붙이면 거짓이다.
+  expect(new URL(page.url()).searchParams.has("kicked")).toBe(false);
+  await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toHaveCount(0);
+});
+
+test("책도 같은 뿌리다 — 403 이면 표식 없이 인증 화면으로 보낸다", async ({ page }) => {
+  await 부모쿠키가있는상태(page);
+
+  await page.goto("/book");
+
+  await page.waitForURL("**/child/auth");
+  await expect(본문(page).getByText(코드입력.제목)).toBeVisible();
+
+  // **401 과 갈린다.** 401 은 **들어와 있다가 끊긴 것**이라 표식을 달지만(위 검사),
+  // 403 은 **부모 쿠키가 있는 것**이라 **새 코드를 받은 적이 없다.**
+  expect(new URL(page.url()).searchParams.has("kicked")).toBe(false);
+  await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toHaveCount(0);
+});
