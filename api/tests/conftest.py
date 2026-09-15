@@ -46,6 +46,26 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.setdefault("JWT_SECRET", "test-secret-not-used-anywhere-else")
 os.environ.setdefault("APP_ENV", "dev")
 
+# **⛔ 돈이 나가는 것을 여기서 막는다** (2026-09-15).
+#
+# `.env` 에는 **진짜 키와 진짜 모델 이름**이 들어 있고 설정은 그것을 읽는다. 그래서
+# **프로바이더 호출을 갈아끼우는 것을 잊은 테스트는 진짜 호출을 낸다** — 그리고
+# **응답이 오니까 초록으로 지나간다.** 빨간불이 아니라 청구서로 오는 부류다.
+#
+# **`setdefault` 가 아니라 덮어쓴다.** 이 자리는 「없으면 채운다」가 아니라
+# 「무엇이 있든 못 쓰게 한다」다.
+#
+# **실제로 밟았다** — 2026-09-15 에 `POST /attempts` 가 아이 문장으로 굽기 시작하면서
+# (`adr/0015` ②) **갈아끼우는 것을 잊은 테스트들이 진짜 이미지를 구웠다.** 그날 비용
+# 카운터가 $0.0672(이미지 2장) 올랐다. **그 전까지는 제품 경로에 굽기가 없어서
+# 이 구멍이 안 보였다.**
+#
+# **가짜 앞단을 쓰는 테스트는 그대로 돈다** — 그쪽은 `GEMINI_BASE_URL` 로 **주소**를
+# 돌리지 키를 쓰지 않는다 (`tests/fake_gemini.py`). 값도 한 군데에서 가져온다.
+from tests.fake_gemini import 못쓰는키  # noqa: E402
+
+os.environ["GEMINI_API_KEY"] = 못쓰는키
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
