@@ -328,16 +328,18 @@ def test_헤더가_없으면_판정_결과가_나온다(client: TestClient):
     assert body["tier"] == "rare"
     assert [h["text"] for h in body["highlights"]] == ["은빛", "살금살금"]
     assert body["outcome"] == "result"
-    # **즉시 `ready` 다** (2026-09-09). 신규 생성을 하지 않으므로 기존 파일을
-    # 가리키거나 기본 에셋으로 확정하고, 어느 쪽이든 굽는 시간이 없다.
-    assert body["artwork"]["status"] == "ready"
+    # **`pending` 이다** (2026-09-15, `adr/0015` ②). 아이 문장으로 굽기 때문에 그림이
+    # 아직 없고, **프론트는 이 값을 보고 폴링한다**(3초/2초/15초, `web/src/lib/artwork.ts`).
+    # 2026-09-09~09-15 에는 `ready` 였다 — 그때는 깔아 둔 파일을 가리키기만 했다.
+    assert body["artwork"]["status"] == "pending"
     # **`placeholder_url` 은 2026-09-08 계약에서 빠졌다.** 성공이든 폴백이든 그림은
     # `/artworks/{id}/image` 한 주소로 나간다 — 별도 주소를 두면 **주소만 보고
     # 「기본 그림인가」를 알 수 있게 된다.**
     assert "placeholder_url" not in body["artwork"]
-    # **상대 경로다** (`adr/0012` ① — 한 오리진). `endswith` 만 재면 절대 주소도
-    # 통과하므로 **통째로 비교한다** — 셋 중 한 곳만 절대로 돌아가면 조용히 샌다.
-    assert body["artwork"]["url"] == f"/api/v1/artworks/{body['artwork']['artwork_id']}/image"
+    # **굽는 중이라 주소가 아직 없다** (`삽화주소()` — 「프론트가 `status` 로 가르는데
+    # 주소까지 미리 주면 그 분기가 흐려진다」). **주소 규칙 자체는 폴링·책이 같이 쓰고**
+    # `test_artwork_polling.py` 가 잰다.
+    assert body["artwork"]["url"] is None
 
 
 def test_scaffold_를_헤더로_강제한다(client: TestClient):

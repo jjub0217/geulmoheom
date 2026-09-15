@@ -81,6 +81,28 @@ async def 세어보기(session: AsyncSession, book_id: uuid.UUID) -> dict[str, i
     return {티어: int(센것.get(티어, 0)) for 티어 in _높이}
 
 
+async def 더_높은가(session: AsyncSession, 아이: Child, card_id: str, tier: Tier) -> bool:
+    """이 티어가 **그 카드의 책 페이지를 바꾸나.** 페이지가 아직 없으면 참이다.
+
+    **삽화를 다시 굽는 조건이 이것이다** (`adr/0015` ②). 같은 규칙을 두 군데 적지
+    않으려고 여기 둔다 — **책이 바뀌는 자리와 그림을 굽는 자리가 갈리면**, 책에 안
+    실릴 그림에 돈을 쓰거나 **책에 실린 문장과 다른 그림**이 남는다.
+
+    **그리고 이것이 비용 천장이다.** 재시도는 일일 상한 밖이라(`attempts.py`) 여기서
+    막지 않으면 **아이 한 명의 하루 비용에 천장이 없다.** 카드 하나에 최대 3회
+    (첫 장 + `basic→rare` + `rare→legendary`), 하루 5장이니 **15회가 최악**이다.
+    """
+    그책 = await 책(session, 아이)
+    있던것 = await session.scalar(
+        select(BookPage).where(
+            BookPage.book_id == 그책.id,
+            BookPage.source == "card",
+            BookPage.source_id == card_id,
+        )
+    )
+    return 있던것 is None or _높이[tier] > _높이[있던것.tier]
+
+
 async def 페이지올리기(
     session: AsyncSession,
     아이: Child,

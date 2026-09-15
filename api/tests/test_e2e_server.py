@@ -130,6 +130,22 @@ def _기다린다(서버: subprocess.Popen, 주소: str, 초: float = 40) -> Non
     raise RuntimeError("서버가 제한 시간 안에 안 떴다")
 
 
+def _구워질때까지(손님: httpx.Client, artwork_id: str, 초: float = 15) -> str:
+    """`ready` 가 될 때까지 물어본다. **프론트가 하는 것과 같다**(3초/2초/15초).
+
+    **`fallback` 이면 이 검사가 선 것이 아니다** — 가짜 앞단이 그림을 주므로
+    **여기서 폴백이 나오면 굽는 길 어딘가가 끊긴 것**이다. 200 만 보면 그 둘이 같다.
+    """
+    끝 = time.monotonic() + 초
+    while time.monotonic() < 끝:
+        몸 = 손님.get(f"/artworks/{artwork_id}").json()
+        if 몸["status"] == "ready":
+            assert not 몸["fallback"], "가짜 앞단이 그림을 줬는데 폴백으로 떨어졌다"
+            return 몸["url"]
+        time.sleep(0.3)
+    raise AssertionError("삽화가 제한 시간 안에 안 구워졌다")
+
+
 def test_가입부터_책까지_한_갈래가_진짜_서버를_지난다(태운서버: tuple[str, 가짜앞단]):
     """가입(E-3) → 카드 → 문장 → 등급(B-2) → 그림(B-3) → 책(A0-4).
 
@@ -171,9 +187,16 @@ def test_가입부터_책까지_한_갈래가_진짜_서버를_지난다(태운�
         assert 몸통["tier"] == "legendary"
         assert 앞단.받은경로, "가짜 앞단이 한 번도 안 불렸다 — 유료 호출이 나갔을 수 있다"
 
-        # **그림은 굽지 않는다**(W5 7번) — 캐시에 없으면 기본 에셋으로 확정된다.
-        # 여기서 재는 것은 「무슨 그림인가」가 아니라 **주소가 실제로 바이트를 준다**는 것이다.
-        주소값 = 몸통["artwork"]["url"]
+        # **이제 굽는다** (`adr/0015` ②, 2026-09-15). 그래서 여기가 `pending` 이고
+        # **주소가 아직 없다** — 프론트는 이 자리에서 폴링을 시작한다.
+        # **가짜 앞단이 이미지 갈래도 받는다**(모델 이름에 `image` 가 든다) —
+        # 그래서 이 검사는 **돈을 안 쓰고 굽는 길 전체**를 지난다.
+        assert 몸통["artwork"]["status"] == "pending"
+        assert 몸통["artwork"]["url"] is None
+
+        # **폴링까지 지난다** — 굽는 것은 백그라운드라 응답 뒤에 끝난다. 프론트와 같은
+        # 상한(15초)을 쓴다 (`Stage0.md` 5절 · `web/src/lib/artwork.ts`).
+        주소값 = _구워질때까지(손님, 몸통["artwork"]["artwork_id"])
         assert 주소값.startswith("/api/v1/artworks/"), "상대 경로여야 한다 (`adr/0012`)"
         그림 = 손님.get(주소값.removeprefix("/api/v1"))
         assert 그림.status_code == 200

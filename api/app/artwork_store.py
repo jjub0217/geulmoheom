@@ -33,13 +33,18 @@ from app.config import REPO_ROOT
 from app.middleware import current_request_id
 from app.models import Artwork, CardAttempt
 from app.schemas.stage0 import Tier
-from app.storage import mime추측, 올리기, 읽기, 조합찾기, 조합키
+from app.storage import mime추측, 시도키, 올리기, 읽기, 조합찾기
 
 logger = logging.getLogger(__name__)
 
 
 async def 만들기(
-    session: AsyncSession, card_attempt_id: uuid.UUID, tier: Tier, card_id: str
+    session: AsyncSession,
+    card_attempt_id: uuid.UUID,
+    tier: Tier,
+    card_id: str,
+    *,
+    굽나: bool = False,
 ) -> Artwork:
     """행 하나. **커밋까지 한다** — 「내 책」과 폴링이 다른 세션으로 이 행을 찾는다.
 
@@ -59,6 +64,20 @@ async def 만들기(
     `/artworks/{id}/image` 하나 그대로다. **어느 종류의 폴백인지는 서버 로그에만
     남긴다** — 아이에게는 어느 쪽이든 그냥 그림이 나온 것이어야 한다.
     """
+    if 굽나:
+        # **아이 문장으로 구울 행이다** (`adr/0015` ②). `pending` 으로 두고 부르는
+        # 쪽이 뒤에서 굽는다 — **여기서 굽지 않는다.** 이 함수는 요청 세션을 쥐고 있고,
+        # 굽기는 응답이 나간 뒤에 도는 코드다.
+        #
+        # **`fallback` 은 거짓으로 시작한다.** 아직 실패하지 않았다 — 15초를 넘기거나
+        # 굽기가 실패하면 그때 참이 된다 (`오래_기다렸으면_확정` · `굽기`).
+        굽는것 = Artwork(
+            card_attempt_id=card_attempt_id, tier=tier, status="pending", fallback=False
+        )
+        session.add(굽는것)
+        await session.commit()
+        return 굽는것
+
     찾은 = await 조합찾기(card_id, tier)
     if 찾은 is None:
         # **아이 원문이 아니다** — 카드 id 와 티어는 우리가 정한 값이라 실어도 된다.
@@ -87,12 +106,18 @@ async def 만들기(
     return 삽화
 
 
-async def 굽기(artwork_id: uuid.UUID, card_id: str, tier: Tier) -> None:
+async def 굽기(
+    artwork_id: uuid.UUID, card_id: str, tier: Tier, 아이문장: str | None = None
+) -> None:
     """생성 → 저장 → 행 갱신. **예외를 밖으로 내지 않는다.**
 
-    **⛔ 지금 이것을 부르는 제품 코드가 없다** (2026-09-09, 위 모듈 주석). **유료
-    이미지 호출이 여기서 나가므로 아무 데서나 다시 부르지 않는다** — 되살리는 것은
-    Stage 1 이고, 그때도 **아이 요청이 아니라 정해진 자리에서** 부른다.
+    **⛔ 유료 이미지 호출이 여기서 나간다.** 2026-09-15 에 **아이 요청 경로로 되살아났다**
+    (`adr/0015` ②, 대표 판정) — 2026-09-09 에 걷어낸 그 자리다. **상한을 부르는 쪽이
+    쥔다**: 하루 카드 5장 + **등급이 오른 재시도만.** 여기서는 안 센다 —
+    **세는 자리가 둘이면 한쪽만 바뀐다**(`attempts.굽나`).
+
+    **`아이문장` 은 가린 것이다** (`adr/0015` ②). 원문을 받으면 **가린 것이 그림으로
+    되돌아온다.** 여기서 다시 가리지 않는다 — 두 군데서 가리면 한쪽만 바뀌는 날이 온다.
 
     백그라운드에서 돈다. 여기서 터진 것이 아이 응답을 되돌릴 수는 없지만
     (응답은 이미 나갔다), **행이 `pending` 에 갇히면 프론트가 15초를 헛돈다** —
@@ -102,19 +127,33 @@ async def 굽기(artwork_id: uuid.UUID, card_id: str, tier: Tier) -> None:
     **요청 세션에 얹지 않는다.** 응답이 나간 뒤에 도는 코드라 그 세션은 이미 닫혔다.
     """
     try:
-        결과 = await 생성(card_id, tier)
+        결과 = await 생성(card_id, tier, 아이문장)
         키 = None
-        if 결과.image and (오브젝트키 := 조합키(card_id, tier, 결과.mime)):
-            # **조합 키로 올린다** — 다음에 같은 카드·같은 등급이 오면 이 파일을 가리킨다.
+        if 결과.image and (오브젝트키 := 시도키(artwork_id, 결과.mime)):
+            # **⛔ 조합 키가 아니라 시도 키다** (`adr/0015` ②). 조합 키는 카드+티어
+            # 하나에 파일 하나라 **여러 아이가 같이 보는 자리**다 — 아이 문장으로 구운
+            # 그림을 거기 덮으면 **다음 아이가 남의 문장으로 그려진 그림을 캐시 히트로
+            # 받고**, 깔아 둔 `legendary` 18장도 덮인다.
             키 = await 올리기(오브젝트키, 결과.image, 결과.mime)
         if 키 is None:
+            # **기본 에셋 앞에 조합 파일을 한 번 본다.** 미리 깔아 둔 `legendary` 가
+            # 있는데 안 보면 **아이가 오늘보다 나쁜 그림을 받는다** — 회색 액자 한 장이다.
+            # **`fallback` 은 참이다**: 아이 문장으로 그린 것이 아니다.
+            찾은 = await 조합찾기(card_id, tier)
             # **사유는 우리 눈금이다** (`artwork.생성결과`). 아이에게 안 나간다 —
             # 나가면 「기본 그림이야」가 되고, 그건 아이가 자기 문장이 부족했다고 읽는다.
             logger.info(
-                "삽화를 기본 에셋으로 확정한다",
-                extra={"request_id": current_request_id(), "reason": 결과.사유 or "store"},
+                "삽화를 못 구워 폴백한다",
+                extra={
+                    "request_id": current_request_id(),
+                    "reason": 결과.사유 or "store",
+                    "card_id": card_id,
+                    "tier": tier,
+                },
             )
-        await _끝냈다(artwork_id, 키)
+            await _끝냈다(artwork_id, 찾은.키 if 찾은 else None, 폴백=True)
+            return
+        await _끝냈다(artwork_id, 키, 폴백=False)
     except Exception as exc:
         # **예외 메시지를 싣지 않는다** — 프로바이더가 프롬프트를 되울려 주는 일이 있고,
         # Stage 1 에서는 그 프롬프트에 GM 서사가 들어온다.
@@ -122,11 +161,16 @@ async def 굽기(artwork_id: uuid.UUID, card_id: str, tier: Tier) -> None:
             "삽화 굽기가 실패했다",
             extra={"request_id": current_request_id(), "exc_type": type(exc).__name__},
         )
-        await _끝냈다(artwork_id, None)
+        await _끝냈다(artwork_id, None, 폴백=True)
 
 
-async def _끝냈다(artwork_id: uuid.UUID, r2_key: str | None) -> None:
-    """`ready` 로 확정한다. **`r2_key` 가 없으면 `fallback` 이다.**
+async def _끝냈다(artwork_id: uuid.UUID, r2_key: str | None, *, 폴백: bool) -> None:
+    """`ready` 로 확정한다.
+
+    **`폴백` 을 부르는 쪽이 준다.** 종전에는 `r2_key is None` 으로 유도했는데,
+    **조합 파일로 떨어진 경우가 「키는 있지만 폴백」**이라 그 유도가 틀린다
+    (`adr/0015` ②). 아이에게는 어느 쪽이든 그냥 그림이 나온 것이어야 하고,
+    **어느 종류의 폴백인지는 우리 눈금에만 남는다.**
 
     **행이 없어도 조용히 지나간다** — 자녀 삭제(E-4 「즉시 파기」)가 굽는 중에 들어오면
     실제로 난다. 그때 여기서 터지면 로그만 시끄럽고 고칠 것은 없다.
@@ -138,7 +182,7 @@ async def _끝냈다(artwork_id: uuid.UUID, r2_key: str | None) -> None:
                 return
             삽화.status = "ready"
             삽화.r2_key = r2_key
-            삽화.fallback = r2_key is None
+            삽화.fallback = 폴백
             삽화.ready_at = datetime.now(UTC)
             await session.commit()
     except Exception as exc:

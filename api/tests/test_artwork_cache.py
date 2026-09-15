@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from app import artwork_store, db, storage
 from app.api.v1 import attempts
+from app.artwork import 생성결과
 from app.evaluator import 평가결과
 from app.models import Artwork
 from app.moderation import 검사결과
@@ -125,7 +126,11 @@ async def test_legendary_요청은_폴백할_곳이_없다():
     assert await storage.조합찾기("c01", "legendary") is None
 
 
-# ── 라우트까지 — 이미 있으면 안 굽는다 ──────────────────
+# ── 라우트까지 — **안 굽는 갈래**가 여기를 쓴다 ──────────
+#
+# **2026-09-15 에 이 절이 재는 자리가 좁아졌다** (`adr/0015` ②). 첫 장은 이제 아이
+# 문장으로 굽고, 조합 파일은 **같은 등급으로 다시 쓴 경우**와 **굽기 실패**의 폴백이다.
+# 그래서 아래 셋은 전부 **재시도**로 잰다 — 굽지 않는 갈래가 거기 하나 남았다.
 
 문장 = "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
 
@@ -151,70 +156,85 @@ async def _삽화들() -> list[Artwork]:
         return list(await session.scalars(select(Artwork)))
 
 
-async def test_이미_구워진_조합이면_즉시_ready_이고_안_굽는다(
-    client: TestClient, 판정_고정, monkeypatch: pytest.MonkeyPatch
+async def _마지막삽화() -> Artwork:
+    async with db.SessionLocal() as session:
+        행들 = list(await session.scalars(select(Artwork).order_by(Artwork.created_at)))
+    return 행들[-1]
+
+
+@pytest.fixture
+def 구운것(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """첫 장은 굽는다(`adr/0015` ②). **네트워크를 타지 않게 갈아끼우고 센다** —
+    여기서 재는 것은 **두 번째 장이 안 굽는 것**이라, 첫 장은 세어만 둔다."""
+    불린것: list[str] = []
+
+    async def _센다(card_id: str, tier: str, 아이문장: str | None = None):
+        불린것.append(card_id)
+        return 생성결과(사유="unconfigured")
+
+    monkeypatch.setattr(artwork_store, "생성", _센다)
+    return 불린것
+
+
+def _보내기(client: TestClient, **덧붙임) -> dict:
+    return client.post("/api/v1/attempts", json={"card_id": "c01", "text": 문장} | 덧붙임).json()
+
+
+async def test_같은_등급으로_다시_쓰면_깔아_둔_조합을_가리킨다(
+    client: TestClient, 판정_고정, 구운것
 ):
-    """**이것이 이 항목의 전부다.** 지금은 시도마다 새로 굽고, 그래서 같은 조합을
-    100명이 만나면 100번 생성된다 — 아이 50명 x 9일이면 약 6만 원이다."""
+    """**천장이 선 자리에서 캐시가 산다** (`adr/0015` ②). 같은 등급 재시도는 안 굽고,
+    그러면 가리킬 것이 필요하다 — 그게 미리 깔아 둔 조합 파일이다.
+
+    **`fallback` 은 거짓이다** — 요청한 티어 그대로라서다. 아이 문장으로 그린 것은
+    아니지만, 그 눈금은 「요청한 조합을 줬나」를 센다.
+    """
     키 = storage.조합키("c01", "rare", "image/png")
     await storage.올리기(키, b"\x89PNG", "image/png")
+    첫 = _보내기(client)
 
-    불렸다: list[str] = []
+    몸 = _보내기(client, retry_of=첫["attempt_id"])
 
-    async def _생성(card_id: str, tier: str):
-        불렸다.append(card_id)
-        raise AssertionError("이미 있는 조합인데 구웠다")
-
-    monkeypatch.setattr(artwork_store, "생성", _생성)
-
-    몸 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": 문장}).json()
-
+    assert 구운것 == ["c01"]
     assert 몸["artwork"]["status"] == "ready"
-    (삽화,) = await _삽화들()
-    assert 삽화.status == "ready"
+    삽화 = await _마지막삽화()
     assert 삽화.r2_key == 키
     assert 삽화.fallback is False
-    assert not 불렸다
 
 
 async def test_티어가_비면_legendary_를_주고_fallback_이_참이다(
-    client: TestClient, 판정_고정, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, 판정_고정, 구운것
 ):
     """**아이 화면은 안 갈린다** — 주소도 `/artworks/{id}/image` 하나 그대로고
     `status` 도 `ready` 다. 갈리는 것은 `fallback` 뿐이고 그건 아이에게 안 나간다."""
     키 = storage.조합키("c01", "legendary", "image/jpeg")
-    assert 키 is not None
     await storage.올리기(키, b"\xff\xd8\xff", "image/jpeg")
+    첫 = _보내기(client)
 
-    몸 = client.post("/api/v1/attempts", json={"card_id": "c01", "text": 문장}).json()
+    몸 = _보내기(client, retry_of=첫["attempt_id"])
 
     assert 몸["artwork"]["status"] == "ready"
-    (삽화,) = await _삽화들()
+    삽화 = await _마지막삽화()
     # 이 시도의 티어는 `rare` 인데 파일은 `legendary` 다.
     assert 삽화.tier == "rare"
     assert 삽화.r2_key == 키
     assert 삽화.fallback is True
 
 
-async def test_c10_c12_처럼_아무_파일도_없으면_기본_에셋이다(
-    client: TestClient, 판정_고정, monkeypatch: pytest.MonkeyPatch
-):
+async def test_c10_c12_처럼_아무_파일도_없으면_기본_에셋이다(client: TestClient, 판정_고정, 구운것):
     """**두 카드가 실제로 이 자리다** — `c10`·`c12` 는 쓸 수 있는 판이 없어
-    `legendary` 도 없다(`docs/삽화_legendary_선정.md`). **그 6조합은 파일럿 내내
-    기본 에셋으로 나간다.** 그래도 `status` 는 `ready` 이고 아이 화면은 안 멈춘다.
+    `legendary` 도 없다(`docs/삽화_legendary_선정.md`). 아이 문장으로 구운 것이
+    실패하면 **그 6조합은 기본 에셋으로 나간다.** 그래도 `status` 는 `ready` 이고
+    아이 화면은 안 멈춘다.
     """
-    불렸다: list[str] = []
+    첫 = client.post("/api/v1/attempts", json={"card_id": "c10", "text": 문장}).json()
 
-    async def _생성(card_id: str, tier: str):
-        불렸다.append(card_id)
-        raise AssertionError("파일이 없다고 구웠다")
-
-    monkeypatch.setattr(artwork_store, "생성", _생성)
-
-    몸 = client.post("/api/v1/attempts", json={"card_id": "c10", "text": 문장}).json()
+    몸 = client.post(
+        "/api/v1/attempts",
+        json={"card_id": "c10", "text": 문장, "retry_of": 첫["attempt_id"]},
+    ).json()
 
     assert 몸["artwork"]["status"] == "ready"
-    (삽화,) = await _삽화들()
+    삽화 = await _마지막삽화()
     assert 삽화.r2_key is None
     assert 삽화.fallback is True
-    assert not 불렸다

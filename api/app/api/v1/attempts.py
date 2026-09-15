@@ -24,7 +24,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +37,9 @@ from app.api.v1.deps import (
     mock_outcome,
     require_child,
 )
+from app.artwork_store import 굽기
 from app.artwork_store import 만들기 as 삽화만들기
-from app.book_store import 페이지올리기
+from app.book_store import 더_높은가, 페이지올리기
 from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
@@ -179,6 +180,7 @@ async def create_attempt(
     payload: AttemptRequest,
     아이: Child,
     session: Session,
+    뒤에서: BackgroundTasks,
     outcome: Annotated[MockOutcome | None, Depends(mock_outcome)],
     소진: Annotated[bool, Depends(mock_daily_cap_reached)],
 ) -> AttemptResponse:
@@ -291,16 +293,25 @@ async def create_attempt(
         session, 아이, payload, text=text, 평가=평가, 재시도=재시도, 하이라이트=하이라이트
     )
 
-    # **행만 만든다. 여기서 굽지 않는다** (W5 7번 ② · 2026-09-09 확정).
-    # `만들기()` 는 기존 파일을 가리키거나 기본 에셋으로 확정하고, **어느 쪽이든
-    # 즉시 `ready`** 다 — 아이를 세워 두는 시간이 0이 된다.
+    # **아이가 쓴 문장으로 굽는다** (`adr/0015` ②, 2026-09-15 대표 판정). 2026-09-09 에
+    # 걷어냈던 `뒤에서.add_task(굽기, ...)` 가 여기로 돌아왔다 — **아이 셋이 「내가 쓴
+    # 거랑 그림이 좀 다른데?」라고 스스로 말한 것**이 근거다.
     #
-    # **여기 있던 `뒤에서.add_task(굽기, ...)` 를 걷어냈다.** 그 한 줄이
-    # **아이 손에서 유료 이미지 호출이 나가는 유일한 경로**였다. 파일럿에는
-    # `basic`·`rare` 파일이 아예 없어서, 두면 아이가 카드를 쓸 때마다 캐시 미스로
-    # 굽는다. **`artwork_store.굽기()` 자체는 남아 있다** — Stage 1 에서 되살아나고,
-    # 그때 이 자리로 돌아온다.
-    삽화 = await 삽화만들기(session, 시도.id, 평가.tier, payload.card_id)
+    # **⛔ 천장이 이 한 줄이다.** 재시도는 일일 상한 밖이라(위 `retry_of` 분기)
+    # 여기서 막지 않으면 **아이 한 명의 하루 비용에 천장이 없다.** 조건을 **「책 페이지가
+    # 바뀌나」**로 둔다 — 카드 하나에 최대 3회(첫 장 + `basic→rare` + `rare→legendary`),
+    # 하루 5장이니 **15회 · 약 $0.50 이 최악**이고 그 수가 대표 판정의 근거다.
+    #
+    # **책과 같은 규칙을 쓰는 것이 요점이다.** 갈리면 **책에 안 실릴 그림에 돈을 쓰거나**,
+    # 책에 실린 문장과 다른 그림이 남는다.
+    굽나 = await 더_높은가(session, 아이, payload.card_id, 평가.tier)
+    삽화 = await 삽화만들기(session, 시도.id, 평가.tier, payload.card_id, 굽나=굽나)
+    if 굽나:
+        # **`text` 를 넘긴다 — 원문이 아니다.** 이것이 `card_attempts.text` 로 저장되고
+        # **책 페이지에 그대로 실리는 문자열**이라, 그림도 같은 문자열에서 나와야
+        # **책의 문장과 그림이 같은 것을 말한다.** 원문을 넘기면 가린 것이 그림으로
+        # 되돌아온다 (`adr/0015` ②).
+        뒤에서.add_task(굽기, 삽화.id, payload.card_id, 평가.tier, text)
 
     # **책이 여기서 쌓인다** (`Stage0.md` 9절 10b). 카드별 **최고 티어 1건**이 한
     # 페이지이고, 티어가 올랐을 때만 교체된다 — 같은 티어로 다시 쓰면 **처음 해낸

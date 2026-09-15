@@ -12,13 +12,14 @@
 import asyncio
 import io
 import logging
+import uuid
 
 import pytest
 from pydantic import SecretStr
 
 from app import storage
 from app.config import get_settings
-from app.storage import mime추측, 설정됐나, 올리기, 읽기, 조합키
+from app.storage import mime추측, 설정됐나, 시도키, 올리기, 읽기, 조합키
 
 이미지 = b"\x89PNG\r\n\x1a\n" + b"0" * 64
 
@@ -85,6 +86,38 @@ def test_조합_키는_결정론적이되_추측할_수_없다():
     assert 첫.startswith("artworks/c01_basic-") and 첫.endswith(".png")
     # **조합만으로 맞출 수 있으면 안 된다.**
     assert 첫 != "artworks/c01_basic.png"
+
+
+def test_아이_문장으로_구운_것은_조합_키에_안_올라간다():
+    """**같은 키에 올리면 한 아이의 그림이 다른 아이에게 나간다** (`adr/0015` ②).
+
+    조합 키는 **카드+티어 하나에 파일 하나**라 여러 아이가 같이 본다. 아이 문장으로
+    구운 그림은 **그 아이의 것**이라 그 자리에 덮으면 안 된다 — 덮으면 다음 아이가
+    같은 카드를 썼을 때 **남이 쓴 문장으로 그려진 그림**을 캐시 히트로 받는다.
+    **그리고 깔아 둔 `legendary` 18장이 아이 그림으로 덮인다.**
+    """
+    시도 = 시도키(uuid.UUID("11111111-1111-1111-1111-111111111111"), "image/png")
+
+    assert 시도 != 조합키("c01", "legendary", "image/png")
+    assert not 시도.startswith("artworks/c01")
+
+
+def test_시도_키도_결정론적이되_추측할_수_없다():
+    """**결정론적이어야 다시 구워도 같은 자리에 덮인다** — 난수면 실패한 굽기가
+    쓰레기 파일을 남긴다. **그러면서 id 만으로 맞출 수는 없어야 한다**(`조합키` 와 같은 이유).
+    """
+    아이디 = uuid.UUID("22222222-2222-2222-2222-222222222222")
+
+    첫, 둘 = 시도키(아이디, "image/png"), 시도키(아이디, "image/png")
+
+    assert 첫 == 둘
+    assert 첫.endswith(".png")
+    assert 첫 != f"artworks/시도/{아이디}.png"
+    assert 시도키(uuid.UUID("33333333-3333-3333-3333-333333333333"), "image/png") != 첫
+
+
+def test_시도_키도_모르는_형식은_저장하지_않는다():
+    assert 시도키(uuid.UUID("44444444-4444-4444-4444-444444444444"), "image/heic") is None
 
 
 @pytest.mark.parametrize(

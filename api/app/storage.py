@@ -29,6 +29,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import uuid
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -90,12 +91,38 @@ def _키(card_id: str, tier: str, 확: str) -> str:
     return f"artworks/{card_id}_{tier}-{_조각(card_id, tier)}.{확}"
 
 
-def _조각(card_id: str, tier: str) -> str:
-    """조합에서 유도한 16자. **비밀이 없으면 고정 문자열로 떨어진다** — 개발·테스트가
+def 시도키(artwork_id: uuid.UUID, mime: str) -> str | None:
+    """**아이 문장으로 구운 그림 한 장**의 키 (`adr/0015` ②). 모르는 형식이면 `None`.
+
+    **⛔ 조합 키에 올리지 않는다.** 조합 키는 **카드+티어 하나에 파일 하나**라 여러
+    아이가 같이 본다 — 거기 덮으면 **한 아이의 그림이 다른 아이에게 캐시 히트로
+    나가고**, 깔아 둔 `legendary` 18장도 덮인다. 문장으로 구운 것은 그 아이의 것이다.
+
+    **결정론적이다** — 다시 구우면 같은 자리에 덮는다. 난수면 실패한 굽기가 쓰레기
+    파일을 남기고, 그걸 지우는 코드를 또 세워야 한다.
+
+    **그러면서 id 만으로 맞출 수 없다** — `artwork_id` 는 응답에 실려 나가는 값이라
+    (`ArtworkRef`) 그것만으로 키가 되면 **id 를 아는 사람이 곧 그림을 볼 수 있는
+    사람**이 된다. `조합키` 와 같은 이유로 **비밀에서 유도한 조각**을 붙인다.
+    """
+    확 = 확장자.get(mime)
+    if not 확:
+        logger.warning("모르는 이미지 형식이라 저장하지 않는다: %s", mime)
+        return None
+    return f"artworks/시도/{artwork_id}-{_조각('시도', str(artwork_id))}.{확}"
+
+
+def _조각(*부분: str) -> str:
+    """키 재료에서 유도한 16자. **비밀이 없으면 고정 문자열로 떨어진다** — 개발·테스트가
     그 상태이고, 그때는 그냥 「추측 가능한 키」가 된다. 비공개 버킷 + 프록시라
-    거기서 새는 것은 없다."""
+    거기서 새는 것은 없다.
+
+    **재료를 `/` 로 잇는다.** 조합 키는 `("c01", "basic")`, 시도 키는
+    `("시도", artwork_id)` 다 — **둘이 같은 문자열을 만들 수 없어야** 한 쪽 키가
+    다른 쪽 자리를 덮지 않는다.
+    """
     비밀 = get_settings().jwt_secret.get_secret_value().encode()
-    return hmac.new(비밀, f"{card_id}/{tier}".encode(), hashlib.sha256).hexdigest()[:16]
+    return hmac.new(비밀, "/".join(부분).encode(), hashlib.sha256).hexdigest()[:16]
 
 
 @dataclass(frozen=True)

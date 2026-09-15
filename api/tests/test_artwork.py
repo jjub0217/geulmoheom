@@ -74,11 +74,39 @@ def test_화풍이_모든_프롬프트에_들어간다():
     assert STYLE in 프롬프트("c01", "basic")
 
 
-def test_아이_원문은_프롬프트에_안_들어간다():
-    """프롬프트 재료에 아이 문장이 낄 자리 자체를 두지 않았다 — `프롬프트()` 는
-    `card_id` 와 `tier` 만 받는다. **인자가 늘면 이 테스트부터 다시 본다.**"""
+def test_아이_문장이_프롬프트에_들어간다():
+    """**뒤집혔다** (`adr/0015`, 2026-09-15 대표 판정 ②). 종전 검사는
+    「아이 원문은 프롬프트에 안 들어간다」였고 **「인자가 늘면 이 테스트부터 다시 본다」**고
+    적혀 있었다. 그 인자가 늘었다.
+
+    **아이 셋이 찾아냈다** — 「내가 쓴 거랑 그림이 좀 다른데?」
+    (`프리테스트_결과_2026-09-14.md` 1장).
+    프롬프트에 아이 문장이 없어서 그림에 들어가는 것이 **「무엇을 했는가」가 아니라
+    「얼마나 잘 썼는가」뿐**이었다.
+    """
     for tier in ("basic", "rare", "legendary"):
-        assert 아이문장 not in 프롬프트("c01", tier)
+        assert 아이문장 in 프롬프트("c01", tier, 아이문장)
+
+
+def test_문장을_안_넘기면_종전과_같다():
+    """**갈래를 새로 만들지 않는다.** `scripts/bench_image.py` 와 Stage 1 이 문장 없이
+    부르고, 그때는 **카드+티어만으로 그리던 그대로**여야 한다 — 기본값이 다른 그림을
+    만들면 벤치가 재던 것이 바뀐다."""
+    assert 프롬프트("c01", "rare") == 프롬프트("c01", "rare", None)
+    assert 아이문장 not in 프롬프트("c01", "rare")
+
+
+def test_카드_스케치는_아이_문장이_있어도_남는다():
+    """**카드를 버리지 않는다** (`adr/0015` 결정). 배경·장소·등장물은 카드가 쥐고
+    아이 문장이 **그 안에서 무슨 일이 일어나는지**를 정한다. 카드를 버리면
+    **같은 카드가 같은 장소라는 보장이 사라진다.**"""
+    카드 = 모험카드들()[0]
+
+    문장 = 프롬프트(카드.card_id, "rare", 아이문장)
+
+    assert 카드.스케치프롬프트 in 문장
+    assert GUIDE in 문장
+    assert STYLE in 문장
 
 
 def test_모르는_카드는_None(caplog):
@@ -173,6 +201,43 @@ def test_생성되면_이미지와_mime_이_온다(monkeypatch):
     assert 결과.mime == "image/png"
     assert not 결과.사유
     assert 쓴돈 == [(artwork.장당USD, "image")]
+
+
+def test_아이_문장이_생성_호출까지_간다(monkeypatch):
+    """**여기서 끊기면 프롬프트만 고친 것이 된다** — `프롬프트()` 는 받는데 `생성()` 이
+    안 넘기면 검사는 초록이고 아이 그림은 그대로 어긋난다 (`adr/0015`)."""
+    _고정(monkeypatch, 검사(block=False))
+    _생성고정(monkeypatch, (b"PNGBYTES", "image/png"))
+    나간것 = []
+
+    async def _한번(모델명, 프롬프트문, 레퍼런스):
+        나간것.append(프롬프트문)
+        return (b"PNGBYTES", "image/png")
+
+    monkeypatch.setattr(artwork, "_한번", _한번)
+
+    asyncio.run(생성("c01", "rare", 아이문장))
+
+    assert 나간것 and 아이문장 in 나간것[0]
+
+
+def test_출력_검사가_아이_문장까지_본다(monkeypatch):
+    """**안전 갈래를 새로 만들지 않는다** (`adr/0015` 「안전 — 이미 서 있는 것」).
+    아이 문장이 프롬프트에 들어가면 **이미 서 있는 출력 검사가 그것도 본다.**
+    검사에 넘어간 문장에 아이 문장이 없으면 **그 자리가 통째로 비는 것**이다."""
+    본것 = []
+
+    async def _한번(모델: str, 문장: str) -> 검사:
+        본것.append(문장)
+        return 검사(block=False)
+
+    monkeypatch.setattr(moderation, "_한번", _한번)
+    monkeypatch.setattr(moderation, "_설정된모델", lambda: "test-model")
+    _생성고정(monkeypatch, (b"PNGBYTES", "image/png"))
+
+    asyncio.run(생성("c01", "rare", 아이문장))
+
+    assert 본것 and 아이문장 in 본것[0]
 
 
 def test_출력_검사에_막히면_생성_호출이_안_나간다(monkeypatch):
