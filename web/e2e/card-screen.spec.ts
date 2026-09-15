@@ -1230,3 +1230,69 @@ for (const [폭, 높이, 어디] of [
     expect(액자.height).toBeGreaterThan(높이 * 0.3);
   });
 }
+
+/**
+ * **⛔ 2026-09-14 아동 3명 관찰 회차에서 나왔다** (`프리테스트_결과_2026-09-14.md` 3장 ⑨ ·
+ * `문구.md` **2.6**).
+ *
+ * **한 브라우저에 아이 세션이 30일 남는다.** 어른이 다음 아이에게 기기를 넘겼는데
+ * **앞 아이 세션이 그대로**였고, **그 아이가 쓴 글이 앞 아이 책에 들어갔다.**
+ * 그때 **화면 어디에도 누구인지가 없었다.**
+ *
+ * **아이가 읽는 것이 아니라 어른이 확인하는 것이다** — 그래서 **꾸미지 않고**,
+ * 대신 **보이는 자리**에 둔다. 2.6 이 「맨 위」에 근거를 단 것이 그것이고,
+ * **③(「내 책」이 첫 화면 밖)이 같은 날 그 근거를 증명했다.**
+ */
+test("지금 누구인지가 맨 위에 있다 — 앞 아이로 놀지 않게", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  await page.route("**/api/v1/child/me", (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        child_id: "c-1",
+        nickname: "은빛나침반",
+        guide_name: null,
+        today: { cards_done: 0, cap: 5 },
+      },
+    }),
+  );
+
+  await page.goto("/");
+  const 이름 = page.locator("[data-탐험가이름]");
+
+  // **이름만 쓴다. 라벨도 꾸밈말도 없다** (2.6).
+  await expect(이름).toHaveText("은빛나침반");
+
+  // **「맨 위」가 조건이다 — 스크롤 없이 보여야 한다.** 안 보이는 자리에 둔 표식은 표식이 아니다.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  const 자리 = (await 이름.boundingBox())!;
+  expect(자리.y).toBeLessThan(768 * 0.2);
+
+  // **⚠ 그 자리만 본다. 화면 전체를 보면 카드 문구를 문다** — `prompt_label` 이
+  // **「탐험가는 어떻게 할까?」**이고 그건 **서버가 주는 정상 문구**다(`용어사전.md` 아이 화면 열).
+  // **2.6 이 규율하는 것은 이 한 자리**이고, 넓게 재면 **제품이 아니라 남의 규칙을 잰다.**
+  const 그자리 = await page.locator("header").innerText();
+  expect(그자리.trim()).toBe("은빛나침반");
+  // **⛔ 「별명」은 학부모 화면 말이고**(`용어사전.md`), **「탐험가」는 아이가 스스로를 부르는 말**이지
+  // 이름 앞에 붙이는 직함이 아니다. **인사말로 감싸지도 않는다** — 말을 거는 자리가 하나 더 는다.
+  for (const 안쓰는말 of ["별명", "탐험가", "안녕", "님", "환영"]) {
+    expect(그자리).not.toContain(안쓰는말);
+  }
+});
+
+test("누구인지 모르면 아무 이름도 안 쓴다 — 지어내지 않는다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: CARD }),
+  );
+  // **`/child/me` 가 못 닿았다.** 카드는 왔으므로 아이는 들어와 있다 —
+  // **그래도 이름을 모르면 그 자리를 안 그린다.** 「탐험가」 같은 기본값을 넣으면
+  // **다음 아이가 그 화면을 보고 자기 판이라고 읽는다** — 없느니만 못하다.
+  await page.route("**/api/v1/child/me", (route) => route.abort("failed"));
+
+  await page.goto("/");
+  await expect(page.getByText(CARD.situation)).toBeVisible();
+  await expect(page.locator("[data-탐험가이름]")).toHaveCount(0);
+});

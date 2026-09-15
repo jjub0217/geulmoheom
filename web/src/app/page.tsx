@@ -29,6 +29,7 @@ import { 버튼, 못닿음 } from "./copy";
 import { 상태표시 } from "./status-copy";
 
 type Card = components["schemas"]["Card"];
+type ChildMe = components["schemas"]["ChildMe"];
 type AttemptResult = components["schemas"]["AttemptResult"];
 /** 세 형태가 한 응답에 온다 (`outcome`). 셋 다 화면이 있다 — `blocked` 를 오류로 때우지 않는다. */
 type AttemptOutcome =
@@ -159,6 +160,17 @@ export default function Home() {
   const 올린종류 = useRef(new Set<PiiKind>());
 
   /**
+   * **지금 누구인지** (`문구.md` **2.6**, 2026-09-15 신설 · 결과 ⑨).
+   *
+   * **한 브라우저에 아이 세션이 30일 남는다.** 어른이 다음 아이에게 기기를 넘겼는데
+   * **앞 아이 세션이 그대로**였고, **그 아이가 쓴 글이 앞 아이 책에 들어갔다** (관찰 회차).
+   *
+   * **모르면 `null` 이고 그 자리를 아예 안 그린다.** 「탐험가」 같은 기본값을 넣으면
+   * **다음 아이가 그 화면을 보고 자기 판이라고 읽는다** — 없느니만 못하다.
+   */
+  const [이름, set이름] = useState<string | null>(null);
+
+  /**
    * 입력창이 개인정보를 가렸다 (E-2 클라이언트 1차). `pii_masked` 를 남긴다 —
    * **종류만 싣는다. 아이 문장도, 가려진 값도 싣지 않는다** (`Stage0.md` 7절 「원문 필드 없음」).
    *
@@ -180,6 +192,25 @@ export default function Home() {
       // 삼킨다. 실패 이유를 남기려면 요청 정보를 들고 있어야 하는데, 그 안에 아이 문장이 있다.
     });
   };
+
+  /**
+   * **카드와 따로 부른다.** 이름은 **카드가 바뀌어도 안 바뀌고**, 못 받아도
+   * **모험이 막히면 안 된다** — 그래서 실패를 삼킨다(화면에 오류를 안 낸다).
+   * **들어왔는지 아닌지는 `/cards/next` 쪽이 판정한다** — 여기서 두 번 판정하면 갈린다.
+   */
+  useEffect(() => {
+    let alive = true;
+    apiGet<ChildMe>("/child/me")
+      .then((me) => {
+        if (alive) set이름(me.nickname);
+      })
+      .catch(() => {
+        // 삼킨다. **이름을 모르는 것과 못 들어온 것은 다르다.**
+      });
+    return () => {
+      alive = false;
+    };
+  }, [attempt]);
 
   useEffect(() => {
     // 화면이 사라진 뒤 도착한 응답으로 상태를 건드리지 않는다.
@@ -304,6 +335,24 @@ export default function Home() {
 
   return (
     <>
+      {/* **지금 누구인지** (`문구.md` **2.6** · 결과 ⑨). **이름만 쓴다 — 라벨도 꾸밈말도 없다.**
+          「별명」은 학부모 화면 말이고(`용어사전.md`), **「탐험가」는 아이가 스스로를 부르는 말**이지
+          이름 앞에 붙이는 직함이 아니다.
+
+          **자리가 맨 위인 것이 조건이다.** 신설 때는 「「나가기」와 같은 줄」이었는데
+          **「나가기」는 `<footer>` 맨 아래**이고 그 자리는 2.3 이 정한 것이다 —
+          **같은 날 ③ 이 「맨 아래는 안 보이는 자리」임을 세 뷰포트에서 증명했다.**
+          **확인하라고 둔 표식을 안 보이는 자리에 두면 그것은 표식이 아니다** (PM 정정, 2.6).
+
+          **꾸미지 않는다.** 아이가 읽는 것이 아니라 **어른이 확인하는 것**이라,
+          크게 쓰거나 인사말로 감싸면 **아이 화면이 아이에게 말을 거는 자리가 하나 더 는다.** */}
+      {이름 !== null && (
+        <header className="page-frame flex justify-end pt-3">
+          <p data-탐험가이름 className="text-sm opacity-60">
+            {이름}
+          </p>
+        </header>
+      )}
       <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-10">
         {screen.kind === "loading" && (
           // 글자만 둔다. 여기에 가이드 캐릭터를 세우면 표정을 프론트가 고르는 것이 된다

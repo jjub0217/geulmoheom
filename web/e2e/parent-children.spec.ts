@@ -453,6 +453,12 @@ async function 아이가들어온다(page: Page) {
   );
   await page.goto("/parents/signup");
   await expect(page.getByText(폼.가입됨)).toBeVisible();
+  // **⚠ 「가입됨」만 기다리면 경쟁이 난다** (2026-09-15 실측 — 전체 실행에서만 빨간불이었다).
+  // **`/parents/me` 를 두 곳이 부른다**: 가입 화면과 자녀 관리 패널. 「가입됨」은 앞의 것이
+  // 돌아온 것일 뿐이라, **패널의 것이 아직 날아가는 중에 403 으로 뒤집으면**
+  // 목록이 403 을 받아 **누르기도 전에 화면이 로그인으로 넘어간다.**
+  // **자녀 줄이 보이는 것이 「패널도 200 을 받았다」**이므로 그것을 기다린다.
+  await expect(page.locator("[data-자녀]").first()).toBeVisible();
   return () => {
     아이가들어왔다 = true;
   };
