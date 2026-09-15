@@ -40,6 +40,22 @@ def test_모든_오류코드에_아이_문구와_상태코드가_있다():
         assert CHILD_MESSAGE[code].strip()
 
 
+def test_잠금_문구가_말하는_시간이_실제_잠금_시간과_같다():
+    """**문구가 「15분 뒤에」라고 말한다.** 잠금 시간을 바꾸면 그 문장이 거짓이 된다 —
+    그리고 **거짓말은 아이가 다시 눌러 보는 자리에서 바로 들킨다** (`문구.md` 2.1).
+
+    **문구를 지키려고 잠금을 묶는 검사가 아니다.** 속도 제한은 2026-09-07 대표 승인
+    안전 장치이고 여기서 무르지 않는다 — **둘이 갈라졌다는 것만 알린다.**
+    이 문구가 09-08 에 고쳐졌는데 코드가 **일주일** 안 따라온 자리라, 다음에는
+    **사람이 화면에서 찾기 전에** 빨개져야 한다.
+    """
+    from app.child_auth_limit import DEVICE_LOCK_SECONDS
+
+    분 = DEVICE_LOCK_SECONDS // 60
+
+    assert f"{분}분" in CHILD_MESSAGE[ErrorCode.RATE_LIMITED]
+
+
 def test_앱_오류가_공통_형식으로_나간다(client: TestClient):
     response = client.get("/__test__/cap")
 

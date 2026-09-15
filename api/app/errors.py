@@ -64,7 +64,16 @@ CHILD_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.DAILY_CAP_REACHED: "오늘 카드를 다 썼어요",
     ErrorCode.CARD_ALREADY_DONE_TODAY: "이 장면은 오늘 이미 다녀왔어요",
     ErrorCode.CONSENT_REQUIRED: "부모님 확인이 먼저 필요해요",
-    ErrorCode.RATE_LIMITED: "조금만 천천히 가볼까요",
+    # **종전 「조금만 천천히 가볼까요」는 둘이 틀렸다** (`문구.md` 2.1, 2026-09-08 확정 —
+    # **코드가 일주일 안 따라왔고 사용자가 화면에서 찾았다**).
+    # ① **「조금만」이 거짓이다 — 15분이다.** 이 자리는 아이가 실제로 다시 눌러 보는
+    #    자리라 거짓이 바로 들킨다 ② **「천천히 가볼까요」는 아이가 서둘렀다는 뜻이라
+    #    탓하는 구조**인데, 실제 원인은 대개 **코드를 잘못 옮겨 적은 것**이다.
+    # **부모님을 가리키지 않는다** — 평문 코드는 생성 응답 한 번에만 실려 **부모도 다시
+    # 읽을 수 없고**, 그 말은 실질적으로 재발급을 시키는 말이 된다. 재발급은
+    # `token_version` 을 올려 **아이가 쓰던 다른 기기를 끊는다.**
+    # **「15분」은 `child_auth_limit.DEVICE_LOCK_SECONDS` 와 짝이다** — 검사가 묶어 뒀다.
+    ErrorCode.RATE_LIMITED: "지금은 코드를 넣을 수 없어요. 15분 뒤에 다시 해볼까요",
     ErrorCode.UPSTREAM_TIMEOUT: "나침반이 잠깐 느려요. 조금 뒤에 다시 해볼까요",
     ErrorCode.INTERNAL_ERROR: "잠깐 문제가 생겼어요. 조금 뒤에 다시 해볼까요",
 }
