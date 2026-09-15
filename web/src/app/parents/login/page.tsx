@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import type { components } from "@/api/types.gen";
 import { ApiError, NetworkError, apiPost } from "@/lib/api";
 
+import { 아이가들어와서왔나 } from "@/lib/parent-kicked";
+
 import { 못닿음, 학부모오류문구 } from "../signup/copy";
 import { 로그인 } from "./copy";
+
+/** `useSyncExternalStore` 의 구독 자리. **모듈 밖에 두어야 매 렌더 새로 만들어지지 않는다.** */
+const 안바뀐다 = () => () => {};
 
 type LoginRequest = components["schemas"]["LoginRequest"];
 type LoginResponse = components["schemas"]["LoginResponse"];
@@ -36,6 +41,22 @@ export default function ParentLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [오류, set오류] = useState<string | null>(null);
+  /**
+   * **아이가 들어와서 풀린 것인가** (`문구.md` **3.11**). 참이면 안내 한 줄이 갈린다 —
+   * 기본 문장은 **시간을 원인으로 말하는데 이 경우 원인은 시간이 아니다.**
+   *
+   * **`useSyncExternalStore` 다. 효과에서 `setState` 하지 않는다** — 그렇게 쓰면
+   * `react-hooks/set-state-in-effect` 가 문다(2026-09-15 실측). 그리고 이 훅이
+   * **서버 스냅샷을 따로 받으므로**(세 번째 인자 `false`) **정적 빌드의 첫 HTML 과
+   * 하이드레이션이 안 어긋난다** — `lib/parent-kicked.ts` 가 걱정한 그 자리를 훅이 맡는다.
+   *
+   * **구독은 빈 함수다.** 주소는 이 화면이 사는 동안 안 바뀐다 — 바뀌면 화면이 새로 선다.
+   */
+  const 아이가들어왔다 = useSyncExternalStore(
+    안바뀐다,
+    아이가들어와서왔나,
+    () => false,
+  );
   const [보내는중, set보내는중] = useState(false);
 
   const 보낼수있다 = email.trim() !== "" && password !== "" && !보내는중;
@@ -93,8 +114,12 @@ export default function ParentLogin() {
           {/* **「다시 로그인해 주세요」가 아니다** — 만료돼서 온 사람과 **처음 오는 사람이
               같은 화면에 온다.** 「다시」는 후자에게 거짓이다 (`문구.md` 3.10). */}
           <h1 className="text-3xl font-semibold">{로그인.제목}</h1>
-          {/* **왜 로그아웃되는지를 먼저 말한다.** 「세션이 만료되었습니다」는 전문 용어라 안 쓴다. */}
-          <p className="opacity-80">{로그인.안내}</p>
+          {/* **왜 로그아웃되는지를 먼저 말한다.** 「세션이 만료되었습니다」는 전문 용어라 안 쓴다.
+              **아이가 들어와서 풀렸으면 그 사실을 말한다** (`문구.md` 3.11) — 기본 문장은
+              **시간을 원인으로 말하는데 그때는 원인이 시간이 아니라서 거짓이 된다.** */}
+          <p data-안내 className="opacity-80">
+            {아이가들어왔다 ? 로그인.아이가들어왔다 : 로그인.안내}
+          </p>
         </div>
 
         <label className="flex flex-col gap-1">

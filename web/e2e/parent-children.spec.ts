@@ -13,6 +13,8 @@ import {
   하루상한,
 } from "../src/components/children-copy";
 import { 학부모오류문구, 폼 } from "../src/app/parents/signup/copy";
+import { 로그인 } from "../src/app/parents/login/copy";
+import { 아이입장으로보낼곳 } from "../src/lib/parent-kicked";
 
 /**
  * 학부모 자녀 관리 (E-4 프론트 짝).
@@ -425,4 +427,80 @@ test("지운 아이의 접속 코드가 화면에 남지 않는다", async ({ pa
   // 목록에 안 붙은 것을 조건으로 뜨는데 **지워진 아이가 정확히 그 조건에 걸린다.**
   await expect(page.locator("[data-지웠다]")).toBeVisible();
   await expect(코드칸(page)).toHaveCount(0);
+});
+
+/**
+ * **⛔ 2026-09-14 회차 준비에서 나왔다** (`프리테스트_결과_2026-09-14.md` 3장 ⑩ · `문구.md` 3.11).
+ *
+ * **아이가 같은 기기로 들어오면 서버가 보호자 쿠키를 지운다**(`adr/0014` 결정 3).
+ * **열려 있던 이 화면은 그것을 모른다** — 사용자가 **되돌릴 수 없는 삭제 확인창을 다 띄우고
+ * 「지우기」를 누른 뒤에야** 403 을 만났다. 마음을 정하는 비용을 **다 치르고 나서**다.
+ */
+
+/** 처음엔 살아 있다가 **아이가 들어온 뒤**부터 403 을 준다. */
+async function 아이가들어온다(page: Page) {
+  let 아이가들어왔다 = false;
+  await page.route(ME, (route) =>
+    아이가들어왔다
+      ? route.fulfill({
+          status: 403,
+          json: {
+            code: "FORBIDDEN_ROLE",
+            error: { code: "FORBIDDEN_ROLE", message: "여기는 지금 들어갈 수 없어요" },
+          },
+        })
+      : route.fulfill({ status: 200, json: 가입됨([아이]) }),
+  );
+  await page.goto("/parents/signup");
+  await expect(page.getByText(폼.가입됨)).toBeVisible();
+  return () => {
+    아이가들어왔다 = true;
+  };
+}
+
+test("되돌릴 수 없는 창은 열기 전에 묻는다 — 이미 풀렸으면 아예 안 연다", async ({
+  page,
+}) => {
+  const 들어오게한다 = await 아이가들어온다(page);
+  let 지우려했나 = false;
+  await page.route(자녀하나(아이.child_id), (route) => {
+    지우려했나 = true;
+    return route.fulfill({ status: 204, body: "" });
+  });
+
+  들어오게한다();
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+
+  // **창이 안 열린다.** 열면 부모가 **마음을 정하는 비용을 다 치르고 나서** 안 된다는 말을 듣는다.
+  await expect(확인창(page)).toHaveCount(0);
+  expect(지우려했나).toBe(false);
+
+  // **왜 그런지 말하는 화면으로 간다** (`문구.md` 3.11).
+  await page.waitForURL(`**${아이입장으로보낼곳}`);
+  await expect(page.locator("[data-안내]")).toHaveText(로그인.아이가들어왔다);
+});
+
+test("목록을 다시 부르다 풀려도 같은 곳으로 간다 — 자리마다 다르게 굴지 않는다", async ({
+  page,
+}) => {
+  const 들어오게한다 = await 아이가들어온다(page);
+  // **추가하기가 끝나면 목록을 다시 부른다.** 그 갈래에서 풀리는 경우다.
+  await page.route(CHILDREN, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error: { code: "FORBIDDEN_ROLE", message: "여기는 지금 들어갈 수 없어요" } },
+    }),
+  );
+
+  들어오게한다();
+  await page.getByLabel(만들기.별명).fill("새나침반");
+  await page.getByRole("button", { name: 만들기.버튼 }).click();
+
+  await page.waitForURL(`**${아이입장으로보낼곳}`);
+  await expect(page.locator("[data-안내]")).toHaveText(로그인.아이가들어왔다);
+
+  // **3.8 의 일반 문장으로 때우지 않는다** — 그 문장은 이유를 안 말한다.
+  expect(await page.locator("main").innerText()).not.toContain(
+    학부모오류문구("FORBIDDEN_ROLE"),
+  );
 });

@@ -1,9 +1,18 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
-import { ApiError, NetworkError, apiDelete, apiGet, apiPost } from "@/lib/api";
+import {
+  ApiError,
+  NetworkError,
+  apiDelete,
+  apiGet,
+  apiPost,
+  역할이다르다,
+} from "@/lib/api";
+import { 아이입장으로보낼곳 } from "@/lib/parent-kicked";
 import { 학부모오류문구 } from "@/app/parents/signup/copy";
 
 import {
@@ -45,7 +54,27 @@ type AccessCode = components["schemas"]["AccessCode"];
 /** 방금 발급된 평문 코드. **서버는 해시만 저장하므로 이 값은 다시 못 받는다.** */
 type 발급된코드 = { childId: string; code: string; expiresAt: string };
 
+/**
+ * **아이가 들어와서 보호자 로그인이 풀렸는가** (`문구.md` **3.11** · 결과 ⑩).
+ *
+ * **403 은 이 화면에서 뜻이 하나다** — 아이가 같은 기기로 들어와 **서버가 보호자 쿠키를
+ * 지운 것**이다 (`adr/0014` 결정 3). 종전에는 3.8 의 「이 계정으로는 볼 수 없는
+ * 화면입니다.」를 **한 줄 띄우고 끝**이라, **왜 안 되는지도 다시 들어갈 길도 없었다.**
+ *
+ * **어느 자리에서 풀리든 같다** — 목록·추가·재발급·삭제 넷이 이 한 갈래를 같이 쓴다.
+ * **낱개로 고치면 다음 자리가 또 남는다.**
+ */
+function 아이가들어와서풀렸다(
+  e: unknown,
+  보낸다: (곳: string) => void,
+): boolean {
+  if (!역할이다르다(e)) return false;
+  보낸다(아이입장으로보낼곳);
+  return true;
+}
+
 export function ChildrenPanel() {
+  const router = useRouter();
   /** `null` 이면 아직 안 왔다. **빈 배열과 다르다** — 빈 배열은 「아이가 없다」다. */
   const [children, setChildren] = useState<ChildSummary[] | null>(null);
   const [목록실패, set목록실패] = useState<string | null>(null);
@@ -71,6 +100,8 @@ export function ChildrenPanel() {
       })
       .catch((e: unknown) => {
         // **형식 갖춘 거절은 `code` 로 고르고**(`문구.md` 3.8), **못 닿은 것만 3.5** 다.
+        // **다만 403 은 문장이 아니라 화면 이동이다** — 아이가 들어와 풀린 것이다 (3.11).
+        if (아이가들어와서풀렸다(e, (곳) => router.replace(곳))) return;
         if (e instanceof ApiError) {
           set목록실패(학부모오류문구(e.code));
           return;
@@ -85,6 +116,7 @@ export function ChildrenPanel() {
   useEffect(() => {
     // 한 번만 부른다. 이후 갱신은 만들기가 끝난 자리에서 직접 부른다.
     void 목록불러오기();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 한 번만 부른다. 아래 갱신은 만들기가 직접 부른다.
   }, []);
 
   const 추가하기 = async () => {
@@ -102,6 +134,7 @@ export function ChildrenPanel() {
       setNickname("");
       await 목록불러오기();
     } catch (e) {
+      if (아이가들어와서풀렸다(e, (곳) => router.replace(곳))) return;
       if (e instanceof ApiError) {
         // **별명이 걸린 것만 종류를 말해 준다** (`문구.md` 3.4). 학부모는 다시 지어야 하는
         // 사람이라, 무엇이 걸렸는지 모르면 **같은 별명을 조금 바꿔 다시 넣는다.**
@@ -141,6 +174,7 @@ export function ChildrenPanel() {
       // **남의 자녀는 404 다**(403 이 아니다). 3.8 의 `NOT_FOUND` 가 **「찾으시는 정보가
       // 없습니다.」로 끝나는 이유**가 그것이다 — 「권한이 없습니다」로 쓰면
       // **「그 ID 는 존재한다」가 문구로 샌다.** 문구가 계약의 판단을 되돌리면 안 된다.
+      if (아이가들어와서풀렸다(e, (곳) => router.replace(곳))) return;
       if (e instanceof ApiError) {
         set재발급실패(학부모오류문구(e.code));
         return;
@@ -153,6 +187,30 @@ export function ChildrenPanel() {
     } finally {
       set재발급중(null);
     }
+  };
+
+  /**
+   * **되돌릴 수 없는 창을 열기 전에 한 번 묻는다** (2026-09-15, 결과 ⑩ · `문구.md` 3.11 ⚠).
+   *
+   * **2026-09-14 에 사용자가 확인창을 다 띄우고 「지우기」를 누른 뒤에야 403 을 만났다.**
+   * 마음을 정하는 비용을 **다 치르고 나서** 안 된다는 말을 들은 것이고, **그 사이에
+   * 「지워졌나?」를 모른다.** 열기 전에 물으면 **그 자리에서 로그인 화면으로 간다.**
+   *
+   * **이것만으로는 ⑩ 이 안 닫힌다** — 여기는 **삭제 자리 하나**를 막을 뿐이고,
+   * 나머지 자리는 위 `아이가들어와서풀렸다` 가 받는다. **둘 다 해야 한다** (PM 판단).
+   *
+   * **못 닿으면 창을 연다.** 서버가 아무 말도 못 한 것을 「풀렸다」로 읽으면
+   * **네트워크가 잠깐 끊긴 부모를 로그인 화면으로 쫓아내는 것**이 된다 — 그때는
+   * 창 안에서 3.5 문장으로 받는 길이 이미 있다.
+   */
+  const 지우기전에확인 = async (아이: ChildSummary) => {
+    try {
+      await apiGet<ParentMe>("/parents/me");
+    } catch (e) {
+      if (아이가들어와서풀렸다(e, (곳) => router.replace(곳))) return;
+      // 그 밖의 거절·못닿음은 **창 안이 이미 처리한다.** 여기서 두 번 말하지 않는다.
+    }
+    set지울아이(아이);
   };
 
   /**
@@ -232,7 +290,7 @@ export function ChildrenPanel() {
                     // 지난번 「지웠어요」가 남아 있으면 지운다 — 다음 아이를 지우려는데
                     // 앞 아이의 완료 문장이 떠 있으면 **무엇이 방금 일어난 것인지 갈린다.**
                     set지웠다(null);
-                    set지울아이(아이);
+                    void 지우기전에확인(아이);
                   }}
                   className="pressable self-start underline underline-offset-4 opacity-70"
                 >
@@ -372,6 +430,7 @@ function DeleteChildDialog({
   닫기: () => void;
   지워졌다: (아이: ChildSummary) => Promise<void>;
 }) {
+  const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const [지우는중, set지우는중] = useState(false);
   const [실패, set실패] = useState<string | null>(null);
@@ -389,6 +448,9 @@ function DeleteChildDialog({
     } catch (e) {
       // **닿지 못하면 아이 데이터가 그대로 남아 있다. 지운 척하지 않는다** —
       // 창도 안 닫는다. 닫으면 목록이 그대로인 것을 보고 **왜 안 지워졌는지 모른다.**
+      // **창을 열 때는 살아 있었는데 누르는 사이에 아이가 들어왔을 수 있다** (3.11).
+      // 열기 전 확인이 그 틈을 못 막는다 — **그래서 여기도 같은 갈래로 보낸다.**
+      if (아이가들어와서풀렸다(e, (곳) => router.replace(곳))) return;
       if (e instanceof ApiError) {
         // **`message` 를 쓰지 않는다** — 아이 목소리다. `code` 로 3.8 표에서 고른다.
         set실패(학부모오류문구(e.code));

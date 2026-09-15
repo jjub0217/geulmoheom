@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { 못닿음, 학부모오류문구 } from "../src/app/parents/signup/copy";
 import { 로그인 } from "../src/app/parents/login/copy";
+import { 아이입장으로보낼곳 } from "../src/lib/parent-kicked";
 
 /**
  * 학부모 로그인 화면 (`문구.md` **3.10** · `adr/0014` 결정 5).
@@ -203,4 +204,43 @@ test("왜 로그아웃되는지 먼저 말하고, 전문 용어를 쓰지 않는
 
   // **나가는 길은 가입 하나뿐이다.**
   await expect(page.getByRole("link", { name: 로그인.가입으로 })).toBeVisible();
+});
+
+/**
+ * **⛔ 2026-09-14 회차 준비에서 나왔다** (`프리테스트_결과_2026-09-14.md` 3장 ⑩ · `문구.md` 3.11).
+ *
+ * **아이가 같은 기기로 들어오면 서버가 보호자 쿠키를 지운다**(`adr/0014` 결정 3). 그런데
+ * **열려 있던 학부모 화면은 그것을 모른다** — 사용자가 **되돌릴 수 없는 자녀 삭제 확인창을
+ * 다 띄우고 나서야** 403 을 만났고, **왜 안 되는지도 아이 때문이라는 것도 화면에 없었다.**
+ */
+test("아이가 들어와서 풀렸으면 시간 탓을 하지 않는다", async ({ page }) => {
+  await page.goto(아이입장으로보낼곳);
+
+  await expect(page.locator("[data-안내]")).toHaveText(로그인.아이가들어왔다);
+
+  const 화면 = await page.locator("main").innerText();
+  // **⛔ 기본 안내가 남아 있으면 화면이 거짓을 말한다** — 이 경우 원인은 시간이 아니다.
+  // 부모가 「2시간이 지났나 보다」로 읽으면 **다음에 또 같은 일을 겪는다.**
+  expect(화면).not.toContain(로그인.안내);
+  // **아이를 탓하지 않는다.** 부모가 아이에게 화내는 문장을 우리가 쓰지 않는다.
+  for (const 안쓰는말 of ["때문에", "잘못", "주의"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
+  // **전문 용어를 쓰지 않는다** (`용어사전.md` 9장).
+  for (const 안쓰는말 of ["세션", "쿠키", "권한", "토큰"]) {
+    expect(화면).not.toContain(안쓰는말);
+  }
+  // **다시 들어갈 길이 그대로 있다** — 이 화면이 곧 그 길이다.
+  await expect(page.getByRole("button", { name: 로그인.버튼 })).toBeVisible();
+});
+
+test("표식이 없으면 기본 안내 그대로다 — 아무 데서나 아이 탓을 하지 않는다", async ({
+  page,
+}) => {
+  await page.goto("/parents/login");
+
+  // **만료돼서 온 사람과 처음 오는 사람이 같은 화면에 온다.** 표식이 없으면 원인을 모른다 —
+  // 모르면서 「아이가 들어왔다」고 말하면 **없는 일을 지어내는 것**이다.
+  await expect(page.locator("[data-안내]")).toHaveText(로그인.안내);
+  expect(await page.locator("main").innerText()).not.toContain(로그인.아이가들어왔다);
 });

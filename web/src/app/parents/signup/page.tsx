@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
@@ -17,6 +18,8 @@ import {
 import { ChildrenPanel } from "@/components/children";
 
 import { 날짜시각 } from "@/lib/format";
+
+import { 아이입장으로보낼곳 } from "@/lib/parent-kicked";
 
 import { 상태표시 } from "@/app/status-copy";
 
@@ -62,6 +65,7 @@ type Screen =
   | { kind: "못닿음"; hints: string[]; 동작: keyof typeof 못닿음 };
 
 export default function ParentSignup() {
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: "확인중" });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -95,8 +99,13 @@ export default function ParentSignup() {
         }
         // **403 을 401 과 같이 다루지 않는다.** 자녀 쿠키로 들어온 경우가 여기다 —
         // 로그인이 풀린 게 아니라 **역할이 다른 것**이라, 가입 폼을 다시 보여주면 안 된다.
+        //
+        // **⛔ 거절 문장으로 끝내지 않는다** (2026-09-15, `문구.md` **3.11** 신설 · 결과 ⑩).
+        // 종전에는 3.8 의 **「이 계정으로는 볼 수 없는 화면입니다.」**를 띄우고 **거기서 끝났다** —
+        // **왜 안 되는지도, 아이 때문이라는 것도 말하지 않고** 다시 들어갈 길도 없었다.
+        // **로그인 화면으로 보내면서 표식을 단다**: 그 화면이 3.11 문장으로 안내를 갈아끼운다.
         if (역할이다르다(e)) {
-          setScreen({ kind: "거절", line: 학부모오류문구((e as ApiError).code) });
+          router.replace(아이입장으로보낼곳);
           return;
         }
         if (e instanceof ApiError) {
@@ -115,7 +124,7 @@ export default function ParentSignup() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [router]);
 
   const 보내기 = async () => {
     set보내는중(true);
