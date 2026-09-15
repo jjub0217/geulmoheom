@@ -1524,3 +1524,62 @@ test("그림이 오기 전 빈 자리는 1:1 이다 — 평시 경로의 모양�
   // **레이아웃이 안 튀는 것이 목적이다** — 그림이 오면 그때 실제 비율로 바뀐다.
   expect(자리.width / 자리.height).toBeCloseTo(1, 2);
 });
+
+/**
+ * **⛔ 2026-09-16 · `문구.md` 2.5 넷째 행 신설.** 이 자리가 **비어 있었다** —
+ * 아이가 「보내기」를 누르면 **입력창이 잠기고 버튼이 흐려질 뿐 아무 말도 안 했다.**
+ *
+ * **길이는 2.9초다**(운영 실측 `POST /attempts` 2856ms) — **콜드가 아니다.**
+ * 아이 흐름의 **첫 요청(접속 코드)이 콜드를 다 맞는다.** 짧아도 **눌렸는지를 화면이
+ * 말해 주지 않는 것**은 길이와 별개다.
+ *
+ * **⛔ 가이드가 말을 거는 자리가 아니다** — **평가가 도는 중**이라 무슨 말이든
+ * **판정을 예고하는 것처럼 읽힌다.** 1.5(삽화 대기)는 **등급이 정해진 뒤**라 안전하다.
+ */
+test("문장을 보내는 동안 나침반이 읽는다고 말한다 — 등급을 미리 흘리지 않는다", async ({
+  page,
+}) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  let 풀어준다: (() => void) | null = null;
+  await page.route(ATTEMPTS, async (route) => {
+    await new Promise<void>((res) => (풀어준다 = res));
+    return route.fulfill({ status: 200, json: 결과() });
+  });
+
+  // **결과 뒤까지 본다** — 그 말이 사라지는 것도 이 검사의 몫이라 삽화까지 걸어 둔다.
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+  );
+
+  await page.goto("/");
+  await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  await expect(page.locator("[data-읽는중]")).toHaveText(상태표시.읽는중);
+  // **쓴 문장이 그대로 있다** — 보내는 중에 사라지면 아이는 날아간 줄 안다.
+  await expect(page.getByLabel(CARD.prompt_label)).toHaveValue("등대 계단을 한 칸씩 올라간다");
+
+  // **⛔ 등급을 미리 흘리지 않는다.** 이 자리는 **평가가 도는 중**이라 배지도 결과 대사도
+  // 아직 오면 안 된다 — 오면 그림보다 먼저 판정을 읽는다 (`문구.md` 1.5 가 생긴 이유).
+  await expect(page.locator("main [data-티어배지]")).toHaveCount(0);
+  await expect(page.getByText(결과가이드.line)).toHaveCount(0);
+
+  await expect.poll(() => 풀어준다 !== null).toBe(true);
+  풀어준다!();
+
+  // 결과가 오면 그 말이 사라진다 — 남아 있으면 **끝난 뒤에도 기다리는 것처럼 보인다.**
+  await expect(page.locator("[data-다음장면]")).toBeVisible();
+  await expect(page.locator("[data-읽는중]")).toHaveCount(0);
+});
