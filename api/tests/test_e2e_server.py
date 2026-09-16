@@ -205,8 +205,57 @@ def test_가입부터_책까지_한_갈래가_진짜_서버를_지난다(태운�
 
         책 = 손님.get("/book")
         assert 책.status_code == 200
+        카드장들 = [것 for 것 in 책.json()["pages"] if 것["source"] == "card"]
 
-    페이지 = 책.json()["pages"]
+        # ── Stage 1 한 판 (A-1·A-4·A-7) ────────────────────────────
+        #
+        # **⛔ 2026-09-16 에 여기까지 태우기로 했다.** 프론트가 브라우저 e2e 에서
+        # **`POST /chapters` 500**(`ValidationError`)을 찾았는데, **이 갈래가 챕터를
+        # 안 태워서 내 쪽은 초록이었다.** 가짜 앞단이 **Stage 0 스키마만** 답하고
+        # **GM 것을 안 답하던 것**이고, 원인보다 **못 잡은 자리**가 더 문제였다.
+        판 = 손님.post("/chapters")
+        assert 판.status_code == 201, 판.text
+        챕터판 = 판.json()
+        assert 챕터판["turn"] == 0 and 챕터판["beat"] == "intro"
+        # **가짜가 답했다는 증거** — GM 서사가 150자를 넘는다(PRD 4.1 규칙대로 둔 값)
+        assert len(챕터판["narrative"]) >= 150
+        assert 챕터판["choices"], "선택지가 없으면 화면이 고를 것이 없다"
+
+        # **진행 중인 판을 돌려준다 — 새로 열지 않는다** (계약 1절)
+        이어 = 손님.get("/chapters/current")
+        assert 이어.status_code == 200
+        assert 이어.json()["chapter_id"] == 챕터판["chapter_id"]
+
+        # **한 판을 끝까지.** 10턴이면 9턴에 시련을 넘고 10턴이 완결이다
+        턴몸 = {}
+        for _ in range(10):
+            턴응답 = 손님.post("/turns", json={"chapter_id": 챕터판["chapter_id"], "text": 문장})
+            assert 턴응답.status_code == 200, 턴응답.text
+            턴몸 = 턴응답.json()
+            assert 턴몸["outcome"] == "result"
+
+        assert 턴몸["chapter_done"] is True
+        assert 턴몸["beat"] == "resolution"
+
+        # **완결 뒤 같은 날은 잠긴다** (D-1 하드 피니시)
+        다시 = 손님.post("/chapters")
+        assert 다시.status_code == 409
+        assert 다시.json()["error"]["code"] == "CHAPTER_DONE_TODAY"
+
+        완결화면 = 손님.get(f"/chapters/{챕터판['chapter_id']}/summary")
+        assert 완결화면.status_code == 200
+        assert 완결화면.json()["book_page_no"], "책 어디에 남았는지 가리켜야 한다"
+
+        책2 = 손님.get("/book")
+        assert 책2.status_code == 200
+
+    페이지 = 카드장들
     assert [p["source_id"] for p in 페이지] == [card_id]
     # **아이 원문 그대로다** (PRD 1.1b).
     assert 페이지[0]["text"] == 문장
+
+    # **챕터 완결 = 책 한 장** (A-7). **문장은 아이 원문 그대로, 보정 없음**
+    챕터장 = [것 for 것 in 책2.json()["pages"] if 것["source"] == "chapter"]
+    assert len(챕터장) == 1
+    assert 챕터장[0]["source_id"] == 챕터판["chapter_id"]
+    assert 문장 in 챕터장[0]["text"]
