@@ -121,3 +121,138 @@ test("가입부터 책까지 한 갈래가 진짜 서버를 지난다", async ({
   // **한 줄이 다 지나는 동안 화면이 안 깨졌다.**
   expect(오류, `콘솔 오류: ${오류.join(" | ")}`).toEqual([]);
 });
+
+/**
+ * **챕터 한 판이 진짜 서버를 지난다** (`주차계획/W7.md` **8번 ⑤**).
+ *
+ * **⛔ `page.route` 를 한 번도 안 쓴다** — 이 파일의 존재 이유다.
+ * 위 갈래와 **서버를 같이 쓴다**(`workers: 1`) — 쪼개서 또 띄우면 느려지고,
+ * **느려지면 다음에 또 미룬다.**
+ *
+ * **재는 것 — 가로채는 갈래가 원리적으로 못 보는 것들이다.**
+ * ① **GM 이 실제로 답한다**(가짜 앞단을 지난 서사) ② **선택지가 서버에서 온다** —
+ * 라벨을 **우리가 모르는 채로** 잡는다 ③ **턴이 DB 에 쌓여 새로고침해도 안 잃는다**
+ * ④ **선택지로 보낸 턴이 같은 엔드포인트를 지난다** — 몸이 달라 틀리면 422 다.
+ *
+ * **⛔ 차단은 여기서 못 잰다** — 가짜 앞단이 「본문을 뜯지 않는다」라 요청마다 판정을
+ * 못 바꾼다. 아래 ⑤ 에 왜인지와 **어디서 재는지**를 적어 뒀다.
+ *
+ * **⛔ 문장을 박지 않는다.** 서버가 주는 것(서사·선택지·대사)은 **글자를 모른다.**
+ * **모르는 채로 재는 것이 맞다** — 박는 순간 픽스처를 재게 된다.
+ */
+const 챕터별명 = "푸른나침반";
+const 챕터문장 = "낡은 밧줄의 매듭을 하나씩 만져 보며 어느 쪽이 새것인지 살핀다";
+
+test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어하기·선택지", async ({ page }) => {
+  const 오류: string[] = [];
+  page.on("pageerror", (e) => 오류.push(`[pageerror] ${e.message}`));
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    if (m.text().startsWith("Failed to load resource")) return;
+    오류.push(`[console] ${m.text()}`);
+  });
+
+  // ── ① 새 아이를 만든다 ─────────────────────────────────────────────
+  // **위 갈래의 아이를 재사용하지 않는다** — 그 아이는 오늘 몫을 이미 썼고,
+  // **일일 제한에 걸리면 이 갈래가 「서버가 틀렸다」가 아니라 「어제 것이 남았다」로 죽는다.**
+  const 메일 = `e2e-ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+  await page.goto("/parents/signup");
+  await page.getByLabel(폼.이메일).fill(메일);
+  await page.getByLabel(폼.비밀번호).fill(비밀번호);
+  await page.locator('input[name="consent"]').check();
+  await page.getByRole("button", { name: 폼.가입하기 }).click();
+
+  await page.getByLabel(만들기.별명).fill(챕터별명);
+  await page.getByLabel(만들기.나이).selectOption("11");
+  await page.getByRole("button", { name: 만들기.버튼 }).click();
+
+  const 코드칸 = page.locator("[data-접속코드]");
+  await expect(코드칸).toContainText(접속코드.제목);
+  const 코드 = ((await 코드칸.innerText()).match(/\b\d{6}\b/) ?? [])[0];
+  expect(코드, "접속 코드 6자리를 화면에서 못 읽었다").toMatch(/^\d{6}$/);
+
+  await page.goto("/child/auth");
+  await page.getByLabel(코드입력.라벨).fill(코드!);
+  await page.getByRole("button", { name: 코드입력.버튼 }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  // ── ② 챕터가 열린다 (A-1) ──────────────────────────────────────────
+  await page.goto("/chapter");
+
+  // **서사가 온다. 글자를 모르므로 「비어 있지 않다」로 잰다** — GM 이 매번 다르게 쓴다.
+  const 서사 = page.locator("main p").first();
+  await expect(서사).toBeVisible({ timeout: 60_000 });
+  expect((await 서사.innerText()).trim().length).toBeGreaterThan(0);
+
+  // **선택지도 서버가 준다.** 개수를 박지 않는다 — **넷으로 박으면 4칸 그리드를
+  // 다시 들여오는 셈**이고, 경로 나열을 막으려고 개수를 안 정한 것이 계약이다.
+  const 선택지 = page.locator("main li button");
+  await expect(선택지.first()).toBeVisible({ timeout: 60_000 });
+  const 선택지수 = await 선택지.count();
+  expect(선택지수).toBeGreaterThan(0);
+
+  // ── ③ 직접 써서 턴이 넘어간다 (A-3) ────────────────────────────────
+  const 입력창 = page.locator("main textarea");
+  await 입력창.fill(챕터문장);
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // **⛔ 「서사가 바뀌었다」를 잣대로 쓰지 않는다.**
+  // ① **가짜 앞단은 매번 같은 서사를 준다** — 고정 픽스처라 영영 안 바뀐다
+  // ② **진짜 GM 이 와도 못 쓴다** — 같은 문장이 두 번 나올 수 있고, 그러면
+  //    **제품이 멀쩡한데 검사가 빨개진다.** 무작위에 기대는 단언은 잣대가 아니다
+  //
+  // **잣대는 입력창이다.** 화면이 칸을 비우는 것은 **`outcome === "result"` 일 때뿐**이고
+  // (되묻기·차단은 아이 글을 남긴다 — `Stage0.md` 148행), 그래서 **빈 칸 = 턴이 갔다**이다.
+  // 턴 수·등급은 화면에 없다 — **숫자로 안 그리는 것이 규칙**이라 셀 수 없다.
+  await expect(입력창).toHaveValue("", { timeout: 90_000 });
+
+  // ── ④ 새로고침해도 이야기를 안 잃는다 (A-2) ────────────────────────
+  //
+  // **⛔ 서사가 같은지로 재면 안 된다** — 가짜가 고정값이라 **상태를 안 지켜도 통과한다.**
+  // **아무것도 안 하고 통과하는 검사**가 가장 나쁘다.
+  //
+  // **그래서 응답을 본다.** 상태가 DB 에 있으면 `GET /chapters/current` 가 **200**,
+  // 없으면 **404** 이고 화면이 새 판을 연다. **`page.route` 가 아니라 `page.on` 이다** —
+  // 가로채지 않고 **지나가는 것을 볼 뿐**이라 이 파일의 원칙을 안 깬다.
+  const 이어하기응답: number[] = [];
+  page.on("response", (r) => {
+    if (r.url().includes("/api/v1/chapters/current")) 이어하기응답.push(r.status());
+  });
+
+  await page.reload();
+  await expect(서사).toBeVisible({ timeout: 60_000 });
+  await expect
+    .poll(() => 이어하기응답.at(-1), { timeout: 30_000 })
+    .toBe(200);
+
+  // ── ⑤ 선택지로도 턴이 간다 (A-3) ───────────────────────────────────
+  // **`choice_id` 갈래가 진짜 서버를 지나는지**를 본다. 자유 묘사와 **같은 엔드포인트**인데
+  // **몸이 다르다** — 계약이 「둘 중 정확히 하나」라 **틀리면 422** 다.
+  // 가로채는 갈래에서는 **우리가 200 을 만들어 주므로 그 422 가 안 보인다.**
+  const 고를것 = page.locator("main li button").first();
+  await expect(고를것).toBeVisible();
+  const 선택응답 = page.waitForResponse((r) => r.url().includes("/api/v1/turns"));
+  await 고를것.click();
+  const 골라서온것 = await (await 선택응답).json();
+  expect((await 선택응답).status()).toBe(200);
+  // **고른 것도 등급이 매겨진다** — 「고르기만 해도 된다」가 안 되게 하는 자리다
+  // (`Stage1.md` 2절). **등급값 자체는 안 본다** — 가짜가 정하는 값이라 잣대가 아니다.
+  expect(골라서온것.outcome).toBe("result");
+
+  // **⛔ 차단 갈래는 여기서 안 잰다 — 못 재는 것이지 안 중요해서가 아니다.**
+  //
+  // 가짜 앞단은 **「본문을 뜯지 않는다」**가 원칙이다(`api/tests/fake_gemini.py`) —
+  // 뜯으면 **아이 문장을 읽어야** 하고, 그게 이 제품이 하지 않기로 한 일이다.
+  // 그래서 **요청마다 판정을 바꿀 수 없고**, 한 실행 안에서 「이 문장은 막힌다」를 만들 수 없다.
+  //
+  // **⚠ 그리고 「막힐 문장」을 우리가 고르는 것 자체가 위험하다** — `안전_어휘_기준.md` 가
+  // **판타지 전투를 허용**한다. 2026-09-16 에 「칼로 목을 베어서…」로 썼다가
+  // **제품이 일부러 허용하는 문장**을 골랐다는 것을 알았다. **무엇이 막히는지는 안전 정책이지
+  // 검사가 정할 것이 아니다.**
+  //
+  // **어디서 재나** — ① 화면 갈래는 `e2e/chapter-turn.spec.ts` 가 **`outcome: "blocked"` 를
+  // 받아 아이 글이 남는지**를 잰다 ② 서버 갈래는 **백엔드 `pytest` 몫**이다. 거기서는
+  // `가짜앞단(글=...)` 으로 **차단 응답을 만들어 넣을 수 있다.**
+
+  expect(오류, `콘솔 오류: ${오류.join(" | ")}`).toEqual([]);
+});

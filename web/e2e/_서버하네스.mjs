@@ -67,6 +67,29 @@ function 띄운다(이름, 명령, 인자, 옵션 = {}) {
   return p;
 }
 
+/**
+ * 한 번 돌고 끝나는 것. **죽으면 거기서 멈춘다** — 준비가 반만 된 채로 서버를 띄우면
+ * **「인증이 깨졌다」처럼 보이는 실패**가 나고, 그 자리를 쫓느라 시간을 버린다(2026-09-16).
+ */
+function 한번돌린다(이름, 명령, 인자, 옵션 = {}) {
+  return new Promise((res, rej) => {
+    const p = spawn(명령, 인자, { ...옵션, stdio: ["ignore", "pipe", "pipe"] });
+    let 말 = "";
+    p.stderr.on("data", (d) => {
+      말 += d;
+    });
+    p.on("exit", (코드) => {
+      if (코드 === 0) {
+        console.log(`[하네스] ${이름} ✓`);
+        res();
+        return;
+      }
+      rej(new Error(`${이름} 이 실패했다 (exit ${코드})\n${말}`));
+    });
+    p.on("error", rej);
+  });
+}
+
 /** 포트가 열릴 때까지. **고정 대기를 쓰지 않는다** — 느린 기계에서 그 값이 곧 거짓이 된다. */
 async function 열릴때까지(포트, 초 = 90) {
   const 끝 = Date.now() + 초 * 1000;
@@ -117,6 +140,63 @@ await 비었나확인([
   ["web", 웹포트],
 ]);
 
+// ── ⓪ DB — **백엔드 pytest 와 갈라 놓는다** ────────────────────────────
+//
+// **⛔ 종전 기본값이 `geulmoheom_test` 였다. 그게 백엔드 `conftest.py` 의 DB 다.**
+// 그쪽은 세션마다 **`pg_terminate_backend` 로 남의 커넥션을 끊고 `drop database`** 한다
+// (`api/tests/conftest.py` 195~211행 — 옛 스키마 위에서 도는 것을 막으려는 정당한 이유다).
+//
+// **그래서 백엔드가 `pytest` 를 돌리면 이 갈래의 행이 흐름 한가운데서 사라졌다.**
+// 증상이 인증 결함처럼 보인다 — 몇 요청이 200 으로 지나간 뒤 그 다음부터 **401**
+// (`require_parent`/`require_child` 가 행을 못 찾는다). **2026-09-16 에 실제로 밟았고
+// 「세션이 중간에 죽는다」로 한참 쫓았다.**
+//
+// **⛔ 종전 주석은 「백엔드 conftest 가 만들고 마이그레이션까지 해 둔 것」이라고 적어
+// 두고 있었다** — 즉 **남의 세션 검사가 남긴 것에 얹혀 있었다.** 그것이 원인이다.
+// **이제 우리 DB 를 우리가 세운다.**
+//
+// CI 는 자기 `DATABASE_URL` 을 넘기므로 이 기본값을 안 탄다 (`ci.yml` web-slow).
+const 디비주소 =
+  process.env.DATABASE_URL ??
+  // **개발 DB 를 안 문다.** 거기엔 실제 자녀 계정이 있고, 이 갈래는 매 실행마다
+  // 학부모·자녀를 새로 만든다 — 쌓이면 그 DB 가 검사 쓰레기로 찬다.
+  "postgresql+asyncpg://geulmoheom:geulmoheom@localhost:5433/geulmoheom_e2e";
+
+// **⛔ 지우고 다시 만들지 않는다.** 백엔드 conftest 가 그러는 것은 **스키마가 낡는 것**을
+// 막으려는 것이고, 여기는 **마이그레이션을 매번 끝까지 돌리므로** 같은 위험이 없다.
+// 그리고 **남의 것을 지우는 코드가 저장소에 하나 더 생기는 것**이 오늘 밟은 그 문제다.
+//
+// **⛔ `psql` 을 안 쓴다** — 기계에 깔려 있으란 법이 없다. api 의 venv 에 `asyncpg` 가
+// 이미 있으니 **그것으로 만든다.** 준비물을 늘리면 **다음 사람이 여기서 막힌다.**
+const 디비이름 = new URL(디비주소.replace("postgresql+asyncpg://", "postgresql://")).pathname.slice(1);
+
+await 한번돌린다("DB 만들기", "uv", [
+  "run",
+  "python",
+  "-c",
+  // **이미 있으면 그냥 지나간다.** 매 실행에 새로 만들 이유가 없다 —
+  // 마이그레이션이 뒤에서 스키마를 맞춘다.
+  "import asyncio, asyncpg\n"
+    + "async def m():\n"
+    + "    c = await asyncpg.connect('postgresql://geulmoheom:geulmoheom@localhost:5433/postgres')\n"
+    + "    try:\n"
+    + `        await c.execute('create database \"${디비이름}\"')\n`
+    + "    except asyncpg.DuplicateDatabaseError:\n"
+    + "        pass\n"
+    + "    finally:\n"
+    + "        await c.close()\n"
+    + "asyncio.run(m())\n",
+], { cwd: API, env: { ...process.env, PYTHONPATH: API } });
+
+await 한번돌린다("마이그레이션", "uv", ["run", "alembic", "upgrade", "head"], {
+  cwd: API,
+  env: { ...process.env, DATABASE_URL: 디비주소 },
+});
+await 한번돌린다("카드 시드", "uv", ["run", "python", "scripts/seed_cards.py"], {
+  cwd: API,
+  env: { ...process.env, DATABASE_URL: 디비주소, PYTHONPATH: API },
+});
+
 // ── ① 가짜 앞단 — api 의 것을 불러서 쓴다 ────────────────────────────────
 const 가짜 = 띄운다(
   "가짜앞단",
@@ -164,12 +244,7 @@ await 비었나확인([["api", api포트]]);
       EVALUATOR_MODEL: "gemini-3.1-flash-lite",
       // 가짜는 **모델 이름에 `image` 가 드는가**로 갈래를 나눈다 (`adr/0006`).
       IMAGE_MODEL: "gemini-3.1-flash-lite-image",
-      DATABASE_URL:
-        process.env.DATABASE_URL ??
-        // **개발 DB 를 안 문다.** 거기엔 실제 자녀 계정이 있고, 이 갈래는 매 실행마다
-        // 학부모·자녀를 새로 만든다 — 쌓이면 그 DB 가 검사 쓰레기로 찬다.
-        //  는 백엔드 conftest 가 만들고 마이그레이션까지 해 둔 것이다.
-        "postgresql+asyncpg://geulmoheom:geulmoheom@localhost:5433/geulmoheom_test",
+      DATABASE_URL: 디비주소,
       JWT_SECRET: process.env.JWT_SECRET ?? "e2e-secret-not-used-outside-tests",
       PYTHONPATH: API,
     },
