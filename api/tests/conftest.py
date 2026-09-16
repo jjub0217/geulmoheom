@@ -309,14 +309,34 @@ async def client(학부모행: Parent, 자녀행: Child) -> TestClient:
 
 @pytest.fixture
 def _NER_켠다(monkeypatch: pytest.MonkeyPatch):
-    """실명(NER)을 켠다. **운영 기본값은 꺼짐이다** (2026-09-09 대표 판정).
+    """실명(NER)을 켠다. **운영 기본값도 켜짐이다** (2026-09-16 대표 판정).
 
-    **코드 경로가 따로 있는 게 아니라 같은 자리가 켜지는 것**이라, 이 픽스처를 쓴
-    검사들은 **되살릴 때 그 코드가 여전히 도는지**를 보장한다 (`app/pii.py`).
+    **기본값과 같아졌는데도 남겨 둔다.** 이 픽스처를 쓴 검사들이 재는 것은
+    **「켠 갈래가 돈다」**이지 **「기본값이 켜짐이다」**가 아니다 — 후자는
+    `test_pii.py` 의 기본값 검사 하나가 따로 잰다. 섞으면 **기본값을 뒤집는 날
+    켠 갈래 검사가 통째로 의미를 잃는다.**
     """
     from app.config import get_settings
 
     monkeypatch.setenv("PII_NER_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def _NER_끈다(monkeypatch: pytest.MonkeyPatch):
+    """실명(NER)을 끈다. **운영 기본값은 켜짐이다** (2026-09-16 대표 판정).
+
+    **끈 갈래는 살아 있다** — 다시 끄는 것은 대표 판정 자리이고, 그때 **그 코드가
+    여전히 도는지**를 이 픽스처를 쓴 검사들이 보장한다.
+
+    **⛔ 기본값에 기대어 재지 않는다.** 2026-09-09~09-16 에는 끈 갈래 검사들이
+    **기본값이 꺼짐인 것에 기대** 있었고, 켜는 날 **둘 다 조용히 반대를 재게 됐다.**
+    """
+    from app.config import get_settings
+
+    monkeypatch.setenv("PII_NER_ENABLED", "false")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
