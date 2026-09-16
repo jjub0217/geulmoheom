@@ -1,6 +1,8 @@
 """Stage 0 테이블. 기준은 `MVP_PRD.md` 6장 + `docs/api/Stage0.md` 10절.
 
-Stage 1 의 `chapters`·`sessions` 는 여기 없다 — W6 에 추가한다.
+Stage 1 의 `chapters`·`chapter_turns` 는 이 파일 아래쪽에 있다 (W7 3번).
+**`sessions` 는 아직 없다** — 턴 상태는 `chapters` 한 행이 들고 있고, 요약·상태
+추출 체인이 붙는 2번(A-2)에서 그 자리가 정해진다.
 
 **`card_attempts.text` 가 아이 원문이 들어가는 유일한 자리다** (PRD 1.1b).
 다른 테이블(특히 `events.payload`)에 원문을 복사하지 않는다.
@@ -16,12 +18,14 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -166,6 +170,126 @@ class CardAttempt(Base):
     text: Mapped[str] = mapped_column(
         Text, comment="아이 원문. 책 콘텐츠로 보관한다 (PRD 1.1b). 로그·APM 으로 복사 금지"
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+BEATS = ("intro", "explore", "rising_action", "approach", "trial", "resolution")
+# **넷이 동등하다** (PRD A-4). **「보스」를 식별자에도 쓰지 않는다** (`용어사전.md` 8장)
+TRIAL_PATHS = ("force", "persuade", "observe", "care")
+TURN_INPUT_TYPES = ("free", "choice")  # 자유 묘사 / 선택지 — `Stage1.md` 2절
+
+
+class Chapter(Base):
+    """한 아이의 챕터 한 판 (`docs/api/Stage1.md` 1절 · W7 3번).
+
+    **⭐ 진행 중인 챕터는 하나다.** 부분 유니크 인덱스로 **DB 가 지킨다** — 코드로만
+    막으면 **새로고침 두 번에 두 판이 열리고**, 그러면 아이가 쓴 이야기가 갈라진다.
+
+    **⛔ 아이 원문이 여기 없다.** `narrative`·`choices` 는 **GM 이 낸 글**이고,
+    `state` 는 요약이다 (PRD 4.2 의 부분집합). 원문이 가도 되는 곳은
+    **`card_attempts.text` 하나**다 (PRD 1.1b · `api/CLAUDE.md`).
+
+    **`narrative` 를 저장하는 이유는 새로고침이다.** `GET /chapters/current` 가
+    **지금 장면을 그대로 돌려줘야** 아이가 이야기를 잃지 않는다 — 계약 1절이
+    **「아이가 새로고침해도 이야기를 잃지 않는다」**로 못 박은 자리다.
+    """
+
+    __tablename__ = "chapters"
+    __table_args__ = (
+        CheckConstraint(f"beat in {BEATS}", name="ck_chapters_beat"),
+        CheckConstraint(
+            f"trial_path is null or trial_path in {TRIAL_PATHS}",
+            name="ck_chapters_trial_path",
+        ),
+        CheckConstraint(
+            f"trial_best_grade is null or trial_best_grade in {GRADES}",
+            name="ck_chapters_trial_best_grade",
+        ),
+        # **진행 중인 챕터는 아이당 하나.** 완결(`done_at`)한 것은 여러 개다.
+        Index(
+            "ux_chapters_active_child",
+            "child_id",
+            unique=True,
+            postgresql_where=text("done_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    child_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("children.id", ondelete="CASCADE"), index=True
+    )
+    # **뼈대 하나뿐이다** (A-1 「판타지 1종·챕터 1개」). 늘리지 않는다 —
+    # 값은 `docs/챕터뼈대_초안.md` 의 `ch01` 이다
+    chapter_key: Mapped[str] = mapped_column(String(16))
+    turn: Mapped[int] = mapped_column(Integer, default=0)
+    # **⛔ 비트를 턴으로 다시 계산하지 않는다** — 못 넘은 아이가 10턴에 `resolution`
+    # 을 받는다. `chapter_run.진행` 이 굳힌 값을 그대로 둔다
+    beat: Mapped[str] = mapped_column(String(16), default="intro")
+    trial_progress: Mapped[int] = mapped_column(Integer, default=0)
+    trial_path: Mapped[str | None] = mapped_column(String(16))
+    trial_best_grade: Mapped[str | None] = mapped_column(
+        String(2),
+        comment=(
+            "시련에서 낸 최고 등급. 보상 티어가 이 값에서 나온다 (Stage1.md 5절) — "
+            "12턴까지 G1 만 낸 아이는 basic. 차이는 삽화 티어에서 나지 완결 여부에서 안 난다"
+        ),
+    )
+    state: Mapped[dict] = mapped_column(
+        JSONB,
+        default=dict,
+        comment=(
+            "화면에 나가는 상태 (PRD 4.2 의 부분집합). summary·recent_turns·grades 는 "
+            "여기 없다 — recent_turns 에는 아이 원문이 들어가고 grades 는 화면이 점수로 그린다"
+        ),
+    )
+    narrative: Mapped[str | None] = mapped_column(
+        Text, comment="마지막 GM 서사. 새로고침 복구용이다 (Stage1.md 1절). 아이 원문이 아니다"
+    )
+    choices: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ChapterTurn(Base):
+    """턴 한 번의 기록 (`Stage1.md` 2절 11번).
+
+    **⛔ 아이 원문 칸이 없다. 그것이 이 테이블의 결정이다** — 계약 11번이
+    **「아이 원문은 로그에 안 남는다. 등급·경로·소요만」**이다. 원문이 가도 되는 곳은
+    **`card_attempts.text` 하나**이고 (`api/CLAUDE.md`), **책에 실릴 문장을 어디에
+    둘지는 9번(A-7)에서 정한다** — 그때까지 **여기에 슬그머니 칸을 만들지 않는다.**
+
+    **`char_len` 은 길이만이다.** H2 지표(회당 150자)가 이 값을 센다 —
+    `card_attempts.char_len` 과 **같은 정의(공백 포함)** 를 쓴다.
+    """
+
+    __tablename__ = "chapter_turns"
+    __table_args__ = (
+        UniqueConstraint("chapter_id", "turn_no", name="uq_chapter_turns_turn"),
+        CheckConstraint(f"grade in {GRADES}", name="ck_chapter_turns_grade"),
+        CheckConstraint(
+            f"trial_path is null or trial_path in {TRIAL_PATHS}",
+            name="ck_chapter_turns_trial_path",
+        ),
+        CheckConstraint(f"input_type in {TURN_INPUT_TYPES}", name="ck_chapter_turns_input_type"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    chapter_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chapters.id", ondelete="CASCADE"), index=True
+    )
+    turn_no: Mapped[int] = mapped_column(Integer)
+    beat: Mapped[str] = mapped_column(String(16))
+    grade: Mapped[str] = mapped_column(String(2))
+    input_type: Mapped[str] = mapped_column(String(8))
+    trial_path: Mapped[str | None] = mapped_column(String(16))
+    char_len: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
