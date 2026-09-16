@@ -71,7 +71,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <ServiceWorkerRegistrar />
         {/* **식은 서버를 깨운다** (`lib/wake.ts` · W6 15번). **아무것도 안 그린다.**
-            모든 화면에 붙는 이유는 **다음 요청이 502 로 죽는 것이 어느 화면에서나 같기** 때문이다. */}
+            모든 화면에 붙는 이유는 **다음 요청이 기동 32초를 맞는 것이 어느 화면에서나 같기** 때문이다. */}
         <Waker />
       </body>
     </html>
