@@ -41,7 +41,8 @@ def 켜져있나() -> bool:
     """스위치 하나 (`config.tutorial_enabled`).
 
     **✅ 2026-09-16 — T1~T3 대표 검수가 통과했다. 관문이 풀렸다.**
-    **운영은 `TUTORIAL_ENABLED=true` 로 켜져 있고**, **여기 기본값은 아직 `False` 다** —
+    **운영은 `TUTORIAL_ENABLED=true` 로 켠다**(⏳ 2026-09-16 밤 기준 **아직 안 들어갔다**).
+    **여기 기본값도 `False` 다** —
     켜면 새 계정이 `/cards/next` 에서 T1~T3 부터 받아 **프론트 실서버 e2e 가 바뀐다.**
     갈린 사정과 닫는 조건은 `app/config.py` 의 그 줄에 적어 뒀다.
 
