@@ -25,7 +25,13 @@ export function BookPageFrame({ page }: { page: BookPage }) {
   /** **온 그림이 자기 비율을 말한다** — 오기 전에는 `빈자리비율`(1:1). 결과 화면과 같은 규칙이다. */
   const [비율, set비율] = useState(빈자리비율);
   return (
-    <article className="flex flex-col gap-5 rounded-3xl border-2 border-brass/30 p-5">
+    // **`data-책쪽` 은 인쇄가 쓴다** (`globals.css` `@media print`) —
+    // **한 쪽이 두 장으로 갈리지 않게** 잡는 표식이다. 그림과 그 아래 아이 문장이
+    // 다른 종이에 있으면 **그건 책이 아니다.**
+    <article
+      data-책쪽
+      className="flex flex-col gap-5 rounded-3xl border-2 border-brass/30 p-5"
+    >
       {/* **`artwork_url` 은 `ready` 인 것만 온다** — 굽는 중에 책을 열면 `null` 이다.
           그때는 **자리를 비운다**: 깨진 그림을 세우면 아이는 자기 그림이 사라진 줄 안다.
           결과 화면에서 못 받았을 때 액자를 통째로 빼는 것과 같은 판단이다 (`문구.md` 1.7). */}

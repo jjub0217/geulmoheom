@@ -12,7 +12,7 @@ import { ApiError, NetworkError, apiGet, 역할이다르다, 인증이풀렸다 
 
 import { 버튼, 못닿음 } from "../copy";
 import { 상태표시 } from "../status-copy";
-import { 빈책, 지은이 } from "./copy";
+import { 보내기라벨, 빈책, 지은이 } from "./copy";
 
 type Book = components["schemas"]["Book"];
 
@@ -166,7 +166,26 @@ export default function BookScreen() {
 
                   **목록 아래에 둔다** — 여기 온 아이가 하려던 일은 **다시 보는 것**이고,
                   다 보고 나서 나가는 자리가 끝이다. 위에 두면 목록을 가린다. */}
-              <div className="flex justify-center">
+              {/* **인쇄로 낸다** (A-7 · 2026-09-16 PM 판정 ㉡). **새 엔드포인트가 없다** —
+                  `GET /books/{id}/pdf` 는 계약에서 지워졌다. 화면에 이미 있는 것을 그대로 찍는다.
+
+                  **⛔ 자리가 「쓰러 가기」보다 위다.** 나가는 문은 **끝**에 있어야 하고
+                  (이 화면에 온 아이가 하려던 일은 **다시 보는 것**이다), 내보내기는
+                  **다 본 뒤에 하는 일**이라 그 사이다.
+
+                  **`print:hidden` 으로 자기 자신을 숨긴다** — 안 그러면 **버튼이 종이에 찍힌다.** */}
+              <div className="flex justify-center print:hidden">
+                <button
+                  type="button"
+                  data-보내기
+                  onClick={() => window.print()}
+                  className="pressable rounded-full border-2 border-brass/50 px-8 py-3 text-xl"
+                >
+                  {보내기라벨}
+                </button>
+              </div>
+
+              <div className="flex justify-center print:hidden">
                 <Link
                   href="/"
                   data-쓰러가기

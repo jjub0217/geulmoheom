@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { components, paths } from "../src/api/types.gen";
 // 문구는 박지 않는다 — `docs/문구.md` 1.13·1.16·2.4·2.5 가 SSOT 다.
-import { 빈책, 책이름 } from "../src/app/book/copy";
+import { 보내기라벨, 빈책, 책이름 } from "../src/app/book/copy";
 import { 버튼, 못닿음 } from "../src/app/copy";
 import { 상태표시 } from "../src/app/status-copy";
 import { 티어이름 } from "../src/components/tier-badge";
@@ -439,4 +439,63 @@ test("챕터 한 판과 카드 한 장이 같은 책에 나란히 쌓인다", as
   for (const 금지 of ["chapter", "card", "챕터", "점수", "연습", "학습", "보스", "앨범"]) {
     expect(화면, `「${금지}」가 아이 화면에 보인다`).not.toContain(금지);
   }
+});
+
+/**
+ * **책을 종이로 내보낸다** (백로그 A-7 · `주차계획/W7.md` **9번** · 2026-09-16 PM 판정 ㉡).
+ *
+ * **서버가 PDF 를 굽지 않는다** — 계약에서 `GET /books/{id}/pdf` 를 지웠다(`e2736f4`).
+ * **화면에 있는 것을 그대로 찍는다.** A-7 이 규모 `S` 라 그 안에 드는 길이 이것이다.
+ *
+ * **⚠ 여기서 재는 것은 「인쇄를 부른다」와 「종이에 남을 것만 남는다」**다.
+ * **실제 종이는 검사가 못 본다** — 대화상자 너머는 브라우저·OS 몫이다.
+ * **그래서 못 재는 것을 안 재는 척하지 않는다**: 아래 단언은 **버튼이 인쇄를 부르는지**와
+ * **숨기기로 한 것에 `print:hidden` 이 붙었는지**까지다.
+ */
+test("「부모님께 보내기」가 인쇄를 부르고, 종이에는 아이 것만 남는다", async ({ page }) => {
+  const 문장 = "낡은 밧줄의 매듭을 하나씩 만져 보며 어느 쪽이 새것인지 살폈다";
+  await page.route(BOOK, (route) =>
+    route.fulfill({
+      status: 200,
+      json: 책([페이지({ source: "chapter", source_id: "ch-1", text: 문장 })]),
+    }),
+  );
+
+  await page.goto("/book");
+
+  // **`window.print()` 를 가로챈다** — 진짜로 부르면 대화상자가 떠서 검사가 멈춘다.
+  const 불렀나 = await page.evaluate(() => {
+    (window as unknown as { __printed?: boolean }).__printed = false;
+    window.print = () => {
+      (window as unknown as { __printed?: boolean }).__printed = true;
+    };
+    return true;
+  });
+  expect(불렀나).toBe(true);
+
+  // **낱말은 `용어사전.md` 55행이다** — 「PDF」·「내보내기」는 **어른 낱말**이라 안 쓴다.
+  await page.getByRole("button", { name: 보내기라벨 }).click();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __printed?: boolean }).__printed,
+    ),
+  ).toBe(true);
+
+  // **종이에 남을 것** — 아이 문장은 `print:hidden` 이 아니다.
+  const 숨나 = (로케이터: ReturnType<typeof page.locator>) =>
+    로케이터.evaluate((el: Element) => {
+      for (let n: Element | null = el; n; n = n.parentElement) {
+        if (n.className?.toString().includes("print:hidden")) return true;
+      }
+      return false;
+    });
+  expect(await 숨나(page.locator("[data-책문장]").first())).toBe(false);
+
+  // **⛔ 안 남을 것 — 버튼과 나가는 문.** 안 숨기면 **종이에 버튼이 찍힌다.**
+  expect(await 숨나(page.locator("[data-보내기]"))).toBe(true);
+  expect(await 숨나(page.locator("[data-쓰러가기]"))).toBe(true);
+
+  // **한 쪽이 두 장으로 갈리지 않게 표식이 붙어 있다** — 그림과 그 아래 문장이
+  // 다른 종이에 있으면 그건 책이 아니다.
+  await expect(page.locator("[data-책쪽]")).toHaveCount(1);
 });
