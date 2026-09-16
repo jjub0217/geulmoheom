@@ -27,7 +27,28 @@ import { resolve } from "node:path";
 const 저장소 = resolve(import.meta.dirname, "../..");
 const API = resolve(저장소, "api");
 
-const 프록시포트 = Number(process.env.E2E_PROXY_PORT ?? 3003);
+/**
+ * **사람이 보는 모드** (2026-09-16 신설 · W7 10번).
+ *
+ * **검사가 아니라 대표가 눈으로 보려고 띄운다.** T1~T3 장면 카드가 **대표 미검수**라
+ * 튜토리얼이 **기본 꺼짐**인데(`config.tutorial_enabled`), **검수를 하려면 켜진 화면을
+ * 봐야 한다.** 그래서 이 모드에서만 `TUTORIAL_ENABLED=true` 로 띄운다.
+ *
+ * **⛔ 돈이 안 나가는 것이 요점이다.** 가짜 앞단과 못 쓰는 키를 **그대로** 쓴다 —
+ * 검사 갈래와 **같은 설정**이고, **평가도 그림도 진짜 구글로 안 나간다.**
+ * **삽화가 기본 에셋인 것은 알고 본다** — 그림을 보려는 것이 아니라 **문구와 흐름**을 본다.
+ *
+ * **⛔ 운영을 안 켠다.** 이건 **이 기계의 임시 서버**이고 DB 도 `geulmoheom_e2e` 다 —
+ * 운영 스위치는 **검수가 끝난 뒤 `config.tutorial_enabled` 한 군데**를 켜는 것이지
+ * 이 모드와 무관하다.
+ *
+ * ```
+ * cd web && pnpm 보여주기
+ * ```
+ */
+const 보여주기 = process.env.E2E_SHOW === "1" || process.argv.includes("--보여주기");
+
+const 프록시포트 = Number(process.env.E2E_SHOW === "1" ? 3005 : (process.env.E2E_PROXY_PORT ?? 3003));
 const 웹포트 = Number(process.env.E2E_WEB_PORT ?? 3004);
 
 const 자식들 = [];
@@ -241,6 +262,9 @@ await 비었나확인([["api", api포트]]);
       // **여기 둘이 이 하네스의 핵심이다.** 없으면 진짜 구글로 나간다.
       GEMINI_BASE_URL: 가짜주소,
       GEMINI_API_KEY: "fake-key-not-valid-anywhere",
+      // **사람이 보는 모드에서만 켠다** — 검사 갈래는 **꺼진 채로** 돈다.
+      // 켜고 검사하면 **「기본 꺼짐」이 깨져도 아무도 모른다.**
+      ...(보여주기 ? { TUTORIAL_ENABLED: "true" } : {}),
       EVALUATOR_MODEL: "gemini-3.1-flash-lite",
       // 가짜는 **모델 이름에 `image` 가 드는가**로 갈래를 나눈다 (`adr/0006`).
       IMAGE_MODEL: "gemini-3.1-flash-lite-image",
@@ -341,4 +365,25 @@ const 프록시 = createServer((요청, 응답) => {
 
 프록시.listen(프록시포트, "127.0.0.1", () => {
   console.log(`[하네스] 프록시 http://127.0.0.1:${프록시포트} — /api/* → api, 나머지 → web`);
+
+  if (!보여주기) return;
+
+  // **사람이 읽는 줄이다.** 위 줄들은 기계가 뜬 것을 적은 것이고 이건 **볼 사람을 위한 것**이다.
+  // **끄지 않는다** — Playwright 가 없으니 이 프로세스가 살아 있는 동안 서버도 산다.
+  console.log(`
+────────────────────────────────────────────────────────────
+  튜토리얼 「나침반 깨우기」를 눈으로 봅니다
+
+  1. 브라우저에서 열기   http://127.0.0.1:${프록시포트}/parents/signup
+  2. 학부모로 가입 → 아이 추가 → 접속 코드(6자리)를 받는다
+  3. http://127.0.0.1:${프록시포트}/child/auth 에 그 코드를 넣는다
+  4. T1 → T2 → T3 가 순서대로 나옵니다
+
+  ⛔ 돈이 안 나갑니다 — 가짜 앞단 + 못 쓰는 키입니다.
+     삽화는 기본 에셋이 뜹니다. 그림이 아니라 문구와 흐름을 보는 자리입니다.
+  ⛔ 이건 이 기계의 임시 서버입니다. 운영이 켜진 것이 아닙니다.
+
+  끄기: Ctrl+C
+────────────────────────────────────────────────────────────
+`);
 });
