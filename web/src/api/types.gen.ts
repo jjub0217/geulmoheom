@@ -535,6 +535,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Chapter
+         * @description 챕터를 연다 (`Stage1.md` 1절). **요청 본문 없음** — 아이 쿠키로 누구인지 안다.
+         *
+         *     **⛔ 진행 중인 챕터가 있으면 새로 안 연다 — 그것을 돌려준다.**
+         *     **⭐ 아이가 새로고침해도 이야기를 잃지 않는다.**
+         *
+         *     **⏳ 목이라 아직 안 지키는 것 둘** — ① 오늘 완결했으면 `409 CHAPTER_DONE_TODAY`
+         *     (D-1 하드 피니시) ② 진행 중인 챕터 돌려주기. **둘 다 상태(2번)가 선 뒤다.**
+         */
+        post: operations["open_chapter_api_v1_chapters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chapters/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Chapter
+         * @description 지금 상태 (`Stage1.md` 1절). **진행 중인 챕터가 없으면 `404 NO_ACTIVE_CHAPTER`.**
+         *
+         *     **⏳ 목은 언제나 챕터가 있는 것처럼 답한다.** 실제 판정은 상태(2번) 뒤다 —
+         *     **`NO_ACTIVE_CHAPTER` 갈래를 프론트가 그려야 하므로 코드는 지금 세워 둔다**
+         *     (`app/errors.py`).
+         */
+        get: operations["current_chapter_api_v1_chapters_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chapters/{chapter_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Chapter Summary
+         * @description 완결 화면 (`Stage1.md` 5절 · D-1).
+         *
+         *     **⛔ 「이어서 더 하기」를 응답에 넣지 않는다. 없는 것이 결정이다** (페르소나 7.1).
+         */
+        get: operations["chapter_summary_api_v1_chapters__chapter_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Turn
+         * @description 턴 하나 (`Stage1.md` 2절). **선택지든 자유 묘사든 한 자리로 받는다.**
+         *
+         *     **⛔ `choice_id` 와 `text` 중 정확히 하나다** — 둘 다 오거나 둘 다 없으면 422.
+         *     **이 검사는 목에서도 진짜로 돈다**: 프론트가 한 입력창으로 두 갈래를 보내는데,
+         *     **목이 아무거나 받아 주면 프론트가 틀린 모양으로 화면을 만들고** 실제 구현이
+         *     들어오는 날 422 를 처음 본다.
+         *
+         *     **⏳ 목이라 아직 안 도는 것** — `Stage1.md` 2절의 11단계 전부(Moderation ·
+         *     PII · 상한 · Evaluator · GM · 상태 추출 · 요약 · 삽화 · 턴 로그).
+         *     **등급은 `G2` 고정이다** — 목이 등급을 흉내내면 프론트가 그 값으로 화면을 가른다.
+         */
+        post: operations["create_turn_api_v1_turns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -780,6 +881,65 @@ export interface components {
             guide: components["schemas"]["Guide"];
             today: components["schemas"]["Today"];
         };
+        /**
+         * ChapterState
+         * @description 화면에 나가는 상태. **`summary`·`recent_turns`·`grades` 는 여기 없다** — 위 주석.
+         */
+        ChapterState: {
+            hero: components["schemas"]["HeroState"];
+            /** Location */
+            location: string;
+        };
+        /**
+         * ChapterSummary
+         * @description `GET /chapters/{id}/summary` — 완결 화면 (D-1 하드 피니시).
+         *
+         *     **⛔ 「이어서 더 하기」를 응답에 넣지 않는다. 없는 것이 결정이다** (페르소나 7.1).
+         */
+        ChapterSummary: {
+            /** Chapter Id */
+            chapter_id: string;
+            /** Chapter Key */
+            chapter_key: string;
+            /** Title */
+            title: string;
+            /** Turns Used */
+            turns_used: number;
+            /** Trial Path */
+            trial_path?: ("force" | "persuade" | "observe" | "care") | null;
+            /** Tier */
+            tier?: ("basic" | "rare" | "legendary") | null;
+            /** Book Page No */
+            book_page_no?: number | null;
+        };
+        /**
+         * ChapterView
+         * @description `POST /chapters` · `GET /chapters/current` 의 응답 (`Stage1.md` 1절).
+         *
+         *     **진행 중인 챕터가 있으면 새로 안 연다** — 그것을 돌려준다.
+         *     **⭐ 아이가 새로고침해도 이야기를 잃지 않는다.**
+         */
+        ChapterView: {
+            /** Chapter Id */
+            chapter_id: string;
+            /** Chapter Key */
+            chapter_key: string;
+            /** Turn */
+            turn: number;
+            /**
+             * Beat
+             * @enum {string}
+             */
+            beat: "intro" | "explore" | "rising_action" | "approach" | "trial" | "resolution";
+            /** Narrative */
+            narrative: string;
+            /** Choices */
+            choices: components["schemas"]["Choice"][];
+            state: components["schemas"]["ChapterState"];
+            /** Turns Left */
+            turns_left: number;
+            artwork: components["schemas"]["ArtworkRef"];
+        };
         /** ChildAuthRequest */
         ChildAuthRequest: {
             /** Access Code */
@@ -843,6 +1003,19 @@ export interface components {
              * @description 기기 로컬 자정. 클라이언트가 X-Timezone 을 보낸다
              */
             resets_at: string;
+        };
+        /**
+         * Choice
+         * @description 선택지 하나. **막힌 아이의 길이지 쓰기를 건너뛰는 길이 아니다** (비전 1장).
+         *
+         *     **⛔ 네 경로를 그대로 나열하지 않는다** — 「① 싸운다 ② 말을 건다 ③ 살펴본다
+         *     ④ 달랜다」가 되면 **쓰기가 고르기로 바뀐다.** 경로가 섞이게 낸다 (PRD 4.1).
+         */
+        Choice: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
         };
         /**
          * ClientEvent
@@ -917,6 +1090,16 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HeroState
+         * @description PRD 4.2 의 `hero` 부분. **요약이지 원문이 아니다.**
+         */
+        HeroState: {
+            /** Hp */
+            hp: number;
+            /** Items */
+            items?: string[];
         };
         /**
          * Highlight
@@ -1012,6 +1195,70 @@ export interface components {
             cap: number;
             /** Locked */
             locked: boolean;
+        };
+        /**
+         * TurnRequest
+         * @description **⛔ `choice_id` 와 `text` 중 정확히 하나다.** 둘 다 오거나 둘 다 없으면 422.
+         *
+         *     **⭐ 엔드포인트를 안 가른다** — 가르면 화면이 두 갈래를 따로 그리게 되고,
+         *     A-3 이 **「선택지와 자유 묘사를 한 입력창에」**로 쓰여 있다.
+         *
+         *     **⚠ `choice_id` 로 온 턴도 등급이 매겨진다** — 선택지 라벨을 그 아이의 입력으로
+         *     평가한다. **그래야 「고르기만 해도 된다」가 안 된다.** 다만 **G0 스캐폴딩은 안
+         *     띄운다** — 고른 것을 되물으면 뜻이 없다.
+         */
+        TurnRequest: {
+            /** Chapter Id */
+            chapter_id: string;
+            /** Choice Id */
+            choice_id?: string | null;
+            /** Text */
+            text?: string | null;
+        };
+        /**
+         * TurnResult
+         * @description `POST /turns` 의 응답 (`Stage1.md` 2절).
+         *
+         *     **`scaffold` 가 오면 `narrative` 는 `null` 이고 턴이 안 는다** — 되묻기가 상한을
+         *     깎으면 **막힌 아이가 더 빨리 잠긴다** (4절).
+         */
+        TurnResult: {
+            /** Turn */
+            turn: number;
+            /**
+             * Beat
+             * @enum {string}
+             */
+            beat: "intro" | "explore" | "rising_action" | "approach" | "trial" | "resolution";
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "G0" | "G1" | "G2" | "G3";
+            /** Bonus */
+            bonus: number;
+            /** Scaffold */
+            scaffold?: string | null;
+            /** Narrative */
+            narrative?: string | null;
+            /** Choices */
+            choices?: components["schemas"]["Choice"][];
+            state: components["schemas"]["ChapterState"];
+            /** Turns Left */
+            turns_left: number;
+            artwork?: components["schemas"]["ArtworkRef"] | null;
+            /**
+             * Chapter Done
+             * @default false
+             */
+            chapter_done: boolean;
+            /** Highlights */
+            highlights?: components["schemas"]["Highlight"][];
+            guide?: components["schemas"]["Guide"] | null;
+            /** Trial Path */
+            trial_path?: ("force" | "persuade" | "observe" | "care") | null;
+            /** Trial Progress */
+            trial_progress?: number | null;
         };
         /** UpdateBookRequest */
         UpdateBookRequest: {
@@ -1744,6 +1991,110 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_chapter_api_v1_chapters_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChapterView"];
+                };
+            };
+        };
+    };
+    current_chapter_api_v1_chapters_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChapterView"];
+                };
+            };
+        };
+    };
+    chapter_summary_api_v1_chapters__chapter_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChapterSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_turn_api_v1_turns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TurnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TurnResult"];
+                };
             };
             /** @description Validation Error */
             422: {
