@@ -33,11 +33,13 @@ from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, 평가기록
 from app.events import 남기기, 이벤트
 from app.gm import 도입프롬프트, 서사, 시스템지시, 턴프롬프트
+from app.guide_lines import 자해대사, 차단대사, 하나
 from app.models import Chapter
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
 from app.pii import 가리기, 실명까지가리기
 from app.scaffold import 되묻기횟수, 질문
+from app.schemas.stage0 import Guide
 from app.schemas.stage1 import (
     ChapterState,
     ChapterSummary,
@@ -204,14 +206,20 @@ async def create_turn(
     if 검사.blocked or 평가.차단됨:
         # **여기서 멈춘다 — GM 을 부르지 않는다** (계약 2절 1번).
         #
-        # **⏳ 계약 2절은 `422 UNSAFE_INPUT` 인데 6절이 「새 코드는 넷뿐」이고 그 넷에
-        # 없다.** 계약 안에서 어긋난 자리라 **PM 에게 올렸고**, 그때까지 **승인된 422
-        # 문구**로 나간다.
+        # **⛔ 차단은 오류가 아니라 정상 응답이다** (2026-09-16 계약 정정 `dc975e5`).
+        # 종전 `422 UNSAFE_INPUT` 은 **6절(「새 코드는 넷뿐」)과 어긋났고, 어긋난 쪽이
+        # 2절이었다** — `Stage0.md` 가 이미 `(c) 차단` 정상 응답으로 정해 뒀다
+        # (2026-09-08 대표 판정).
+        #
+        # **⛔ 그리고 그게 아이에게 중요하다.** `Stage0.md` 148행: **「차단 시 아이가 쓴
+        # 문장을 지우지 않는다. 입력창에 그대로 남긴다 — 이유도 모른 채 공들여 쓴 글이
+        # 사라지면 그것 자체가 벌로 읽힌다」.** **422 면 화면이 오류 갈래로 가고 그
+        # 규칙이 깨진다** (프론트가 짚었다).
         #
         # **차단 기록은 여기서 남기지 않는다** — `moderation_blocked` 를
         # `app/moderation.py` 가 이미 남긴다 (`direction`·`category`·`text_hash`).
         # 두 번 남기면 **안전 이슈 건수가 두 배로 세인다.**
-        raise AppError(ErrorCode.VALIDATION_ERROR)
+        return _차단(챕터, 현재=저장소.진행으로(챕터), 자해=검사.self_harm)
 
     평가기록(평가)
     현재 = 저장소.진행으로(챕터)
@@ -282,6 +290,7 @@ async def create_turn(
 
     시련중 = 진행.비트 == "trial"
     return TurnResult(
+        outcome="result",
         turn=진행.턴,
         beat=진행.비트,
         grade=평가.grade,  # type: ignore[arg-type]
@@ -295,6 +304,36 @@ async def create_turn(
         chapter_done=진행.완결,
         trial_path=진행.시련경로 if 시련중 else None,
         trial_progress=진행.시련진행 if 시련중 else None,
+    )
+
+
+def _차단(챕터: Chapter, *, 현재, 자해: bool) -> TurnResult:
+    """입력이 검사에 걸렸을 때 (`Stage1.md` 2절 1번 · `문구.md` 1.11).
+
+    **⛔ 턴을 안 먹는다** — 막힌 것이 아이 몫을 깎으면 **그 자체가 벌**이 된다.
+    **⛔ 종류·카테고리를 응답에 안 싣는다** — 아이에게 「나쁜 말」 피드백을 주지 않는다.
+
+    **자해 분기는 겉모양이 같다** (`문구.md` 1.2 · Stage 0 선례). 표정도 `reason` 도
+    같고 **달라지는 것은 대사 한 줄**이다 — 전용 표정이나 사유를 만들면 **아이가
+    자기 신호가 특별히 취급됐다는 것을 알아챈다.**
+    """
+    return TurnResult(
+        outcome="blocked",
+        reason="moderation",
+        turn=현재.턴,
+        beat=현재.비트,
+        grade=None,  # **평가값을 버린다** — 보여주지도 않은 평가가 분포를 오염시킨다
+        bonus=0,
+        scaffold=None,
+        narrative=None,
+        choices=[Choice(**것) for 것 in 챕터.choices],
+        state=_상태보기(챕터.state),
+        turns_left=저장소.남은턴(챕터),
+        guide=Guide(
+            expression="compass_dim",
+            line=자해대사() if 자해 else 하나(차단대사()),
+        ),
+        chapter_done=False,
     )
 
 
@@ -348,9 +387,8 @@ async def _되묻기(아이: ChildRow, 챕터: Chapter, 현재) -> TurnResult | 
         아이.id,
         이벤트("scaffold_triggered", {"turn_idx": 현재.턴 + 1, "attempt": 횟수}),
     )
-    from app.schemas.stage0 import Guide
-
     return TurnResult(
+        outcome="scaffold",
         turn=현재.턴,
         beat=현재.비트,
         grade="G0",

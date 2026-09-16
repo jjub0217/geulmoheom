@@ -44,7 +44,7 @@ from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
-from app.guide_lines import 결과한줄, 종료대사, 차단대사, 하나
+from app.guide_lines import 결과한줄, 자해대사, 종료대사, 차단대사, 하나
 from app.middleware import current_request_id
 from app.models import Artwork, Card, CardAttempt
 from app.models import Child as ChildRow
@@ -114,13 +114,13 @@ def _scaffold(today: TodayState | None = None) -> AttemptScaffold:
 
 # **차단 대사는 `문구.md` 1.11 에서 읽는다** (2026-09-08 확정). 코드에 복사하지 않는다.
 
-# **자해·자살 신호만 문구가 확정돼 있다** (`docs/문구.md` 1.2, 2026-09-07 대표 판정).
-# 화면을 봐도 달라질 것이 없어 나머지 대사보다 먼저 닫혔다. **바꾸는 것은 「대표 몫」이다.**
+# **자해 대사는 `guide_lines.자해대사()` 가 문서에서 읽는다** (2026-09-16 옮겼다).
+# 종전에는 여기 하드코딩 상수였는데, **그 문안을 바꾸는 것은 「대표 몫」**이라
+# (`문구.md` 1.2) **대표가 문서를 고쳐도 코드가 안 따라오는 자리**였다.
 #
 # **한 줄만 말하고 이어 말하지 않는다.** 가이드는 상담자가 아니라 게임 마스터이고
 # (C-1 「퀘스트 밖 자유 대화 없음」), 캐릭터가 아이의 실제 마음에 개입하면
 # 「가상 페르소나 의존」(페르소나 4.4)이 정면으로 발생한다.
-_자해대사 = "지금 마음이 많이 힘들면, 옆에 있는 어른한테 꼭 말해줘."
 
 
 def _소진() -> AppError:
@@ -146,7 +146,7 @@ def _blocked(*, 자해: bool = False, today: TodayState | None = None) -> Attemp
     return AttemptBlocked(
         outcome="blocked",
         reason="moderation",
-        guide=Guide(expression="compass_dim", line=_자해대사 if 자해 else 하나(차단대사())),
+        guide=Guide(expression="compass_dim", line=자해대사() if 자해 else 하나(차단대사())),
         today=today or TodayState(cards_done=2, cap=5, locked=False),
     )
 

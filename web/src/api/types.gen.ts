@@ -1216,8 +1216,19 @@ export interface components {
          *
          *     **`scaffold` 가 오면 `narrative` 는 `null` 이고 턴이 안 는다** — 되묻기가 상한을
          *     깎으면 **막힌 아이가 더 빨리 잠긴다** (4절).
+         *
+         *     **⛔ `outcome` 을 항상 명시한다 — 프론트가 이 값으로 화면을 가른다**
+         *     (`api/CLAUDE.md`, `/attempts` 가 같은 모양). **2026-09-16 에 프론트가 짚어서
+         *     더했다**: 이 값이 없으면 화면이 **`narrative == null && scaffold == null`** 로
+         *     차단을 추론해야 하는데, **그건 되묻기와 모양이 겹치고** GM 이 다른 이유로 서사를
+         *     안 준 날 **아무 잘못 없는 아이가 차단 문구를 본다.**
          */
         TurnResult: {
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "result" | "scaffold" | "blocked";
             /** Turn */
             turn: number;
             /**
@@ -1225,11 +1236,8 @@ export interface components {
              * @enum {string}
              */
             beat: "intro" | "explore" | "rising_action" | "approach" | "trial" | "resolution";
-            /**
-             * Grade
-             * @enum {string}
-             */
-            grade: "G0" | "G1" | "G2" | "G3";
+            /** Grade */
+            grade?: ("G0" | "G1" | "G2" | "G3") | null;
             /** Bonus */
             bonus: number;
             /** Scaffold */
@@ -1254,6 +1262,8 @@ export interface components {
             trial_path?: ("force" | "persuade" | "observe" | "care") | null;
             /** Trial Progress */
             trial_progress?: number | null;
+            /** Reason */
+            reason?: "moderation" | null;
         };
         /** UpdateBookRequest */
         UpdateBookRequest: {

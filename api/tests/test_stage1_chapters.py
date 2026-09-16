@@ -231,8 +231,85 @@ async def test_차단된_입력은_GM_까지_안_간다(
 
     응답 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": "칼로 찌른다"})
 
-    assert 응답.status_code == 422
+    assert 응답.status_code == 200
     assert _유료호출을_끊는다["gm"] == 부른수
+
+
+async def test_차단은_오류가_아니라_정상_응답이다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    """**⛔ 2026-09-16 계약 정정** (`dc975e5`). 종전 `422 UNSAFE_INPUT` 은 **틀렸고
+    어긋난 쪽이 계약 2절이었다** — `Stage0.md` 가 이미 **`(c) 차단` 정상 응답**으로
+    정해 뒀다(2026-09-08 대표 판정).
+
+    **⛔ 그리고 그게 아이에게 중요하다.** `Stage0.md` 148행이 **「차단 시 아이가 쓴
+    문장을 지우지 않는다. 입력창에 그대로 남긴다 — 이유도 모른 채 공들여 쓴 글이
+    사라지면 그것 자체가 벌로 읽힌다」**다. **422 로 내면 화면이 오류 갈래로 가고
+    그 규칙이 깨진다** (프론트가 짚었다).
+    """
+    from app.guide_lines import 차단대사
+
+    판 = await _열기(client)
+
+    async def _막힘(text: str):
+        return 검사결과(blocked=True, category="violence")
+
+    monkeypatch.setattr(stage1, "검사하기", _막힘)
+
+    몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": "칼로 찌른다"}).json()
+
+    # **프론트가 이 값으로 화면을 가른다** (`api/CLAUDE.md` — `outcome` 3분기)
+    assert 몸["outcome"] == "blocked"
+    assert 몸["reason"] == "moderation"
+    assert 몸["narrative"] is None and 몸["scaffold"] is None
+    # **문구는 1.11 이다** — 종류·카테고리를 아이에게 말하지 않는다
+    assert 몸["guide"]["line"] in 차단대사()
+    assert 몸["guide"]["expression"] == "compass_dim"
+    # **평가를 안 했으니 등급이 없다.** 차단 건의 평가값은 버린다
+    assert 몸["grade"] is None
+    # **턴을 안 먹는다** — 막힌 것이 아이 몫을 깎지 않는다
+    assert 몸["turn"] == 0 and 몸["turns_left"] == 12
+
+
+async def test_자해_신호는_대사만_다르고_겉모양이_같다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    """**`문구.md` 1.2 · Stage 0 선례 그대로.** 표정도 `reason` 도 같다 —
+    **이 상황 전용 표정이나 사유를 만들면 아이가 자기 신호가 특별히 취급됐다는
+    것을 알아챈다.** 달라지는 것은 **대사 한 줄**뿐이다."""
+    from app.guide_lines import 자해대사, 차단대사
+
+    판 = await _열기(client)
+
+    async def _자해(text: str):
+        return 검사결과(blocked=True, category="self_harm", self_harm=True)
+
+    monkeypatch.setattr(stage1, "검사하기", _자해)
+
+    몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": "..."}).json()
+
+    assert 몸["guide"]["line"] == 자해대사()
+    assert 몸["guide"]["line"] not in 차단대사()
+    assert 몸["reason"] == "moderation"
+    assert 몸["guide"]["expression"] == "compass_dim"
+
+
+async def test_세_갈래가_전부_outcome_을_명시한다(client: TestClient, _유료호출을_끊는다: dict):
+    """**`api/CLAUDE.md`: 「`outcome` 3분기를 항상 명시적으로 반환한다 — 프론트가 이
+    값으로 화면을 가른다」.** `/attempts` 가 그렇게 서 있고 `/turns` 도 같다.
+
+    **⛔ 추론으로 가르게 두지 않는다** (프론트가 짚었다). `narrative == null &&
+    scaffold == null` 로 차단을 알아내려면 **되묻기와 모양이 겹치고**, GM 이 다른
+    이유로 서사를 안 준 날 **아무 잘못 없는 아이가 차단 문구를 본다.**
+    """
+    판 = await _열기(client)
+    결과 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": 문장}).json()
+
+    _유료호출을_끊는다["등급"] = "G0"
+    되물음 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": "공격"}).json()
+
+    assert 결과["outcome"] == "result"
+    assert 되물음["outcome"] == "scaffold"
 
 
 async def test_아이_원문이_이벤트에_안_남는다(client: TestClient):

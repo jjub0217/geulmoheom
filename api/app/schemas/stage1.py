@@ -101,11 +101,21 @@ class TurnResult(BaseModel):
 
     **`scaffold` 가 오면 `narrative` 는 `null` 이고 턴이 안 는다** — 되묻기가 상한을
     깎으면 **막힌 아이가 더 빨리 잠긴다** (4절).
+
+    **⛔ `outcome` 을 항상 명시한다 — 프론트가 이 값으로 화면을 가른다**
+    (`api/CLAUDE.md`, `/attempts` 가 같은 모양). **2026-09-16 에 프론트가 짚어서
+    더했다**: 이 값이 없으면 화면이 **`narrative == null && scaffold == null`** 로
+    차단을 추론해야 하는데, **그건 되묻기와 모양이 겹치고** GM 이 다른 이유로 서사를
+    안 준 날 **아무 잘못 없는 아이가 차단 문구를 본다.**
     """
 
+    # `result` 진행 · `scaffold` 되묻기 · `blocked` 입력 차단
+    outcome: Literal["result", "scaffold", "blocked"]
     turn: int
     beat: Beat
-    grade: Literal["G0", "G1", "G2", "G3"]
+    # **차단이면 없다.** 차단은 **평가·GM 호출 전에** 멈추고(2절 1번) 그 건의 평가값은
+    # 버린다 — **화면에 보여주지도 않은 평가가 등급 분포를 오염시키지 않게** (`adr/0009`)
+    grade: Literal["G0", "G1", "G2", "G3"] | None = None
     # **등급이 서사에 반영되는 것이고 숫자가 뜨는 게 아니다** — 「점수」는 금지어다.
     bonus: int
     scaffold: str | None = None
@@ -122,6 +132,9 @@ class TurnResult(BaseModel):
     # 서사로 말한다 (`Stage1.md` 3절).
     trial_path: TrialPath | None = None
     trial_progress: int | None = None
+    # **차단 사유는 `moderation` 하나다** (2026-09-08 대표 판정 · `Stage0.md` 4절).
+    # **카테고리를 아이에게 말하지 않는다** — 「나쁜 말」 피드백을 주지 않는다
+    reason: Literal["moderation"] | None = None
 
 
 class ChapterSummary(BaseModel):

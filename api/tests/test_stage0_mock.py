@@ -17,6 +17,7 @@ from app.auth import CHILD_COOKIE, PARENT_COOKIE
 from app.config import REPO_ROOT, get_settings
 from app.docs_md import 민, 읽기
 from app.evaluator import 평가결과
+from app.guide_lines import 자해대사
 from app.models import Parent
 from app.moderation import SELF_HARM, 검사결과, 슬러그
 
@@ -502,7 +503,7 @@ def test_자해_문구가_문서와_어긋나면_깨진다():
     절 = 본문.split("### 1.2")[1].split("###")[0]
     인용 = [민(줄.lstrip("> ").strip()) for 줄 in 절.splitlines() if 줄.startswith(">")]
 
-    assert attempts._자해대사 in 인용
+    assert 자해대사() in 인용
 
 
 def test_차단은_카테고리를_아이에게_말하지_않는다(
