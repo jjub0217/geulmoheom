@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type { paths } from "../src/api/types.gen";
 // 문구를 문자열로 박지 않는다 — `docs/문구.md` 1.18 이 SSOT 다.
 import { 턴문구 } from "../src/components/turn-copy";
-import { 버튼 } from "../src/app/copy";
+import { 버튼, 못닿음 } from "../src/app/copy";
 
 /**
  * 챕터 턴 화면(A-3 · W7 **7번**)의 완료 조건 둘을 본다 —
@@ -45,6 +45,7 @@ const 장면: ChapterView = {
 
 /** 다음 턴. **turn 이 늘었다**는 것이 「넘어갔다」의 증거다. */
 const 다음턴: TurnResult = {
+  outcome: "result",
   turn: 2,
   beat: "explore",
   grade: "G2",
@@ -137,4 +138,116 @@ test("선택지와 직접 쓰기가 같은 무게다 — 자리·크기로 잰�
   for (const 금지어 of ["점수", "채점", "연습", "학습", "보스", "앨범", "등급"]) {
     expect(화면).not.toContain(금지어);
   }
+});
+
+/** 차단. **200 이고 정상 응답이다** — `outcome` 으로 가른다(2026-09-16 계약 정정). */
+const 차단: TurnResult = {
+  outcome: "blocked",
+  reason: "moderation",
+  turn: 장면.turn,
+  beat: "intro",
+  grade: null,
+  bonus: 0,
+  scaffold: null,
+  narrative: null,
+  choices: 장면.choices,
+  state: 장면.state,
+  turns_left: 장면.turns_left,
+  artwork: null,
+  chapter_done: false,
+  guide: { expression: "compass_dim", line: "그 얘기는 우리 모험에 안 어울려. 다른 걸 해볼까?" },
+};
+
+/**
+ * **⛔ 이것이 8번에서 가장 중요한 검사다.**
+ *
+ * `Stage0.md` 148행 — **「차단 시 아이가 쓴 문장을 지우지 않는다. 이유도 모른 채 공들여 쓴
+ * 글이 사라지면 그것 자체가 벌로 읽힌다.」** 차단을 오류 갈래로 보내면 그 규칙이 깨진다.
+ */
+test("차단은 오류가 아니다 — 아이 글을 지우지 않고 가이드가 말한다", async ({ page }) => {
+  await 장면을띄운다(page);
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 차단 }));
+
+  const 문장 = "부두에 있는 아저씨한테 무섭게 소리를 지른다";
+  await page.getByRole("textbox").fill(문장);
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  // **① 서버가 준 가이드 그대로.** 표정도 대사도 프론트가 안 고른다.
+  await expect(page.getByText(차단.guide!.line)).toBeVisible();
+  await expect(page.locator(`img[src="/guide/${차단.guide!.expression}.png"]`)).toBeVisible();
+
+  // **② 아이 글이 그대로 남아 있다 — 이 줄이 148행이다.**
+  await expect(page.getByRole("textbox")).toHaveValue(문장);
+
+  // **③ 오류 화면이 아니다.** 못 닿음 문구가 뜨면 아이는 서버가 고장 난 줄 안다.
+  await expect(page.getByText(못닿음.보내기)).toHaveCount(0);
+
+  // **④ 선택지가 그대로다** — 차단은 턴을 안 먹는다.
+  await expect(page.locator("main li")).toHaveCount(장면.choices.length);
+});
+
+test("되묻기도 아이 글을 지우지 않는다 — 고쳐 쓰라는 말이다", async ({ page }) => {
+  await 장면을띄운다(page);
+  const 되묻기: TurnResult = {
+    ...차단,
+    outcome: "scaffold",
+    reason: null,
+    grade: "G0",
+    scaffold: "그 밧줄은 어떤 모양이야?",
+    guide: { expression: "compass_dim", line: "그 밧줄은 어떤 모양이야?" },
+  };
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 되묻기 }));
+
+  const 문장 = "밧줄을 본다";
+  await page.getByRole("textbox").fill(문장);
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+
+  await expect(page.getByText(되묻기.guide!.line)).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveValue(문장);
+});
+
+/**
+ * **⛔ 액자를 비우지 않는다** — 핵심 씬이 1턴·9턴 둘뿐이라 **여덟 턴은 `artwork` 가 없다.**
+ * 비우면 **여덟 턴 중 일곱에서 보상이 사라진다.**
+ */
+test("새 그림이 안 와도 액자가 안 비워진다", async ({ page }) => {
+  const 그림있는장면: ChapterView = {
+    ...장면,
+    artwork: { artwork_id: "aw-1", status: "ready", url: "/i/aw-1.png" },
+  };
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 그림있는장면 }));
+  await page.goto("/chapter");
+
+  const 액자 = page.locator('main img[src="/i/aw-1.png"]');
+  await expect(액자).toBeVisible();
+
+  // 다음 턴에는 **새 그림이 없다** (`artwork: null`).
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+  await page.getByRole("button", { name: 장면.choices[0].label }).click();
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+
+  // **직전 그림이 그대로 걸려 있다.**
+  await expect(액자).toBeVisible();
+});
+
+test("완결하면 가이드가 말하고 「이어서 더 하기」가 없다", async ({ page }) => {
+  await 장면을띄운다(page);
+  const 완결: TurnResult = {
+    ...다음턴,
+    chapter_done: true,
+    guide: { expression: "session_end", line: "여기서 한 장이 끝났어. 네 책에 들어갔어." },
+  };
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 완결 }));
+
+  await page.getByRole("button", { name: 장면.choices[0].label }).click();
+
+  await expect(page.getByText(완결.guide!.line)).toBeVisible();
+
+  // **⛔ 없는 것이 결정이다** (D-1 · 페르소나 7.1). Auto-play·무한 스크롤 금지.
+  const 화면 = await page.locator("main").innerText();
+  for (const 금지 of ["이어서", "더 하기", "계속하기", "한 판 더"]) {
+    expect(화면).not.toContain(금지);
+  }
+  // 쓰는 칸도 없다 — 끝났는데 칸이 남으면 **끝난 것으로 안 읽힌다.**
+  await expect(page.getByRole("textbox")).toHaveCount(0);
 });

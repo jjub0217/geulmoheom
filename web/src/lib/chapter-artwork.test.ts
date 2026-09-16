@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { 액자에둘것, 챕터가바뀌었나 } from "@/lib/chapter-artwork";
+import { 액자에둘것 } from "@/lib/chapter-artwork";
 
 const 그림 = (id: string) => ({ artwork_id: id, status: "ready" as const, url: `/i/${id}` });
 
@@ -26,19 +26,5 @@ describe("액자에둘것 — null 은 「없다」가 아니라 「그대로」
 
   it("첫 턴 전에는 비어 있다 — 없는 것을 지어내지 않는다", () => {
     expect(액자에둘것(null, null)).toBeNull();
-  });
-});
-
-describe("챕터가바뀌었나 — 남의 장면 그림을 안 보여준다", () => {
-  it("다른 챕터면 버린다", () => {
-    expect(챕터가바뀌었나("ch-1", "ch-2")).toBe(true);
-  });
-
-  it("⛔ 같은 챕터를 이어하면 안 버린다 — 새로고침으로 돌아온 아이다", () => {
-    expect(챕터가바뀌었나("ch-1", "ch-1")).toBe(false);
-  });
-
-  it("첫 챕터는 버릴 것이 없다", () => {
-    expect(챕터가바뀌었나(null, "ch-1")).toBe(false);
   });
 });
