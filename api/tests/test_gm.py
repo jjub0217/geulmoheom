@@ -13,6 +13,7 @@
 
 import asyncio
 import logging
+from types import SimpleNamespace
 
 import pytest
 
@@ -122,22 +123,23 @@ def test_호출이_thinking_을_끈다():
     """
     잡은: dict[str, object] = {}
 
-    class _응답:
-        text = '{"narrative": "톱니가 돈다.", "choices": [], "is_key_scene": false,'
-        text += ' "scene_prompt_hint": ""}'
-        prompt_feedback = None
-        candidates = [type("_후보", (), {"finish_reason": "STOP"})()]
+    응답 = SimpleNamespace(
+        text='{"narrative": "톱니가 돈다.", "choices": [], "is_key_scene": false,'
+        ' "scene_prompt_hint": ""}',
+        prompt_feedback=None,
+        candidates=[SimpleNamespace(finish_reason="STOP")],
+    )
 
-    class _모델들:
-        async def generate_content(self, *, model, contents, config):
-            잡은["config"] = config
-            return _응답()
+    async def _생성(*, model, contents, config):
+        잡은["config"] = config
+        return 응답
 
-    class _클라이언트:
-        aio = type("_aio", (), {"models": _모델들()})()
+    클라이언트 = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=_생성))
+    )
 
     with pytest.MonkeyPatch.context() as 패치:
-        패치.setattr(gm, "get_client", lambda: _클라이언트())
+        패치.setattr(gm, "get_client", lambda: 클라이언트)
         asyncio.run(gm._한번("gemini-테스트", 시스템지시(), "프롬프트"))
 
     설정 = 잡은["config"]
@@ -180,13 +182,93 @@ def test_프롬프트에_보스가_없다():
         assert "boss" not in 글.lower()
 
 
+# ── ⛔ 핵심 씬은 뼈대가 정한다 — 돈이다 ──────────────────
+
+
+def test_핵심씬은_문서에서_둘이_온다():
+    """**둘인 이유가 돈이다** (뼈대 「핵심 씬」) — 매 턴 굽으면 한 챕터에 10회이고
+    **하루 상한 $0.50 을 한 아이가 혼자 넘긴다.** 코드에 박지 않고 문서에서 읽는다."""
+    from app.chapter_skeleton import 핵심씬인가, 핵심씬턴들
+
+    assert 핵심씬턴들() == (1, 9)
+    assert 핵심씬인가(1) and 핵심씬인가(9)
+    assert not 핵심씬인가(6)
+
+
+def test_프롬프트가_핵심씬_여부를_싣는다():
+    """**안 실어서 결함이 났다** (2026-09-16 유료 실측 · `benchmarks/W7-gm-bench.md`).
+    **모델은 모르는 것을 물어보지 않고 추측한다** — 6턴에 `is_key_scene: true` 가 왔다."""
+    여섯 = 턴프롬프트(턴=6, 상태=상태, 아이입력=문장, 등급="G2", 보너스=1)
+    하나 = 턴프롬프트(턴=1, 상태=상태, 아이입력=문장, 등급="G2", 보너스=1)
+
+    assert "핵심 씬" in 여섯 and "핵심 씬" in 하나
+    assert "핵심 씬인가: 아니다" in 여섯
+    assert "핵심 씬인가: 예" in 하나
+
+
+async def test_모델이_핵심씬이라_해도_뼈대가_아니면_덮는다(monkeypatch: pytest.MonkeyPatch):
+    """**이 검사가 돈을 지킨다.** 실측에서 모델이 6턴에 `true` 를 냈다.
+
+    **프롬프트 준수율에 맡기지 않는다** — 프롬프트에도 넣되 **최종값은 서버가 쥔다.**
+    """
+    monkeypatch.setattr(gm, "_한번", _응답(_출력().model_copy(update={"is_key_scene": True})))
+
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
+
+    assert 결과.출력 is not None
+    assert 결과.출력.is_key_scene is False
+
+
+@pytest.mark.parametrize("턴", [1, 9])
+async def test_뼈대가_핵심씬이라_하면_모델이_아니라도_켠다(
+    monkeypatch: pytest.MonkeyPatch, 턴: int
+):
+    """**반대 방향도 뼈대가 이긴다.** 1턴은 챕터의 얼굴이고 9턴은 보상의 순간이라
+    **거기서 안 구우면 아이가 그림을 못 받는다.**"""
+    monkeypatch.setattr(gm, "_한번", _응답(_출력().model_copy(update={"is_key_scene": False})))
+
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=턴)
+
+    assert 결과.출력 is not None
+    assert 결과.출력.is_key_scene is True
+
+
+async def test_삽화_힌트에_고정_문구가_섞이면_뗀다(monkeypatch: pytest.MonkeyPatch):
+    """**실측에서 받은 값 그대로다** — 힌트 칸에 `문구.md` 1.18 직접쓰기유도가 왔다.
+
+    **그 칸은 삽화 프롬프트다.** 그대로 넘기면 **그 문장으로 그림을 굽는다.**
+    """
+    from app.guide_lines import 직접쓰기유도
+
+    섞임 = f"{직접쓰기유도()} 톱니방에 걸린 외투 끈"
+    monkeypatch.setattr(gm, "_한번", _응답(_출력().model_copy(update={"scene_prompt_hint": 섞임})))
+
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=9)
+
+    assert 결과.출력 is not None
+    assert 직접쓰기유도() not in 결과.출력.scene_prompt_hint
+    assert 결과.출력.scene_prompt_hint == "톱니방에 걸린 외투 끈"
+
+
+async def test_핵심씬이_아니면_삽화_힌트를_비운다(monkeypatch: pytest.MonkeyPatch):
+    """**굽지 않는 턴의 힌트는 쓸 데가 없다.** 남겨 두면 다음에 누가 그것을 굽는다."""
+    monkeypatch.setattr(
+        gm, "_한번", _응답(_출력().model_copy(update={"scene_prompt_hint": "톱니방"}))
+    )
+
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
+
+    assert 결과.출력 is not None
+    assert 결과.출력.scene_prompt_hint == ""
+
+
 # ── 출력 검사 ───────────────────────────────────────────
 
 
 async def test_검사가_통과하면_서사가_나온다(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(gm, "_한번", _응답(_출력()))
 
-    결과 = await 서사(시스템지시(), "프롬프트")
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
 
     assert 결과.출력 is not None
     assert 결과.사유 is None
@@ -214,7 +296,7 @@ async def test_검사가_한_번_막으면_다시_부르고_통과한다(monkeyp
     monkeypatch.setattr(gm, "_한번", _한번)
     monkeypatch.setattr(gm, "검사하기", _검사)
 
-    결과 = await 서사(시스템지시(), "프롬프트")
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
 
     assert len(호출) == 2
     assert 결과.출력 is not None
@@ -234,7 +316,7 @@ async def test_두_번_막히면_unsafe_이고_서사를_지어내지_않는다(
     monkeypatch.setattr(gm, "_한번", _응답(_출력()))
     monkeypatch.setattr(gm, "검사하기", _검사)
 
-    결과 = await 서사(시스템지시(), "프롬프트")
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
 
     assert 결과.막혔나
     assert 결과.출력 is None  # **지어낸 서사가 없다**
@@ -251,7 +333,7 @@ async def test_타임아웃이면_한_번_더_부르고_사유가_남는다(monk
     monkeypatch.setattr(gm, "TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(gm, "_한번", _느림)
 
-    결과 = await 서사(시스템지시(), "프롬프트")
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
 
     assert len(호출) == 2
     assert 결과.사유 == "timeout"
@@ -267,7 +349,7 @@ async def test_모델이_없으면_부르지_않는다(monkeypatch: pytest.Monke
 
     monkeypatch.setattr(gm, "_한번", _불려선안됨)
 
-    결과 = await 서사(시스템지시(), "프롬프트")
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
 
     assert 결과.사유 == "unconfigured"
 
@@ -290,7 +372,7 @@ async def test_실패_로그에_아이_원문이_없다(
 
     프롬프트 = 턴프롬프트(턴=1, 상태=상태, 아이입력=문장, 등급="G2", 보너스=1)
     with caplog.at_level(logging.WARNING):
-        결과 = await 서사(시스템지시(), 프롬프트)
+        결과 = await 서사(시스템지시(), 프롬프트, 턴=6)
 
     assert 결과.사유 == "error"
     assert caplog.records, "로그가 아예 안 남으면 이 검사가 아무것도 안 잰다"
@@ -315,7 +397,7 @@ async def test_금지어가_섞이면_막지_않고_센다(monkeypatch: pytest.M
     """
     monkeypatch.setattr(gm, "_한번", _응답(_출력("네 문장은 조금 부족해. 그래도 가보자.")))
 
-    결과 = await 서사(시스템지시(), "프롬프트")
+    결과 = await 서사(시스템지시(), "프롬프트", 턴=6)
 
     assert 결과.출력 is not None  # 막지 않았다
     assert "부족해" in 결과.금지어걸림  # 셌다
