@@ -29,11 +29,12 @@ from fastapi import APIRouter, Depends, Request, status
 from app import chapter_run as 진행기
 from app import chapter_store as 저장소
 from app.api.v1.deps import Session, require_child
+from app.daily_turns import 다썼나
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, 평가기록
 from app.events import 남기기, 이벤트
 from app.gm import 도입프롬프트, 서사, 시스템지시, 턴프롬프트
-from app.guide_lines import 자해대사, 차단대사, 하나
+from app.guide_lines import 완결대사, 자해대사, 종료대사, 차단대사, 하나
 from app.models import Chapter
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
@@ -58,6 +59,35 @@ router = APIRouter(prefix="/chapters", tags=["stage1"])
 # **되묻기는 같은 턴에서 최대 2회** (PRD A-5). 2회 뒤에는 G1 취급으로 진행한다 —
 # **아이를 막지 않는다.** `/attempts` 와 같은 값을 쓴다
 최대되묻기 = 2
+
+
+def _오늘끝났다() -> AppError:
+    """`409 CHAPTER_DONE_TODAY` (D-1 · `문구.md` 1.20).
+
+    **`guide.line` 을 같이 싣는다** — 화면은 `error.message`(존댓말) 대신 이것만
+    보여준다 (`문구.md` 0장). `/attempts` 의 소진(`_소진()`)과 같은 모양이다.
+
+    **⛔ 1.10 을 돌려 쓰지 않는다.** 1.20 이 **「1.10 은 「더 못 한다」이고 이건 「다
+    했다」다 — 같은 문장을 돌려 쓰면 끝낸 아이와 막힌 아이가 같은 말을 듣는다」**로
+    못 박았다.
+    """
+    return AppError(
+        ErrorCode.CHAPTER_DONE_TODAY,
+        detail={"guide": {"expression": "session_end", "line": 하나(완결대사())}},
+    )
+
+
+def _턴을다썼다() -> AppError:
+    """`429 TURN_LIMIT` (D-2 · `문구.md` 1.21 → **1.10 을 그대로 쓴다**).
+
+    **새 문구를 만들지 않는다** — 1.21 이 그렇게 정했다. **「15분」이 없는 문장이라야
+    한다**(2.1 이 `RATE_LIMITED` 를 고친 이유) — `CHILD_MESSAGE` 의 `TURN_LIMIT` 이
+    그 조건을 지킨 문장이고, 가이드 줄은 1.10 다섯 중 하나다.
+    """
+    return AppError(
+        ErrorCode.TURN_LIMIT,
+        detail={"guide": {"expression": "session_end", "line": 하나(종료대사())}},
+    )
 
 
 def _보기(챕터: Chapter) -> ChapterView:
@@ -111,6 +141,14 @@ async def open_chapter(아이: Child, session: Session) -> ChapterView:
     코드·문구·`오늘완결했나()` 는 이미 서 있다.
     """
     있는것 = await 저장소.진행중(session, 아이)
+    if 있는것 is None:
+        # **⛔ 판을 열기 전에 잠금을 본다.** 뒤로 밀면 **잠긴 아이 때문에 GM 호출이
+        # 나가고 돈이 쓰인다** — 그리고 그 판은 화면에 안 뜬다
+        if await 저장소.오늘완결했나(session, 아이):
+            raise _오늘끝났다()
+        if await 다썼나(session, 아이):
+            # **상한 도달 시 하드 피니시와 동일 화면**이지만 **문구는 1.10 이다** (D-2)
+            raise _턴을다썼다()
     if 있는것 is not None:
         # **이어받은 판이다.** `turn_resume` 이 0 보다 크면 **새로고침이 이야기를
         # 안 잃었다**는 뜻이고, 그것이 이 이벤트를 남기는 이유다 (PRD 5장)
@@ -136,6 +174,11 @@ async def current_chapter(아이: Child, session: Session) -> ChapterView:
     """지금 상태 (계약 1절). **진행 중인 챕터가 없으면 `404 NO_ACTIVE_CHAPTER`.**"""
     있는것 = await 저장소.진행중(session, 아이)
     if 있는것 is None:
+        # **⛔ 「끝냈다」와 「없다」를 가른다** (D-1). 둘 다 `404 NO_ACTIVE_CHAPTER` 로
+        # 두면 **끝낸 아이가 「지금 이어갈 이야기가 없어요」를 본다** — 사실은 끝낸
+        # 것이고, 화면이 잠금을 그리려면 이 둘이 갈려 있어야 한다
+        if await 저장소.오늘완결했나(session, 아이):
+            raise _오늘끝났다()
         raise AppError(ErrorCode.NO_ACTIVE_CHAPTER)
     return _보기(있는것)
 
@@ -184,6 +227,13 @@ async def create_turn(
     if str(챕터.id) != payload.chapter_id:
         # **남의 판이거나 이미 끝난 판이다.** 넘어가면 다른 이야기에 글을 쓴다
         raise AppError(ErrorCode.NOT_FOUND)
+
+    # **⛔ 상한을 프로바이더 호출 앞에 둔다** (D-2). 계약 2절은 이것을 3번(검사·PII
+    # 뒤)으로 적어 뒀는데, **`/attempts` 는 맨 앞에서 본다** — 계약이 「같은 뼈대」라
+    # 부른 그 코드다. **뒤에 두면 잠긴 아이 때문에 검사·평가 호출이 나가고**, 아이는
+    # 결과를 못 본다. **PM 에게 알렸다.**
+    if await 다썼나(session, 아이):
+        raise _턴을다썼다()
 
     입력, 입력종류 = _입력고르기(payload, 챕터)
 
