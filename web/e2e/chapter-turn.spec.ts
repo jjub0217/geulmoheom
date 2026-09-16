@@ -251,3 +251,60 @@ test("완결하면 가이드가 말하고 「이어서 더 하기」가 없다",
   // 쓰는 칸도 없다 — 끝났는데 칸이 남으면 **끝난 것으로 안 읽힌다.**
   await expect(page.getByRole("textbox")).toHaveCount(0);
 });
+
+/**
+ * **⛔ 첫 화면 규칙** (W6 14번 판정 · `주차계획/W7.md` 8번 ④).
+ *
+ * **「그 화면에 온 사람이 해야 할 일은 첫 화면에 있어야 한다.」**
+ * 챕터 화면에서 아이가 해야 할 일은 **고르거나 쓰는 것**이다. 그 둘이 밖에 있으면
+ * **아이에게는 없는 것**이다.
+ *
+ * **⚠ 왜 `toBeVisible()` 로 안 때우나** — `click()` 과 `toBeVisible()` 이 **자동으로
+ * 스크롤한다.** 그래서 「있다」는 초록인데 **아이는 스크롤을 안 한다.**
+ * W6 에서 `toBeVisible()` **134곳이 「내 책이 화면 밖」을 하나도 못 잡았고**,
+ * **아이 셋이 다 못 열고서야** 나왔다. **여기서는 좌표를 재고 `scrollY === 0` 을 같이 본다.**
+ *
+ * **⛔ 서사를 길게 준다 — 이것이 이 검사의 요점이다.**
+ * 목·가짜는 **160자쯤**을 주는데 **실제 GM 은 150~300자**다(PRD 4.1 · 백엔드 확인).
+ * **짧은 서사로 자리를 맞추면 긴 서사가 오는 날 입력창이 접힌다** — 그날은
+ * **아이가 쓸 칸을 못 찾는 날**이고, 우리는 그때 처음 안다.
+ */
+const 긴서사 = "".padEnd(0) +
+  "시계탑 꼭대기로 오르는 나선 계단은 한 칸씩 높이가 달라서 발끝으로 더듬어야 했다. " +
+  "벽을 따라 늘어선 촛대에는 초가 없고, 대신 마른 넝쿨이 손목 굵기로 얽혀 창틀까지 뻗어 있다. " +
+  "위쪽 어딘가에서 쇠가 쇠를 긁는 소리가 일정한 간격으로 내려오는데, 그 사이사이에 " +
+  "숨을 고르는 것 같은 낮은 소리가 섞인다. 난간을 짚자 손바닥에 서늘한 물기가 묻어났다.";
+
+for (const [폭, 높이, 어디] of [
+  [1024, 768, "iPad 가로 — 아이 셋이 이렇게 들었다"],
+  [1280, 800, "검사 기본 뷰포트"],
+  [390, 844, "폰 세로"],
+  // **가장 좁은 것 하나.** 그게 통과하면 위는 따라온다 — W6 에서 이 크기만 빨갰다.
+  [360, 640, "작은 안드로이드 — 주소창까지 있으면 이 정도다"],
+] as const) {
+  test(`쓸 자리가 첫 화면 안에 있다 — 긴 서사에서도 · ${폭}×${높이} (${어디})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 폭, height: 높이 });
+    await page.route(CURRENT, (route) =>
+      route.fulfill({ status: 200, json: { ...장면, narrative: 긴서사 } }),
+    );
+    await page.goto("/chapter");
+    await expect(page.getByText(긴서사)).toBeVisible();
+
+    // **아이가 안 한 것을 검사도 안 한다.** 이 줄이 없으면 위의 `toBeVisible` 이
+    // 이미 스크롤시켜 둔 화면을 재게 된다.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    for (const [이름, 자리] of [
+      ["첫 선택지", await page.locator("main li button").first().boundingBox()],
+      ["쓰는 칸", await page.locator("main textarea").boundingBox()],
+      ["보내기", await page.getByRole("button", { name: 버튼.보내기 }).boundingBox()],
+    ] as const) {
+      expect(
+        Math.round(자리!.y + 자리!.height),
+        `${이름}이 첫 화면 밖이다 (${폭}×${높이})`,
+      ).toBeLessThanOrEqual(높이);
+    }
+  });
+}
