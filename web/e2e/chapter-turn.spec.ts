@@ -11,8 +11,13 @@ import { 버튼, 못닿음 } from "../src/app/copy";
  *
  * **문장은 전부 지어낸 것이다.** 실제 아이 문장을 테스트에 넣지 않는다.
  *
- * **⛔ 목의 고정값에 기대지 않는다** — `narrative`·선택지 라벨·`grade` 는 **A-1 이 서면
- * GM 것으로 바뀐다**(백엔드). 여기서는 **우리가 준 값이 화면에 그려지는지**만 본다.
+ * **⛔ 목의 고정값에 기대지 않는다** — `narrative`·선택지 라벨은 **A-1 이 서면 GM 것으로
+ * 바뀐다**(백엔드). 여기서는 **우리가 준 값이 화면에 그려지는지**만 본다.
+ *
+ * **⛔ `grade`·`bonus` 는 계약에서 빠졌다** (2026-09-16 `5d1f239`). `용어사전.md` 3장이
+ * 등급을 **「화면·API 응답에 넣지 않는다」**로 못 박아 뒀고, **`bonus` 는 정수라 화면이
+ * 그대로 숫자로 그린다 — 그게 「점수」다**(금지어). **화면이 그것으로 그릴 것이 없다**:
+ * **등급은 서사가**, **시련 진행은 `trial_progress` 가**, **보상은 삽화 티어가** 말한다.
  */
 type ChapterView =
   paths["/api/v1/chapters/current"]["get"]["responses"][200]["content"]["application/json"];
@@ -48,8 +53,6 @@ const 다음턴: TurnResult = {
   outcome: "result",
   turn: 2,
   beat: "explore",
-  grade: "G2",
-  bonus: 0,
   scaffold: null,
   narrative: "밧줄은 최근에 누가 풀었다 묶은 듯 매듭이 달랐다.",
   choices: [{ id: "d", label: "매듭을 풀어 본다" }],
@@ -146,8 +149,6 @@ const 차단: TurnResult = {
   reason: "moderation",
   turn: 장면.turn,
   beat: "intro",
-  grade: null,
-  bonus: 0,
   scaffold: null,
   narrative: null,
   choices: 장면.choices,
@@ -192,7 +193,6 @@ test("되묻기도 아이 글을 지우지 않는다 — 고쳐 쓰라는 말이
     ...차단,
     outcome: "scaffold",
     reason: null,
-    grade: "G0",
     scaffold: "그 밧줄은 어떤 모양이야?",
     guide: { expression: "compass_dim", line: "그 밧줄은 어떤 모양이야?" },
   };

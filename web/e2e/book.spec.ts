@@ -395,3 +395,48 @@ test("두 자리의 문은 같은 낱말을 쓴다 — 빈 책이든 쌓였든 �
   await page.goto("/book");
   await expect(page.getByRole("link", { name: 빈책.버튼 })).toBeVisible();
 });
+
+/**
+ * **챕터 완결이 책 한 장으로 온다** (A-7 · `주차계획/W7.md` **9번**).
+ *
+ * **⛔ 화면이 `source` 를 안 본다 — 그게 맞다.** 카드 한 장이든 챕터 한 판이든
+ * **아이에게는 「내 책의 한 쪽」**이다(`api/Stage1.md` 5절 「챕터 완결 = 책 한 장」).
+ * **갈라 그리면 「이건 진짜 책, 저건 연습」처럼 읽힌다** — 그건 `용어사전.md` 8장이
+ * 금지한 낱말을 **레이아웃으로 말하는 것**이다.
+ *
+ * **그래서 여기서 재는 것은 「안 갈라 그린다」**다. 추측이 아니라 검사로 박아 둔다 —
+ * 지금 안 갈라져 있는 것이 **그렇게 정해서**인지 **아직 안 해서**인지는 코드만 봐서는 모른다.
+ *
+ * **⚠ 두 모양이 섞여 쌓이는 것이 이 검사의 자리다** (W6 25번의 액자 판정과 같은 이유) —
+ * 카드 장은 `0.58` 짜리 조합 파일이 오고 챕터 장은 갓 구운 `1:1` 이 온다.
+ */
+test("챕터 한 판과 카드 한 장이 같은 책에 나란히 쌓인다", async ({ page }) => {
+  const 챕터문장 = "낡은 밧줄의 매듭을 하나씩 만져 보며 어느 쪽이 새것인지 살폈다";
+  const 카드문장 = "은빛 물고기가 살금살금 지나갔다";
+  const 책내용 = 책([
+    페이지({ page_no: 1, source: "card", source_id: "c01", text: 카드문장 }),
+    페이지({
+      page_no: 2,
+      source: "chapter",
+      source_id: "11111111-2222-3333-4444-555555555555",
+      text: 챕터문장,
+    }),
+  ]);
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책내용 }));
+
+  await page.goto("/book");
+
+  // **둘 다 아이 원문 그대로** — 요약도 교정도 없다 (비전 2장).
+  await expect(page.getByText(카드문장)).toBeVisible();
+  await expect(page.getByText(챕터문장)).toBeVisible();
+
+  // **쪽 수가 둘이다.** 챕터 장이 빠지거나 두 번 들어가면 여기서 걸린다.
+  await expect(page.locator("[data-책문장]")).toHaveCount(2);
+
+  // **⛔ 출처를 아이에게 말하지 않는다.** 내부 용어가 화면에 새면 안 된다
+  // (`용어사전.md` 8장). `chapter`·`card` 는 코드 식별자이지 아이 화면 낱말이 아니다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 금지 of ["chapter", "card", "챕터", "점수", "연습", "학습", "보스", "앨범"]) {
+    expect(화면, `「${금지}」가 아이 화면에 보인다`).not.toContain(금지);
+  }
+});
