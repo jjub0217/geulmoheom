@@ -9,12 +9,19 @@ from app import db
 from app.db import Base
 from app.models import CardAttempt
 
-# 아이 원문이 들어가도 되는 자리. 둘 다 책 콘텐츠다.
-# `book_pages.text` 는 `card_attempts.text` 를 책 페이지로 굳힌 사본이다.
-원문_허용 = {("card_attempts", "text"), ("book_pages", "text")}
+# 아이 원문이 들어가도 되는 자리. **셋 다 책 콘텐츠다.**
+# `book_pages.text` 는 `card_attempts.text`·자유 묘사 턴들을 책 페이지로 굳힌 사본이다.
+# **`chapter_turns.text` 는 2026-09-16 에 사용자가 열었다** (`api/CLAUDE.md` 8행) —
+# **Stage 1 턴 문장도 책 콘텐츠**이고, 없으면 A-7(「챕터 완결 = 책 한 장 · 문장은 아이
+# 원문 그대로」)을 세울 수 없다. **넷째를 늘리려면 사용자가 그 줄을 다시 고친다.**
+원문_허용 = {
+    ("card_attempts", "text"),
+    ("book_pages", "text"),
+    ("chapter_turns", "text"),
+}
 
 
-def test_원문_컬럼은_책_콘텐츠_두_곳뿐이다():
+def test_원문_컬럼은_책_콘텐츠_세_곳뿐이다():
     """새 테이블에 원문을 복사하면 여기서 걸린다."""
     자유서술_컬럼 = {
         (table.name, column.name)
@@ -56,17 +63,17 @@ def test_stage1_테이블이_섰고_sessions_는_아직_없다():
     assert "sessions" not in Base.metadata.tables
 
 
-def test_턴_기록은_길이를_남기고_원문_칸은_아직_없다():
-    """**⛔ 규칙이 2026-09-16 에 바뀌었다** — 사용자가 `api/CLAUDE.md` 에
-    **`chapter_turns.text` 를 더했다.** 원문이 가도 되는 칸이 **둘**이 됐다.
+def test_턴_기록이_길이와_문장을_남긴다():
+    """**9번(A-7)에서 뒤집은 검사다.** 종전에는 **「원문 칸이 아직 없다」**를 쟀고,
+    **칸이 9번에서 생긴다**는 것을 그 docstring 에 적어 뒀다 — 생겼다.
 
-    **칸은 9번(A-7)에서 생긴다 — 그때 이 검사를 뒤집는다.** 3번 범위에서 **쓰지도
-    않을 칸을 먼저 만들지 않는다.** **로그 금지는 그대로다.**
+    **⛔ 로그 금지는 그대로다.** 가르는 선은 **「로그냐 책 콘텐츠냐」**이고
+    `logger`·APM·예외 메시지·**이벤트 payload** 는 여전히 원문을 못 받는다.
     """
-    칸 = set(Base.metadata.tables["chapter_turns"].columns.keys())
+    칸 = Base.metadata.tables["chapter_turns"].columns
 
-    assert not [이름 for 이름 in 칸 if "text" in 이름]
     assert "char_len" in 칸
+    assert "책 콘텐츠" in (칸["text"].comment or "")
 
 
 def test_자녀에게_token_version_이_있다():

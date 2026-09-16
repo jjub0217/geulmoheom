@@ -160,3 +160,74 @@ async def 페이지올리기(
         )
     )
     await session.commit()
+
+
+async def 챕터페이지올리기(
+    session: AsyncSession,
+    아이: Child,
+    챕터id: uuid.UUID,
+    *,
+    tier: Tier,
+    문장들: list[str],
+    artwork_id: uuid.UUID | None = None,
+) -> int | None:
+    """완결한 챕터 하나를 **책 한 장**으로 (A-7 · `Stage1.md` 5절). 돌려주는 값은 장 번호.
+
+    **⛔ 문장은 아이 원문 그대로 이어 붙인다. 요약·다듬기·맞춤법 교정이 없다**
+    (비전 2장). **그것이 A-7 의 전부다** — 보정을 넣는 순간 **아이 책이 아이 글이
+    아니게 된다.**
+
+    **⛔ 고른 턴은 부르는 쪽에서 걸러 온다.** 그 라벨은 **GM 이 쓴 문장**이고, 실으면
+    **아이가 안 쓴 글이 아이 책에 아이 글로 남는다.**
+
+    **⛔ 교체가 없다** — 카드 장은 티어가 오르면 바뀌지만(`페이지올리기`) **챕터는
+    하루에 하나 끝나고 다시 쓰지 않는다.** 이미 있으면 그 번호를 그대로 돌려준다:
+    **두 번 불려도 책이 두 장이 되지 않는다.**
+
+    **새 책을 만들지 않는다** — `책()` 이 「내 책」(A0-4)을 그대로 준다.
+    """
+    그책 = await 책(session, 아이)
+
+    있던것 = await session.scalar(
+        select(BookPage).where(
+            BookPage.book_id == 그책.id,
+            BookPage.source == "chapter",
+            BookPage.source_id == str(챕터id),
+        )
+    )
+    if 있던것 is not None:
+        return 있던것.page_no
+
+    다음번호 = (
+        await session.scalar(
+            select(func.count()).select_from(BookPage).where(BookPage.book_id == 그책.id)
+        )
+        or 0
+    ) + 1
+
+    session.add(
+        BookPage(
+            book_id=그책.id,
+            source="chapter",
+            source_id=str(챕터id),
+            page_no=다음번호,
+            card_attempt_id=None,  # **챕터 장에는 카드 시도가 없다**
+            artwork_id=artwork_id,  # **⏳ 14번(삽화)이 채운다**
+            tier=tier,
+            text="\n".join(문장들),
+        )
+    )
+    await session.commit()
+    return 다음번호
+
+
+async def 챕터장번호(session: AsyncSession, 아이: Child, 챕터id: uuid.UUID) -> int | None:
+    """그 챕터가 책 몇 장인가. 없으면 `None` — 완결 화면이 이 값을 가리킨다(계약 5절)."""
+    그책 = await 책(session, 아이)
+    return await session.scalar(
+        select(BookPage.page_no).where(
+            BookPage.book_id == 그책.id,
+            BookPage.source == "chapter",
+            BookPage.source_id == str(챕터id),
+        )
+    )

@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, Request, status
 from app import chapter_run as 진행기
 from app import chapter_store as 저장소
 from app.api.v1.deps import Session, require_child
+from app.book_store import 챕터장번호, 챕터페이지올리기
 from app.daily_turns import 다썼나
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, 평가기록
@@ -203,7 +204,9 @@ async def chapter_summary(chapter_id: str, 아이: Child, session: Session) -> C
         turns_used=챕터.turn,
         trial_path=챕터.trial_path,  # type: ignore[arg-type]
         tier=진행기.티어(진행) if 진행.완결 else None,
-        book_page_no=None,
+        # **완결 화면이 「네 책에 들어갔어」라고 말한다**(문구 1.20) — **어디에
+        # 들어갔는지 가리킬 값**이 이것이다
+        book_page_no=await 챕터장번호(session, 아이, 챕터.id),
     )
 
 
@@ -312,6 +315,7 @@ async def create_turn(
         등급=평가.grade,
         입력종류=입력종류,
         글자수=len(문장),
+        문장=문장,  # **마스킹을 지난 문장이고 책에 실린다** (A-7)
         서사=출력.narrative,
         선택지=[것.model_dump() for 것 in 출력.choices],
         상태=챕터.state,  # **⏳ 상태 추출기는 2번(A-2)이다**
@@ -335,6 +339,10 @@ async def create_turn(
         # **4경로 사용 균형을 이 이벤트로 잰다** (PRD A-4 · 5장)
         남길것.append(이벤트("trial_path", {"path": 진행.시련경로, "passed": 진행.시련넘었나}))
     if 진행.완결:
+        # **완결 = 책 한 장** (A-7). **이벤트보다 먼저 만든다** — `남기기()` 는 실패를
+        # 삼키는데(측정이 아이 요청을 죽이면 안 된다) 책이 그 뒤에 있으면
+        # **삼킨 실패 다음에 아이 책이 안 생긴다.** `/attempts` 와 같은 순서다
+        await _책한장(session, 아이, 챕터, 진행)
         남길것.append(await _완결이벤트(session, 챕터, 진행))
     await 남기기(아이.id, *남길것)
 
@@ -384,6 +392,27 @@ def _차단(챕터: Chapter, *, 현재, 자해: bool) -> TurnResult:
             line=자해대사() if 자해 else 하나(차단대사()),
         ),
         chapter_done=False,
+    )
+
+
+async def _책한장(session: Session, 아이: ChildRow, 챕터: Chapter, 진행) -> None:
+    """완결한 챕터를 책 한 장으로 (A-7 · `Stage1.md` 5절).
+
+    **⛔ 고른 턴을 뺀다.** 그 문장은 **GM 이 쓴 선택지 라벨**이고, 실으면 **아이가 안
+    쓴 글이 아이 책에 아이 글로 남는다.** 「아이 원문 그대로」가 거짓이 된다.
+
+    **⛔ 요약·다듬기가 없다** — 쓴 순서대로 이어 붙이기만 한다 (비전 2장).
+
+    **⏳ 삽화는 아직 안 붙는다** — 14번 자리다. 그때까지 장에 그림이 없다.
+    """
+    턴들 = await 저장소.턴들(session, 챕터.id)
+    아이가쓴것 = [것.text for 것 in 턴들 if 것.input_type == "free" and 것.text]
+    await 챕터페이지올리기(
+        session,
+        아이,
+        챕터.id,
+        tier=진행기.티어(진행),
+        문장들=아이가쓴것,
     )
 
 

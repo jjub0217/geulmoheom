@@ -260,10 +260,16 @@ class Chapter(Base):
 class ChapterTurn(Base):
     """턴 한 번의 기록 (`Stage1.md` 2절 11번).
 
-    **⛔ 아이 원문 칸이 없다. 그것이 이 테이블의 결정이다** — 계약 11번이
-    **「아이 원문은 로그에 안 남는다. 등급·경로·소요만」**이다. 원문이 가도 되는 곳은
-    **`card_attempts.text` 하나**이고 (`api/CLAUDE.md`), **책에 실릴 문장을 어디에
-    둘지는 9번(A-7)에서 정한다** — 그때까지 **여기에 슬그머니 칸을 만들지 않는다.**
+    **`text` 는 로그가 아니라 아이의 책 콘텐츠다** (PRD 1.1b · 2026-09-16 사용자 지시로
+    `api/CLAUDE.md` 가 이 칸을 허용했다). **A-7 이 「챕터 완결 = 책 한 장 · 문장은 아이
+    원문 그대로」**라 이 칸 없이는 책을 세울 수 없다.
+
+    **⛔ 금지되는 것은 그대로다** — `logger`·APM·예외 메시지·**이벤트 payload** 에는
+    못 간다. 가르는 선은 **「로그냐 책 콘텐츠냐」**다 (계약 2절 11번 정정).
+
+    **⚠ 고른 턴의 `text` 는 GM 이 쓴 선택지 라벨이다.** 평가에 들어간 문장이라 여기
+    남지만 **책에는 안 들어간다**(`input_type` 으로 가른다) — 실으면 **아이가 안 쓴
+    글이 아이 책에 아이 글로 남는다.**
 
     **`char_len` 은 길이만이다.** H2 지표(회당 150자)가 이 값을 센다 —
     `card_attempts.char_len` 과 **같은 정의(공백 포함)** 를 쓴다.
@@ -290,6 +296,15 @@ class ChapterTurn(Base):
     input_type: Mapped[str] = mapped_column(String(8))
     trial_path: Mapped[str | None] = mapped_column(String(16))
     char_len: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(
+        Text,
+        server_default="",
+        comment=(
+            "평가에 들어간 문장 (PII 마스킹 뒤). 자유 묘사면 아이 원문이고 책 콘텐츠다 "
+            "(PRD 1.1b) — 로그·APM·이벤트로 복사 금지. 고른 턴이면 GM 이 쓴 선택지 "
+            "라벨이라 책에는 안 들어간다 (input_type 으로 가른다)"
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
@@ -335,7 +350,13 @@ class Book(Base):
 
 
 class BookPage(Base):
-    """카드별 **최고 티어 시도 1건**이 한 페이지. 티어가 오르면 이 행을 교체한다."""
+    """한 장. **출처가 둘이다** (`source`).
+
+    - **`card`** — 카드별 **최고 티어 시도 1건**. 티어가 오르면 이 행을 교체한다
+    - **`chapter`** — **완결한 챕터 하나** (A-7). **아이가 자유 묘사로 쓴 문장들을
+      그대로 이어 붙인다** — 요약·다듬기 없음(비전 2장). 교체가 없다: **챕터는 하루에
+      하나 끝나고 다시 쓰지 않는다**
+    """
 
     __tablename__ = "book_pages"
     __table_args__ = (
@@ -348,7 +369,9 @@ class BookPage(Base):
     source: Mapped[str] = mapped_column(String(16), default="card")
     source_id: Mapped[str] = mapped_column(String(64))  # 카드 id / 챕터 id
     page_no: Mapped[int] = mapped_column(Integer)
-    card_attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("card_attempts.id"))
+    # **챕터 장에는 카드 시도가 없다** (A-7, 2026-09-16). 카드 장은 그대로 채운다 —
+    # **비어 있는 것이 「어디서 왔는지 모른다」가 아니다**: 출처는 `source`·`source_id` 다
+    card_attempt_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("card_attempts.id"))
     artwork_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artworks.id"))
     tier: Mapped[str] = mapped_column(String(16))
     text: Mapped[str] = mapped_column(
