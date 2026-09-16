@@ -26,14 +26,14 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import db
-from app.artwork import 생성
+from app.artwork import 생성, 챕터프롬프트, 프롬프트로생성
 from app.config import REPO_ROOT
 from app.middleware import current_request_id
-from app.models import Artwork, CardAttempt
+from app.models import Artwork, CardAttempt, Chapter
 from app.schemas.stage0 import Tier
 from app.storage import mime추측, 시도키, 올리기, 읽기, 조합찾기
 
@@ -227,12 +227,111 @@ async def 내것읽기(session: AsyncSession, artwork_id: str, child_id: uuid.UU
     except ValueError:
         return None
 
+    # **출처가 둘이라 갈래가 둘이다** (2026-09-16 · W7 14번). 카드 시도는
+    # `card_attempts` 를, 챕터 핵심 씬은 `chapters` 를 타고 **같은 아이인지**를 본다.
+    # **한 쿼리로 둔다** — 두 번 조회하면 **한쪽만 고쳐지는 날**이 온다
     문 = (
         select(Artwork)
-        .join(CardAttempt, CardAttempt.id == Artwork.card_attempt_id)
-        .where(Artwork.id == 아이디, CardAttempt.child_id == child_id)
+        .outerjoin(CardAttempt, CardAttempt.id == Artwork.card_attempt_id)
+        .outerjoin(Chapter, Chapter.id == Artwork.chapter_id)
+        .where(
+            Artwork.id == 아이디,
+            or_(CardAttempt.child_id == child_id, Chapter.child_id == child_id),
+        )
     )
     return await session.scalar(문)
+
+
+async def 챕터삽화수(session: AsyncSession, chapter_id: uuid.UUID) -> int:
+    """이 챕터에 이미 만든 삽화 수. **상한을 부르는 쪽이 이 값으로 쥔다.**
+
+    **⛔ 그 상한이 돈이다** — 뼈대가 핵심 씬을 **1턴·9턴 둘**로 묶은 근거가
+    「매 턴 굽으면 한 챕터에 10회이고 하루 상한($0.50)을 한 아이가 혼자 넘긴다」다.
+    """
+    return (
+        await session.scalar(
+            select(func.count()).select_from(Artwork).where(Artwork.chapter_id == chapter_id)
+        )
+    ) or 0
+
+
+async def 마지막챕터삽화(session: AsyncSession, chapter_id: uuid.UUID) -> uuid.UUID | None:
+    """그 챕터의 **마지막** 핵심 씬 삽화. 책 한 장이 이것을 가리킨다 (A-7).
+
+    **마지막인 이유** — 뼈대의 둘 중 뒤엣것이 **9턴 「아이가 시련을 넘은 순간」**이고
+    **보상의 순간**이다. 첫 장(1턴)은 **챕터의 얼굴**이라 화면에서 이미 쓰였다.
+    """
+    return await session.scalar(
+        select(Artwork.id)
+        .where(Artwork.chapter_id == chapter_id)
+        .order_by(Artwork.created_at.desc())
+        .limit(1)
+    )
+
+
+async def 챕터삽화만들기(
+    session: AsyncSession, chapter_id: uuid.UUID, tier: Tier, *, 굽나: bool
+) -> Artwork:
+    """챕터 핵심 씬의 행 하나. **커밋까지 한다** — 폴링이 다른 세션으로 이 행을 찾는다.
+
+    **⛔ 여기서 굽지 않는다** (`만들기` 와 같은 자리). 요청 세션을 쥐고 있고 굽기는
+    응답이 나간 뒤에 도는 코드다.
+
+    **`굽나=False` 면 기본 에셋으로 즉시 `ready`** 다 — 챕터 장면에는 **미리 구운
+    조합이 없다**(카드와 다른 점이다). 그래서 **폴백이 곧 기본 에셋**이고, 아이는
+    **빈 액자 대신 기본 그림**을 본다 (PRD B-3 「플레이 중단 없음」).
+    """
+    삽화 = Artwork(
+        chapter_id=chapter_id,
+        tier=tier,
+        status="pending" if 굽나 else "ready",
+        fallback=not 굽나,
+        ready_at=None if 굽나 else datetime.now(UTC),
+    )
+    session.add(삽화)
+    await session.commit()
+    return 삽화
+
+
+async def 챕터굽기(
+    artwork_id: uuid.UUID, 장면힌트: str, tier: Tier, 아이문장: str | None = None
+) -> None:
+    """챕터 핵심 씬을 굽는다. **`굽기` 와 같은 태도다** — 예외를 밖으로 내지 않고
+    **어떤 길로 끝나든 행은 `ready`** 가 된다(`pending` 에 갇히면 프론트가 15초를 헛돈다).
+
+    **⛔ 상한은 여기서 안 센다** — 부르는 쪽(`stage1`)이 쥔다. **세는 자리가 둘이면
+    한쪽만 바뀐다**(`굽기` 의 그 주석과 같은 이유).
+    """
+    try:
+        결과 = await 프롬프트로생성(챕터프롬프트(장면힌트, tier, 아이문장), tier)
+        키 = None
+        if 결과.image and (오브젝트키 := 시도키(artwork_id, 결과.mime)):
+            # **삽화 id 로 키를 만든다** — 챕터 장면에는 **조합 키가 애초에 없다**
+            # (카드+티어 캐시는 카드 것이다). 아이 문장과 GM 장면으로 그린 그림이라
+            # **남이 볼 자리에 두면 안 된다**(`adr/0015` ②와 같은 이유)
+            키 = await 올리기(오브젝트키, 결과.image, 결과.mime)
+        if 키 is None:
+            # **챕터에는 깔아 둔 조합이 없다 — 곧 기본 에셋이다.** 카드처럼
+            # `legendary` 파일을 볼 자리가 없다
+            logger.info(
+                "챕터 삽화를 못 구워 기본 에셋으로 간다",
+                extra={
+                    "request_id": current_request_id(),
+                    "reason": 결과.사유 or "store",
+                    "tier": tier,
+                },
+            )
+            await _끝냈다(artwork_id, None, 폴백=True)
+            return
+        await _끝냈다(artwork_id, 키, 폴백=False)
+    except Exception as exc:
+        # **예외 메시지를 싣지 않는다** — 프롬프트에 GM 서사와 아이 문장이 들어 있고
+        # 프로바이더가 그것을 되울려 주는 일이 있다
+        logger.warning(
+            "챕터 삽화 굽기가 실패했다",
+            extra={"request_id": current_request_id(), "exc_type": type(exc).__name__},
+        )
+        await _끝냈다(artwork_id, None, 폴백=True)
 
 
 async def 오래_기다렸으면_확정(session: AsyncSession, 삽화: Artwork) -> Artwork:

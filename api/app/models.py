@@ -311,15 +311,34 @@ class ChapterTurn(Base):
 
 
 class Artwork(Base):
+    """삽화 한 장. **출처가 둘이다** (2026-09-16 · W7 14번).
+
+    - **카드 시도** (`card_attempt_id`) — Stage 0
+    - **챕터 핵심 씬** (`chapter_id`) — Stage 1. **한 챕터에 둘**(1턴·9턴)이고
+      **그 수가 돈이다**: 매 턴 구우면 한 챕터에 10회이고 **하루 상한($0.50)을 한
+      아이가 혼자 넘긴다**(뼈대 「핵심 씬」)
+
+    **⛔ 둘 중 정확히 하나가 채워진다** (`ck_artworks_출처`). 둘 다 비면 **주인이 없는
+    그림**이고(폴링의 소유 확인이 그 열을 탄다) 둘 다 차면 **어느 쪽 것인지 모른다.**
+    """
+
     __tablename__ = "artworks"
     __table_args__ = (
         CheckConstraint(f"status in {ARTWORK_STATUSES}", name="ck_artworks_status"),
         CheckConstraint(f"tier in {TIERS}", name="ck_artworks_tier"),
+        CheckConstraint(
+            "(card_attempt_id is null) != (chapter_id is null)", name="ck_artworks_출처"
+        ),
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    card_attempt_id: Mapped[uuid.UUID] = mapped_column(
+    card_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("card_attempts.id", ondelete="CASCADE"), index=True
+    )
+    # **Stage 1 핵심 씬.** 턴에 안 걸고 **챕터에 건다** — 한 챕터에 둘뿐이고
+    # **책 한 장이 챕터 하나**라(A-7) 세는 단위가 챕터다
+    chapter_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chapters.id", ondelete="CASCADE"), index=True
     )
     tier: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), default="pending")

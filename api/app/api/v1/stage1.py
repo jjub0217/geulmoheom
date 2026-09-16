@@ -25,11 +25,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 
 from app import chapter_run as 진행기
 from app import chapter_store as 저장소
 from app.api.v1.deps import Session, require_child
+from app.artwork import 내보내도되나, 챕터프롬프트
+from app.artwork_store import 마지막챕터삽화, 챕터굽기, 챕터삽화만들기, 챕터삽화수
 from app.book_store import 챕터장번호, 챕터페이지올리기
 from app.chapter_state import 상태추출, 요약재료, 요약하기, 요약할때인가, 최근원문
 from app.daily_turns import 다썼나
@@ -44,7 +46,7 @@ from app.models import Child as ChildRow
 from app.moderation import 검사하기
 from app.pii import 가리기, 실명까지가리기
 from app.scaffold import 되묻기횟수, 질문
-from app.schemas.stage0 import Guide
+from app.schemas.stage0 import ArtworkRef, Guide
 from app.schemas.stage1 import (
     ChapterState,
     ChapterSummary,
@@ -61,6 +63,9 @@ Child = Annotated[ChildRow, Depends(require_child)]
 
 router = APIRouter(prefix="/chapters", tags=["stage1"])
 턴라우터 = APIRouter(prefix="/turns", tags=["stage1"])
+
+# **핵심 씬 상한 — 한 챕터에 둘** (뼈대 「핵심 씬」). **그 수가 돈이다.**
+핵심씬상한 = 2
 
 # **되묻기는 같은 턴에서 최대 2회** (PRD A-5). 2회 뒤에는 G1 취급으로 진행한다 —
 # **아이를 막지 않는다.** `/attempts` 와 같은 값을 쓴다
@@ -217,7 +222,11 @@ async def chapter_summary(chapter_id: str, 아이: Child, session: Session) -> C
 
 @턴라우터.post("")
 async def create_turn(
-    request: Request, payload: TurnRequest, 아이: Child, session: Session
+    request: Request,
+    payload: TurnRequest,
+    아이: Child,
+    session: Session,
+    뒤에서: BackgroundTasks,
 ) -> TurnResult:
     """턴 하나 (계약 2절). **선택지든 자유 묘사든 한 자리로 받는다.**
 
@@ -340,6 +349,9 @@ async def create_turn(
     )
     await session.commit()
 
+    # **10. 핵심 씬이면 굽는다** (계약 2절 10번 · W7 14번). **상한은 여기서 쥔다.**
+    삽화 = await _핵심씬삽화(session, 챕터, 진행, 출력, 문장, 뒤에서)
+
     # **11. 턴 로그 — 원문이 없다.** 등급·경로·길이만이다 (계약 2절 11번)
     남길것 = [
         # **Stage 1 은 `turn_idx`, Stage 0 은 `card_id`** — 5장이 그렇게 갈라 뒀다
@@ -374,7 +386,7 @@ async def create_turn(
         choices=[Choice(**것.model_dump()) for 것 in 출력.choices],
         state=_상태보기(새상태),
         turns_left=max(0, 진행기.최대턴 - 진행.턴),
-        artwork=None,
+        artwork=삽화,
         chapter_done=진행.완결,
         trial_path=진행.시련경로 if 시련중 else None,
         trial_progress=진행.시련진행 if 시련중 else None,
@@ -407,6 +419,50 @@ def _차단(챕터: Chapter, *, 현재, 자해: bool) -> TurnResult:
         ),
         chapter_done=False,
     )
+
+
+async def _핵심씬삽화(
+    session: Session,
+    챕터: Chapter,
+    진행,
+    출력,
+    문장: str,
+    뒤에서: BackgroundTasks,
+) -> ArtworkRef | None:
+    """핵심 씬 삽화 (B-3 재사용 · W7 14번). **핵심 씬이 아니면 `None`.**
+
+    **⛔ 상한을 서버가 쥔다 — 한 챕터에 둘.** 뼈대가 **1턴·9턴**으로 묶은 근거가
+    **돈**이다: **매 턴 굽으면 한 챕터에 10회이고 하루 상한($0.50)을 한 아이가 혼자
+    넘는다.** **모델이 `is_key_scene: true` 를 줘도 여기서 막힌다** — 1번에서 그 값을
+    되찾은 것과 **같은 자리**이고, **돈이 걸린 판단을 프롬프트 준수율에 맡기지 않는다.**
+
+    **⛔ 출력 검사가 굽기 앞에 있다** (E-1 양방향 — 이미지 프롬프트도 검사 대상).
+    **GM 이 낸 장면이 그대로 이미지 모델로 가는 자리**다. 막히면 **굽지 않고 기본
+    에셋으로 간다** — 아이 화면에는 **빈 액자가 아니라 그림**이 있다(PRD B-3).
+
+    **`None` 이 「없다」가 아니라 「새 그림이 없다」다** — 화면은 액자를 비우지 않고
+    **직전 핵심 씬 그림을 그대로 둔다**(프론트 8번 규칙 · 명세 변경 `db327d6`).
+    """
+    if not 진행.핵심씬:
+        return None
+    if await 챕터삽화수(session, 챕터.id) >= 핵심씬상한:
+        # **뼈대가 셋으로 늘어도 둘에서 멈춘다.** 문서가 늘면 `뼈대.핵심씬턴들()` 이
+        # 먼저 터지게 돼 있지만(3개 초과), **여기도 막는다** — 돈은 두 겹으로 막는다
+        logger.info(
+            "챕터 핵심 씬 상한에 닿아 안 굽는다",
+            extra={"request_id": current_request_id(), "turn_idx": 진행.턴},
+        )
+        return None
+
+    tier = 진행기.티어(진행)
+    프롬프트문 = 챕터프롬프트(출력.scene_prompt_hint, tier, 문장)
+    굽나 = 프롬프트문 is not None and not (await 내보내도되나(프롬프트문)).blocked
+    삽화 = await 챕터삽화만들기(session, 챕터.id, tier, 굽나=굽나)
+    if 굽나:
+        # **⛔ 가린 문장을 넘긴다** (`adr/0015` ②). 원문을 넘기면 **가린 것이 그림으로
+        # 되돌아온다.** `문장` 이 그 마스킹된 값이다
+        뒤에서.add_task(챕터굽기, 삽화.id, 출력.scene_prompt_hint, tier, 문장)
+    return ArtworkRef(artwork_id=str(삽화.id), status=삽화.status, url=None)
 
 
 class _막한턴:
@@ -465,12 +521,15 @@ async def _책한장(session: Session, 아이: ChildRow, 챕터: Chapter, 진행
     """
     턴들 = await 저장소.턴들(session, 챕터.id)
     아이가쓴것 = [것.text for 것 in 턴들 if 것.input_type == "free" and 것.text]
+    # **그 챕터의 마지막 핵심 씬이 그 장의 그림이다** — **보상의 순간(9턴)**이고
+    # `adr/0015` 가 「아이 문장으로 굽는 자리」로 적어 둔 그 턴이다
     await 챕터페이지올리기(
         session,
         아이,
         챕터.id,
         tier=진행기.티어(진행),
         문장들=아이가쓴것,
+        artwork_id=await 마지막챕터삽화(session, 챕터.id),
     )
 
 
