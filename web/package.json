@@ -12,7 +12,9 @@
     "e2e": "playwright test",
     "e2e:static": "playwright test --config playwright.static.config.ts",
     "e2e:server": "playwright test --config playwright.server.config.ts",
-    "보여주기": "E2E_SHOW=1 node e2e/_서버하네스.mjs"
+    "보여주기": "E2E_SHOW=1 node e2e/_서버하네스.mjs",
+    "보여주기:되묻기": "E2E_SHOW=1 E2E_SHOW_GRADE=G0 node e2e/_서버하네스.mjs",
+    "보여주기:낮게": "E2E_SHOW=1 E2E_SHOW_GRADE=G1 node e2e/_서버하네스.mjs"
   },
   "dependencies": {
     "next": "16.3.4",
