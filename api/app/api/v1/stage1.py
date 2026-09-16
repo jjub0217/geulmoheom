@@ -307,7 +307,9 @@ async def create_turn(
                 상태=챕터.state,
                 아이입력=문장,
                 등급=진행등급,
-                보너스=0,  # **4번(B-4)이 채운다.** 지금은 등급만 프롬프트로 간다
+                # **취급 등급으로 뽑는다** (B-4). 되묻기를 못 받은 G0 은 `G1` 취급이라
+                # 보너스도 0 이다 — **-1 을 그대로 주면 되묻기를 못 받은 아이가 벌까지 받는다**
+                보너스=진행기.보너스(진행등급),
                 요약=str(챕터.state.get("summary") or ""),
                 최근=최근원문(지난턴들),
                 시련넘었나=현재.시련넘었나,
@@ -367,7 +369,9 @@ async def create_turn(
         turn=진행.턴,
         beat=진행.비트,
         grade=평가.grade,  # type: ignore[arg-type]
-        bonus=0,
+        # **판정은 `grade`, 실제로 통한 정도는 `bonus`** — 둘이 갈리는 경우가 있다
+        # (G0 인데 되묻기를 못 받아 `G1` 취급으로 진행한 턴)
+        bonus=진행기.보너스(진행등급),
         scaffold=None,
         narrative=출력.narrative,
         choices=[Choice(**것.model_dump()) for 것 in 출력.choices],
