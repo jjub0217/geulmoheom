@@ -18,6 +18,8 @@ import { 티어이름 } from "../src/components/tier-badge";
 import { 가림안내 } from "../src/components/attempt-input";
 import { 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
+// 튜토리얼 문구도 박지 않는다 — `docs/문구.md` **1.22** 가 SSOT 다.
+import { 튜토리얼문구 } from "../src/app/tutorial-copy";
 
 /**
  * 오늘의 모험 화면(A0-2)이 응답 네 가지를 각각 그리는지 본다.
@@ -1582,4 +1584,108 @@ test("문장을 보내는 동안 나침반이 읽는다고 말한다 — 등급�
   // 결과가 오면 그 말이 사라진다 — 남아 있으면 **끝난 뒤에도 기다리는 것처럼 보인다.**
   await expect(page.locator("[data-다음장면]")).toBeVisible();
   await expect(page.locator("[data-읽는중]")).toHaveCount(0);
+});
+
+/**
+ * **튜토리얼 「나침반 깨우기」** (A-6 · `문구.md` **1.22** · W7 **10번**).
+ *
+ * **화면은 카드 화면 그대로다** — **새 화면을 만들지 않았다.** A-6 이 「루프를 설정만
+ * 바꾼다」이고, 안내 화면을 한 장 세우면 **첫 5~7분에 관문이 하나 생긴다.**
+ *
+ * **⛔ 켜는 것과 만드는 것은 다르다** — T1~T3 **카드 본문은 대표 미검수**이고
+ * 백엔드가 **기본 꺼짐**으로 뒀다(`config.tutorial_enabled`). **여기서 재는 것은 화면**이다.
+ */
+const 튜토리얼카드 = (over: Partial<CardResponse> = {}): CardResponse => ({
+  ...CARD,
+  card_id: "t1",
+  ...over,
+});
+
+test("T1 에서 여는 말이 카드보다 먼저 온다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: 튜토리얼카드() }),
+  );
+  await page.goto("/");
+
+  const 안내 = page.locator("[data-튜토리얼안내]");
+  await expect(안내).toHaveText(튜토리얼문구.여는말);
+
+  // **카드보다 위다.** 전제를 말한 뒤에 첫 장면이 온다 — 순서가 곧 뜻이다.
+  const 안내자리 = (await 안내.boundingBox())!;
+  const 카드자리 = (await page.getByText(CARD.situation).boundingBox())!;
+  expect(안내자리.y).toBeLessThan(카드자리.y);
+});
+
+test("튜토리얼이 아닌 카드에는 안 나온다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await page.goto("/");
+  await expect(page.getByText(CARD.situation)).toBeVisible();
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveCount(0);
+});
+
+/**
+ * **⛔ 1.22 의 급소 — T2 가 재촉이 되면 안 된다.**
+ *
+ * **말로 안 하기로 한 것을 자리와 크기로 하면 같은 것**이다. 그래서 문장만 보지 않고
+ * **「다시 써보기」가 커졌는지**를 같이 잰다 — `check-copy` 도 단위 검사도 못 보는 자리다
+ * (W7 7번에서 1.18 을 좌표로 잰 것과 같은 이유).
+ */
+
+/**
+ * 결과 화면의 **버튼 줄까지** 간다. **삽화를 풀어 줘야 거기 닿는다** —
+ * 안 풀면 화면이 **「네가 쓴 곳으로 가고 있어」**(1.5 대기)에 머문다.
+ * **튜토리얼 문구 둘이 그 버튼 줄 옆에 있어** 여기까지 와야 잰다.
+ */
+async function 결과버튼줄까지(page: Page, cardId: string) {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: 튜토리얼카드({ card_id: cardId }) }),
+  );
+  await page.route(ATTEMPTS, (route) => route.fulfill({ status: 200, json: 결과() }));
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        artwork_id: ARTWORK,
+        status: "ready",
+        url: ARTWORK_URL,
+        tier: "rare",
+        fallback: false,
+      } satisfies components["schemas"]["Artwork"],
+    }),
+  );
+  await page.goto("/");
+  await page.locator("#attempt").fill("낡은 등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await expect(page.locator("[data-다시써보기]")).toBeVisible();
+}
+
+test("T2 권유가 「다시 써보기」를 키우지 않는다", async ({ page }) => {
+  await 결과버튼줄까지(page, "t2");
+
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(튜토리얼문구.다시쓰기권유);
+
+  // **두 버튼의 글자 크기가 같다.** 「다시 써보기」만 커지면 그게 재촉이다.
+  const 크기 = (칸: string) =>
+    page.evaluate((s) => getComputedStyle(document.querySelector(s)!).fontSize, 칸);
+  expect(await 크기("[data-다시써보기]")).toBe(await 크기("[data-다음장면]"));
+
+  // **깜빡이지 않는다.** 애니메이션도 재촉이다.
+  const 움직임 = await page.evaluate(() => {
+    const el = document.querySelector("[data-다시써보기]")!;
+    const s = getComputedStyle(el);
+    return `${s.animationName}|${s.animationIterationCount}`;
+  });
+  expect(움직임.startsWith("none")).toBe(true);
+});
+
+test("T3 뒤에 닫는 말이 나오고, 잠금·관문을 말하지 않는다", async ({ page }) => {
+  await 결과버튼줄까지(page, "t3");
+
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(튜토리얼문구.닫는말);
+
+  // **⛔ A-6 MUST — 첫 5~7분이 관문이 되면 아이는 시작도 못 한다.**
+  const 화면 = await page.locator("main").innerText();
+  for (const 금지 of ["세 장", "남은 장", "잠", "열렸", "연습", "점수", "학습", "채점"]) {
+    expect(화면, `「${금지}」가 튜토리얼 화면에 있다`).not.toContain(금지);
+  }
 });

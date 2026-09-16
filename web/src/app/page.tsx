@@ -27,6 +27,7 @@ import type { PiiKind } from "@/lib/pii";
 import { 내책라벨 } from "./book/copy";
 import { 버튼, 못닿음 } from "./copy";
 import { 상태표시 } from "./status-copy";
+import { 튜토리얼문구, 튜토리얼차례 } from "./tutorial-copy";
 
 type Card = components["schemas"]["Card"];
 type ChildMe = components["schemas"]["ChildMe"];
@@ -415,6 +416,15 @@ export default function Home() {
 
         {(screen.kind === "card" || screen.kind === "sending") && (
           <div className="flex flex-col gap-8">
+            {/* **튜토리얼 여는 말** (`문구.md` 1.22 · A-6). **T1 에서 카드보다 먼저**다 —
+                **쓰는 것이 곧 깨우는 것**이라는 전제를 말한 뒤에 첫 장면이 온다.
+                **⛔ 새 화면을 만들지 않는다** — A-6 이 「루프를 설정만 바꾼다」이고,
+                안내 화면을 한 장 세우면 **첫 5~7분에 관문이 하나 생긴다.** */}
+            {튜토리얼차례(screen.card.card_id) === "t1" && (
+              <p data-튜토리얼안내 className="text-xl/relaxed text-brass">
+                {튜토리얼문구.여는말}
+              </p>
+            )}
             {/* 표정도 대사도 **서버가 마지막에 준 것**이다. 되묻기면 여기가 그 질문 자리가 된다. */}
             <SceneCard card={screen.card}>
               <GuideFigure guide={screen.guide} />
@@ -531,6 +541,27 @@ export default function Home() {
                     이어가는 길이 왼쪽(먼저)이고 「내 책」이 그다음이다.
                     **`flex-wrap` 을 둔다**: 글자가 커지는 설정에서 둘이 한 줄에 안 들어가면
                     **밀려나는 대신 접힌다.** */}
+                {/* **튜토리얼 문구 둘** (`문구.md` 1.22). **버튼 바로 위**다 —
+                    T2 는 **「다시 써보기」를 가리키는 말**이고 T3 는 **여기서 끝났다는 말**이라,
+                    둘 다 **다음에 할 일 바로 앞**에 있어야 닿는다.
+
+                    **⛔ 이 줄이 붙었다고 「다시 써보기」를 크게·깜빡이게 하지 않는다.**
+                    1.22 가 **「재촉이 되면 안 된다」**로 못 박았고, **말로 안 하기로 한 것을
+                    자리와 크기로 하면 같은 것**이다. 버튼은 아래 그대로다.
+
+                    **⛔ 「세 장을 쓰면」·「남은 장」을 안 쓴다** (A-6 MUST) — 실제로도
+                    **일일 제한·턴 상한·내 책이 다 미적용**이다(`api/app/tutorial.py`). */}
+                {튜토리얼차례(screen.card.card_id) === "t2" && (
+                  <p data-튜토리얼안내 className="text-center text-lg/relaxed text-brass">
+                    {튜토리얼문구.다시쓰기권유}
+                  </p>
+                )}
+                {튜토리얼차례(screen.card.card_id) === "t3" && (
+                  <p data-튜토리얼안내 className="text-center text-lg/relaxed text-brass">
+                    {튜토리얼문구.닫는말}
+                  </p>
+                )}
+
                 <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
                   {/* **순서는 `MVP_PRD.md` 72행이 정해 둔 것이다** — `[다시 써보기 | 다음 카드]`.
                       **스펙 층이 정한 것을 화면이 뒤집지 않는다.**
