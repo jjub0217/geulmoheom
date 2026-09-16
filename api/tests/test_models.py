@@ -43,10 +43,29 @@ def test_엔진_echo_가_꺼져_있다():
     assert db.engine.echo is False
 
 
-def test_stage1_테이블은_아직_없다():
-    """chapters·sessions 는 W6. 지금 만들면 안 쓰는 스키마가 먼저 굳는다."""
-    assert "chapters" not in Base.metadata.tables
+def test_stage1_테이블이_섰고_sessions_는_아직_없다():
+    """**2026-09-16 에 뒤집혔다** (W7 3번). 종전은 「chapters·sessions 는 W6」였고
+    **지금 만들면 안 쓰는 스키마가 먼저 굳는다**가 근거였다 — **이제 쓴다.**
+
+    **`sessions` 는 여전히 없다.** 턴 상태는 `chapters` 한 행이 들고 있고,
+    **요약·상태 추출 체인이 붙는 2번(A-2)에서 그 자리가 정해진다** — 그때까지
+    **안 쓰는 테이블을 먼저 굳히지 않는다**는 종전 근거가 그대로 살아 있다.
+    """
+    assert "chapters" in Base.metadata.tables
+    assert "chapter_turns" in Base.metadata.tables
     assert "sessions" not in Base.metadata.tables
+
+
+def test_턴_기록에_아이_원문_칸이_없다():
+    """**`card_attempts.text` 가 아이 원문의 유일한 자리다** (PRD 1.1b · 이 파일 머리).
+
+    **Stage 1 턴은 그 자리를 안 늘린다** — 계약 2절 11번이 「등급·경로·소요만」이다.
+    **책에 실릴 문장을 어디에 둘지는 9번(A-7)에서 정한다.**
+    """
+    칸 = set(Base.metadata.tables["chapter_turns"].columns.keys())
+
+    assert not [이름 for 이름 in 칸 if "text" in 이름]
+    assert "char_len" in 칸
 
 
 def test_자녀에게_token_version_이_있다():

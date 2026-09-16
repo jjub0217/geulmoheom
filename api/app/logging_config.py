@@ -14,6 +14,15 @@ APP_LOGGER = "app"
 
 # 출력할 필드. 여기 없는 것은 찍히지 않는다.
 SAFE_EXTRA_KEYS = (
+    # Stage 1 챕터·턴 (`MVP_PRD.md` 5장 · W7 3번). **원문이 없다** — 턴 번호·등급·
+    # 경로·길이·소요만이다. `grades` 는 등급 목록이고 문장이 아니다
+    "turn_idx",
+    "turn_resume",
+    "turns",
+    "duration_sec",
+    "grades",
+    "path",
+    "passed",
     "request_id",
     "method",
     "path",

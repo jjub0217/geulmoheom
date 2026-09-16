@@ -23,21 +23,34 @@ from app.models import Event
 
 logger = logging.getLogger(__name__)
 
-# `MVP_PRD.md` 5장 표. **Stage 1 전용 이벤트는 아직 넣지 않는다** —
-# `tutorial_complete`·`chapter_start`·`chapter_complete`·`trial_path` 는 W6 이다.
+# `MVP_PRD.md` 5장 표. **Stage 1 셋이 2026-09-16 에 들어왔다** (W7 3번) —
+# `chapter_start`·`chapter_complete`·`trial_path`. **이름과 필드를 5장에서 그대로
+# 옮긴다** — 여기서 지으면 **집계 쿼리가 보는 이름이 문서와 갈린다.**
+# **`tutorial_complete` 는 아직 없다** — 10번(A-6)이 그 자리다.
 EVENT_FIELDS: dict[str, frozenset[str]] = {
     "session_start": frozenset({"locked"}),
     "card_shown": frozenset({"card_id"}),
     "card_retry": frozenset({"card_id", "prev_grade", "attempt", "prompted"}),
-    "turn_input": frozenset({"card_id", "input_type", "char_len", "grade"}),
+    # **`turn_idx` 는 Stage 1, `card_id` 는 Stage 0** — 5장이 「`turn_idx / card_id`」로
+    # 적어 둔 그 갈림이다. 한 건에 둘을 같이 싣지 않는다
+    "turn_input": frozenset({"card_id", "turn_idx", "input_type", "char_len", "grade"}),
     "eval_result": frozenset({"grade", "signal_count", "latency_ms"}),
-    "scaffold_triggered": frozenset({"card_id", "attempt", "followed_by_free", "next_char_len"}),
+    "scaffold_triggered": frozenset(
+        {"card_id", "turn_idx", "attempt", "followed_by_free", "next_char_len"}
+    ),
     "daily_cap_reached": frozenset({"cap"}),
     # **PRD 5장은 이 필드를 `hash` 라고 부른다.** 코드는 `text_hash` 로 서 있고
     # (`app/moderation.py` `_차단기록`) 이미 로그와 테스트가 그 이름을 쓴다.
     # **한쪽으로 맞춰야 하는데 여기서 고르지 않는다** — 이름이 갈린 것을 PM 에게 올렸다.
     "moderation_blocked": frozenset({"direction", "category", "text_hash"}),
     "pii_masked": frozenset({"layer", "kind"}),
+    # Stage 1 (5장). **`chapter_start` 의 `turn_resume` 이 0 이면 새 판, 그보다 크면
+    # 이어받은 판이다** — 새로고침이 이야기를 안 잃는지가 이 값으로 보인다
+    "chapter_start": frozenset({"turn_resume"}),
+    "chapter_complete": frozenset({"turns", "duration_sec", "grades"}),
+    # **4경로 사용 균형이 이 이벤트로 잰다** (PRD A-4). `passed` 가 붙는 이유는
+    # **어느 경로가 더 잘 통하는지**를 봐야 「동등」이 말뿐이 아닌 것이 되기 때문이다
+    "trial_path": frozenset({"path", "passed"}),
 }
 
 

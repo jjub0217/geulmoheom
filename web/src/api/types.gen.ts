@@ -546,13 +546,14 @@ export interface paths {
         put?: never;
         /**
          * Open Chapter
-         * @description 챕터를 연다 (`Stage1.md` 1절). **요청 본문 없음** — 아이 쿠키로 누구인지 안다.
+         * @description 챕터를 연다 (계약 1절). **요청 본문 없음** — 아이 쿠키로 누구인지 안다.
          *
-         *     **⛔ 진행 중인 챕터가 있으면 새로 안 연다 — 그것을 돌려준다.**
-         *     **⭐ 아이가 새로고침해도 이야기를 잃지 않는다.**
+         *     **⛔ 진행 중인 챕터가 있으면 새로 안 연다 — 그것을 돌려주고 GM 을 안 부른다.**
+         *     **⭐ 아이가 새로고침해도 이야기를 잃지 않는다**, 그리고 **새로고침마다 도입이
+         *     바뀌거나 돈이 나가지 않는다.**
          *
-         *     **⏳ 목이라 아직 안 지키는 것 둘** — ① 오늘 완결했으면 `409 CHAPTER_DONE_TODAY`
-         *     (D-1 하드 피니시) ② 진행 중인 챕터 돌려주기. **둘 다 상태(2번)가 선 뒤다.**
+         *     **⏳ 오늘 완결했으면 `409 CHAPTER_DONE_TODAY` 는 5번(D-1)이 붙인다** —
+         *     코드·문구·`오늘완결했나()` 는 이미 서 있다.
          */
         post: operations["open_chapter_api_v1_chapters_post"];
         delete?: never;
@@ -570,11 +571,7 @@ export interface paths {
         };
         /**
          * Current Chapter
-         * @description 지금 상태 (`Stage1.md` 1절). **진행 중인 챕터가 없으면 `404 NO_ACTIVE_CHAPTER`.**
-         *
-         *     **⏳ 목은 언제나 챕터가 있는 것처럼 답한다.** 실제 판정은 상태(2번) 뒤다 —
-         *     **`NO_ACTIVE_CHAPTER` 갈래를 프론트가 그려야 하므로 코드는 지금 세워 둔다**
-         *     (`app/errors.py`).
+         * @description 지금 상태 (계약 1절). **진행 중인 챕터가 없으면 `404 NO_ACTIVE_CHAPTER`.**
          */
         get: operations["current_chapter_api_v1_chapters_current_get"];
         put?: never;
@@ -594,9 +591,11 @@ export interface paths {
         };
         /**
          * Chapter Summary
-         * @description 완결 화면 (`Stage1.md` 5절 · D-1).
+         * @description 완결 화면 (계약 5절 · D-1).
          *
          *     **⛔ 「이어서 더 하기」를 응답에 넣지 않는다. 없는 것이 결정이다** (페르소나 7.1).
+         *
+         *     **⏳ `book_page_no` 는 9번(A-7)이 채운다** — 「완결 = 책 한 장」이 그쪽이다.
          */
         get: operations["chapter_summary_api_v1_chapters__chapter_id__summary_get"];
         put?: never;
@@ -618,16 +617,12 @@ export interface paths {
         put?: never;
         /**
          * Create Turn
-         * @description 턴 하나 (`Stage1.md` 2절). **선택지든 자유 묘사든 한 자리로 받는다.**
+         * @description 턴 하나 (계약 2절). **선택지든 자유 묘사든 한 자리로 받는다.**
          *
          *     **⛔ `choice_id` 와 `text` 중 정확히 하나다** — 둘 다 오거나 둘 다 없으면 422.
-         *     **이 검사는 목에서도 진짜로 돈다**: 프론트가 한 입력창으로 두 갈래를 보내는데,
-         *     **목이 아무거나 받아 주면 프론트가 틀린 모양으로 화면을 만들고** 실제 구현이
-         *     들어오는 날 422 를 처음 본다.
-         *
-         *     **⏳ 목이라 아직 안 도는 것** — `Stage1.md` 2절의 11단계 전부(Moderation ·
-         *     PII · 상한 · Evaluator · GM · 상태 추출 · 요약 · 삽화 · 턴 로그).
-         *     **등급은 `G2` 고정이다** — 목이 등급을 흉내내면 프론트가 그 값으로 화면을 가른다.
+         *     **⚠ `choice_id` 로 온 턴도 등급이 매겨진다** — 선택지 라벨을 그 아이의 입력으로
+         *     평가한다. **그래야 「고르기만 해도 된다」가 안 된다**(비전 1장). 다만 **G0
+         *     스캐폴딩은 안 띄운다** — 고른 것을 되물으면 뜻이 없다.
          */
         post: operations["create_turn_api_v1_turns_post"];
         delete?: never;
@@ -938,7 +933,7 @@ export interface components {
             state: components["schemas"]["ChapterState"];
             /** Turns Left */
             turns_left: number;
-            artwork: components["schemas"]["ArtworkRef"];
+            artwork?: components["schemas"]["ArtworkRef"] | null;
         };
         /** ChildAuthRequest */
         ChildAuthRequest: {

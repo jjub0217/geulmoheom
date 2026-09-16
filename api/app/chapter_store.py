@@ -131,6 +131,20 @@ async def 완결찍기(session: AsyncSession, 챕터id: uuid.UUID, *, 끝난때:
     await session.execute(update(Chapter).where(Chapter.id == 챕터id).values(done_at=끝난때))
 
 
+async def 내챕터(session: AsyncSession, 아이: Child, 챕터id: str) -> Chapter | None:
+    """**내 것인지까지 본다.** id 만 맞으면 **남의 완결 화면이 열린다.**
+
+    **모양이 UUID 가 아니면 `None`** — SQL 층까지 내려가면 500 이 된다
+    (`attempts._재시도확인` 과 같은 자리).
+    """
+    try:
+        골라낸것 = uuid.UUID(챕터id)
+    except ValueError:
+        return None
+    찾기 = select(Chapter).where(Chapter.id == 골라낸것, Chapter.child_id == 아이.id)
+    return (await session.execute(찾기)).scalar_one_or_none()
+
+
 async def 턴들(session: AsyncSession, 챕터id: uuid.UUID) -> list[ChapterTurn]:
     찾기 = select(ChapterTurn).where(ChapterTurn.chapter_id == 챕터id).order_by(ChapterTurn.turn_no)
     return list((await session.execute(찾기)).scalars())

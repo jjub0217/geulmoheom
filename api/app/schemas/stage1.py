@@ -73,7 +73,11 @@ class ChapterView(BaseModel):
     choices: list[Choice]
     state: ChapterState
     turns_left: int
-    artwork: ArtworkRef
+    # **⛔ 없을 수 있다** (2026-09-16 명세 변경 · PM 승인). **핵심 씬이 1턴·9턴 둘뿐**이라
+    # 나머지 턴에는 새 그림이 없고, **필수로 두면 서버가 없는 것을 지어내야 한다.**
+    # **화면은 액자를 비우지 않고 직전 핵심 씬 그림을 그대로 둔다** — 아이 눈에
+    # **그림이 사라지는 것**이 되면 안 된다 (프론트 8번).
+    artwork: ArtworkRef | None = None
 
 
 class TurnRequest(BaseModel):
@@ -109,6 +113,7 @@ class TurnResult(BaseModel):
     choices: list[Choice] = Field(default_factory=list)
     state: ChapterState
     turns_left: int
+    # **핵심 씬(1턴·9턴)에서만 실린다.** 나머지 턴에는 새 그림이 없다
     artwork: ArtworkRef | None = None
     chapter_done: bool = False
     highlights: list[Highlight] = Field(default_factory=list)

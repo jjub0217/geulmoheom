@@ -33,6 +33,11 @@ class ErrorCode(StrEnum):
     RATE_LIMITED = "RATE_LIMITED"
     UPSTREAM_TIMEOUT = "UPSTREAM_TIMEOUT"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    # Stage 1 (`docs/api/Stage1.md` 6절). **넷뿐이다** — 나머지는 위 표 그대로다
+    NO_ACTIVE_CHAPTER = "NO_ACTIVE_CHAPTER"
+    CHAPTER_DONE_TODAY = "CHAPTER_DONE_TODAY"
+    TURN_LIMIT = "TURN_LIMIT"
+    GM_UNSAFE = "GM_UNSAFE"
 
 
 HTTP_STATUS: dict[ErrorCode, int] = {
@@ -46,6 +51,10 @@ HTTP_STATUS: dict[ErrorCode, int] = {
     ErrorCode.RATE_LIMITED: 429,
     ErrorCode.UPSTREAM_TIMEOUT: 504,
     ErrorCode.INTERNAL_ERROR: 500,
+    ErrorCode.NO_ACTIVE_CHAPTER: 404,
+    ErrorCode.CHAPTER_DONE_TODAY: 409,
+    ErrorCode.TURN_LIMIT: 429,
+    ErrorCode.GM_UNSAFE: 502,
 }
 
 # 아이 화면 문구. **SSOT 는 `docs/문구.md` 2.1 이다** (2026-09-07 확정) — 여기는 그 표를
@@ -76,6 +85,18 @@ CHILD_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.RATE_LIMITED: "지금은 코드를 넣을 수 없어요. 15분 뒤에 다시 해볼까요",
     ErrorCode.UPSTREAM_TIMEOUT: "나침반이 잠깐 느려요. 조금 뒤에 다시 해볼까요",
     ErrorCode.INTERNAL_ERROR: "잠깐 문제가 생겼어요. 조금 뒤에 다시 해볼까요",
+    # Stage 1 넷 (2026-09-16 내려왔다 · `문구.md` 2.1).
+    # **「챕터」·「턴」을 아이 화면에 안 쓴다** — 내부 용어다 (`용어사전.md`).
+    ErrorCode.NO_ACTIVE_CHAPTER: "지금 이어갈 이야기가 없어요",
+    ErrorCode.CHAPTER_DONE_TODAY: "오늘 이야기는 이미 끝냈어요",
+    # **⛔ 「15분」이 없다.** `RATE_LIMITED` 를 여기 돌려 쓰면 아이가 15분 뒤에
+    # 눌러 보고 또 막힌다 — 2.1 이 **「429 가 두 번째 자리를 얻으면 갈라야 한다」**로
+    # 예고해 둔 자리이고, 이것이 그 두 번째 자리다
+    ErrorCode.TURN_LIMIT: "오늘 모험은 여기까지예요",
+    # **⛔ 아이가 뭘 잘못했다고 읽히면 안 된다** — 막힌 것은 출력이지 입력이 아니다
+    # (입력 차단은 1.11, 다른 자리다). 주어를 나침반으로 두는 것은
+    # `UPSTREAM_TIMEOUT` 이 세운 선례다 — **기술적 실패는 도구가 진다**
+    ErrorCode.GM_UNSAFE: "나침반이 길을 못 찾았어요. 다시 해볼까요",
 }
 
 # HTTPException(401) 처럼 상태 코드만 던져진 경우의 되매핑.
