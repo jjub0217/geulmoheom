@@ -6,7 +6,13 @@ import { CompassGlow } from "@/components/compass-glow";
 import { PII_MASK, maskPii, 가림안내, type PiiKind } from "@/lib/pii";
 
 /**
- * 자유 입력창. **선택지는 없다** — Stage 0 이 검증하는 것이 「직접 쓴다」이기 때문이다.
+ * 자유 입력창.
+ *
+ * **⛔ 종전에 여기 「선택지는 없다 — Stage 0 이 검증하는 것이 『직접 쓴다』이기 때문이다」로
+ * 적혀 있었다.** Stage 1 에서 **선택지가 생겼다**(`문구.md` 1.18 · W7 7번, 2026-09-16).
+ * **다만 이 컴포넌트는 여전히 「직접 쓰는 칸」 하나다** — 선택지는 형제(`turn-choices.tsx`)로
+ * 옆에 서고, **여기로 들어오지 않는다.** 한 상자에 둘을 넣으면 **테두리 안이 아이 것**이라는
+ * 규칙이 깨진다(아래).
  *
  * 라벨은 서버가 준 `prompt_label` 을 그대로 쓴다 (「탐험가는 어떻게 할까?」).
  * 프론트에 문구를 박아두면 서버가 카드마다 다른 물음을 줄 때 화면만 옛말을 하게 된다.
@@ -48,6 +54,7 @@ export function AttemptInput({
   onSend,
   보낼수있나,
   보내기라벨,
+  안내글,
   disabled = false,
 }: {
   label: string;
@@ -60,6 +67,14 @@ export function AttemptInput({
   보낼수있나: boolean;
   /** `문구.md` 2.2. **여기서 짓지 않는다** — 부모가 상수를 넘긴다. */
   보내기라벨: string;
+  /**
+   * 빈 칸에 뜨는 안내 (`문구.md` 1.18 「어떻게 할지 자세히 말해줘!」).
+   *
+   * **⛔ 여기서 짓지 않는다** — 부모가 상수를 넘긴다. **Stage 0 카드 화면은 안 넘긴다**:
+   * 거기는 **물음(`prompt_label`)이 이미 바로 위에 있어** 안내가 같은 말을 두 번 하게 된다.
+   * **없으면 안 그린다** — 빈 문자열을 넘기는 것과 같게 두면 「자리는 있는데 비었다」가 된다.
+   */
+  안내글?: string;
   disabled?: boolean;
 }) {
   const 입력창 = useRef<HTMLTextAreaElement>(null);
@@ -159,6 +174,9 @@ export function AttemptInput({
           // H2 합격선이 **회당 150자**다. 더 키우지 않는 것은 **아이패드에서 자판이 올라오면
           // 화면의 절반이 사라지기 때문**이고, 그때 「보내기」가 밖으로 밀리면 안 된다.
           rows={5}
+        // **없으면 아예 속성을 안 단다.** 빈 문자열을 주면 브라우저가 빈 placeholder 를
+        // 들고 있게 되고, 「비었다」와 「안 쓴다」가 코드에서 안 갈린다.
+        placeholder={안내글}
         // 아이가 쓰는 칸이다. 맞춤법 빨간 줄로 「틀렸다」는 인상을 주지 않는다.
         spellCheck={false}
         autoComplete="off"
@@ -166,8 +184,10 @@ export function AttemptInput({
         // 밝은 배경에서 칸이 사라져 아이가 어디에 쓰는지 모른다 — 첫 스크린샷에서 실제로 그랬다.
           // 테두리와 배경은 위 감싸개가 가진다. 여기는 **글자만** 둔다 —
           // 안에 또 테두리를 그리면 **상자 안의 상자**가 되어 덩어리가 다시 갈라진다.
+          // `placeholder` 를 **흐리게** 둔다 — 아이가 쓴 글자와 같은 색이면
+          // **자기가 쓴 줄 알고 지우려 든다.**
           className="w-full resize-none bg-transparent px-5 pb-3 pt-4 text-xl/relaxed
-            text-foreground outline-none"
+            text-foreground outline-none placeholder:text-brass/60"
         />
 
         {/* 「보내기」는 **상자 안에 남는다** — 쓰던 자리와 보내는 자리를 떼어놓지 않는다.

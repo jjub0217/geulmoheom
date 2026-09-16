@@ -61,6 +61,7 @@ const 볼파일 = [
   "web/src/components/artwork-copy.ts",
   "web/src/components/children-copy.ts",
   "web/src/components/leave-copy.ts",
+  "web/src/components/turn-copy.ts",
   // **넷째가 여기였다.** 아이 화면 문구가 두 패키지에서 나간다.
   // **블록을 못 박는다** — 이 파일에는 **로그·예외 문구**도 있고 그건 화면에 안 나간다.
   // 그리고 **`api/` 는 백엔드 모자의 파일**이라, 예외 표식을 달러 들어가지 않는 것이
