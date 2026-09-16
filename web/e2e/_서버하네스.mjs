@@ -21,6 +21,8 @@
 // **⚠ DB 가 떠 있어야 한다** — `make db-up`. 없으면 api 가 뜨다 죽고, 아래가 그 이유를 보여준다.
 import { spawn } from "node:child_process";
 import { createServer, request as httpRequest } from "node:http";
+import { createServer as createTlsServer } from "node:https";
+import { existsSync, readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { resolve } from "node:path";
 
@@ -300,7 +302,33 @@ console.log(`[하네스] web 127.0.0.1:${웹포트}`);
 //
 // **생소켓으로 쓰지 않는다.** 직접 HTTP 를 써 보내면 청크 인코딩·연결 재사용을 우리가 떠안고,
 // **틀리면 제품이 아니라 하네스가 만든 실패**가 난다. `http.request` 가 그것을 안다.
-const 프록시 = createServer((요청, 응답) => {
+/**
+ * **보여주기 모드는 https 로 선다** (2026-09-16).
+ *
+ * **⛔ 사파리는 `http` 로 온 `Secure` 쿠키를 버린다.** 인증 쿠키가 `__Host-` 라
+ * **Secure 가 강제**되므로, http 로 띄우면 **가입은 201 인데 쿠키가 안 앉아**
+ * 다음 요청이 401 이고 **로그인 ↔ 가입이 돈다** (대표가 실제로 밟았다).
+ *
+ * **`dev-certs.sh` 가 이미 그 이유로 존재한다** — 「파일럿이 태블릿이라 Safari 를
+ * 건너뛸 수 없어 **개발 환경 자체를 https 로 옮긴다**」. **그 길을 여기서도 쓴다.**
+ *
+ * **⛔ 쿠키를 약하게 만들지 않는다.** 보는 편의 때문에 `__Host-`·`Secure` 를 내리면
+ * **그게 남는다.** 고칠 것은 **띄우는 쪽**이다.
+ *
+ * **⛔ 검사 갈래는 http 그대로다** — Chromium 은 `http://127.0.0.1` 의 Secure 쿠키를
+ * 받으므로 바꿀 이유가 없고, **바꾸면 인증서가 없는 기계(CI)에서 검사가 죽는다.**
+ *
+ * **인증서가 없으면 http 로 내려앉고 그 사실을 말한다** — 조용히 http 로 서면
+ * **대표가 또 같은 고리를 밟는다.**
+ */
+const 인증서 = `${API}/../.certs/geulmoheom.test.pem`;
+const 열쇠 = `${API}/../.certs/geulmoheom.test-key.pem`;
+const https로 = 보여주기 && existsSync(인증서) && existsSync(열쇠);
+const 볼주소 = https로
+  ? `https://app.geulmoheom.test:${프록시포트}`
+  : `http://127.0.0.1:${프록시포트}`;
+
+const 프록시핸들러 = (요청, 응답) => {
   // **`/healthz` 도 api 로 넘긴다** — 운영 `vercel.json` 과 같은 모양이다 (2026-09-15).
   // **로컬과 운영이 같은 길을 써야** 「깨우기가 안 간다」를 여기서 잡을 수 있다.
   const api로 = 요청.url.startsWith("/api/") || 요청.url === "/healthz";
@@ -333,7 +361,11 @@ const 프록시 = createServer((요청, 응답) => {
   요청.on("error", () => 응답.destroy());
   응답.on("error", () => 요청.destroy());
   요청.pipe(뒤);
-});
+};
+
+const 프록시 = https로
+  ? createTlsServer({ cert: readFileSync(인증서), key: readFileSync(열쇠) }, 프록시핸들러)
+  : createServer(프록시핸들러);
 
 // **연결 자체가 깨진 경우**(TLS 아님·중간 끊김). 기본 동작은 400 을 쓰려다 죽는 것이다.
 프록시.on("clientError", (_e, 소켓) => 소켓.destroy());
@@ -382,17 +414,17 @@ const 프록시 = createServer((요청, 응답) => {
 ────────────────────────────────────────────────────────────
   튜토리얼 「나침반 깨우기」를 눈으로 봅니다
 
-  1. 브라우저에서 열기   http://127.0.0.1:${프록시포트}/parents/signup
+  1. 브라우저에서 열기   ${볼주소}/parents/signup
   2. 학부모로 가입 → 아이 추가 → 접속 코드(6자리)를 받는다
-  3. http://127.0.0.1:${프록시포트}/child/auth 에 그 코드를 넣는다
+  3. ${볼주소}/child/auth 에 그 코드를 넣는다
   4. T1 → T2 → T3 가 순서대로 나옵니다
 
-  ⛔ 크롬으로 열어 주세요. 사파리에서는 가입이 안 됩니다.
-     이 서버는 http 인데 인증 쿠키가 __Host- (Secure 강제)라,
-     사파리는 http 로 온 Secure 쿠키를 버립니다. 가입은 201 로 되는데
-     쿠키가 안 앉아 그다음이 401 이고, 화면은 로그인 → 가입으로 돕니다.
-     ⭐ 제품 결함이 아닙니다 — 운영은 https 라 사파리에서도 됩니다.
-     (2026-09-16 실측: 크롬 쿠키 앉음 / 사파리 안 앉음)
+${https로
+    ? `  ✅ 사파리로 보셔도 됩니다 — https 로 섰습니다 (.certs 의 mkcert 인증서).
+     운영과 같은 조건입니다: __Host- 쿠키가 Secure 를 강제하는데 https 라 앉습니다.`
+    : `  ⛔ 크롬으로 열어 주세요 — 인증서가 없어 http 로 섰습니다.
+     사파리는 http 로 온 Secure 쿠키를 버려서 가입이 로그인 ↔ 가입으로 돕니다.
+     사파리로 보려면 별도 터미널에서: make certs`}
 
   ⛔ 돈이 안 나갑니다 — 가짜 앞단 + 못 쓰는 키입니다.
      삽화는 기본 에셋이 뜹니다. 그림이 아니라 문구와 흐름을 보는 자리입니다.

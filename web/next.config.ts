@@ -24,7 +24,15 @@ const nextConfig: NextConfig = {
   // **증상이 「확인하는 중…」에서 멈추는 것**이라 화면 코드를 한참 뒤졌다.
   //
   // **개발에만 걸린다** — `output: "export"` 라 운영에는 dev 서버 자체가 없다.
-  allowedDevOrigins: ["127.0.0.1"],
+  // **⛔ `app.geulmoheom.test` 도 같은 이유로 연다** (2026-09-16). 대표가 **사파리로**
+  // 튜토리얼을 검수하는데, **사파리는 `http` 로 온 `Secure` 쿠키를 버려서**
+  // (`__Host-` 가 Secure 를 강제한다) **하네스를 https 로 띄워야** 한다 —
+  // 그 https 호스트가 `.certs` 의 mkcert 인증서에 담긴 이 이름이다(`api/scripts/dev-certs.sh`).
+  //
+  // **⚠ 위 주석이 적어 둔 그 증상을 호스트만 바꿔 그대로 다시 밟았다** —
+  // 「확인하는 중…」에서 멈췄고 **api 로그에는 요청이 아예 안 닿았다.**
+  // **한 번 적어 둔 덕에 이번에는 화면 코드를 안 뒤졌다.**
+  allowedDevOrigins: ["127.0.0.1", "app.geulmoheom.test"],
 
   // 삽화·스케치가 R2 에서 오고 배포는 정적 빌드다 — Stage 0 은 최적화를 쓰지 않는다
   // (`docs/adr/0007` 결정 4). 끄면 원격 호스트를 `remotePatterns` 에 등록할 필요도 없어져

@@ -27,7 +27,7 @@ import type { PiiKind } from "@/lib/pii";
 import { 내책라벨 } from "./book/copy";
 import { 버튼, 못닿음 } from "./copy";
 import { 상태표시 } from "./status-copy";
-import { 튜토리얼문구, 튜토리얼차례 } from "./tutorial-copy";
+import { T2권유를띄울까, 튜토리얼문구, 튜토리얼차례 } from "./tutorial-copy";
 
 type Card = components["schemas"]["Card"];
 type ChildMe = components["schemas"]["ChildMe"];
@@ -551,7 +551,8 @@ export default function Home() {
 
                     **⛔ 「세 장을 쓰면」·「남은 장」을 안 쓴다** (A-6 MUST) — 실제로도
                     **일일 제한·턴 상한·내 책이 다 미적용**이다(`api/app/tutorial.py`). */}
-                {튜토리얼차례(screen.card.card_id) === "t2" && (
+                {튜토리얼차례(screen.card.card_id) === "t2" &&
+                  T2권유를띄울까(screen.result.tier) && (
                   <p data-튜토리얼안내 className="text-center text-lg/relaxed text-brass">
                     {튜토리얼문구.다시쓰기권유}
                   </p>

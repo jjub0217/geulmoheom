@@ -1636,11 +1636,17 @@ test("튜토리얼이 아닌 카드에는 안 나온다", async ({ page }) => {
  * 안 풀면 화면이 **「네가 쓴 곳으로 가고 있어」**(1.5 대기)에 머문다.
  * **튜토리얼 문구 둘이 그 버튼 줄 옆에 있어** 여기까지 와야 잰다.
  */
-async function 결과버튼줄까지(page: Page, cardId: string) {
+async function 결과버튼줄까지(
+  page: Page,
+  cardId: string,
+  tier: "basic" | "rare" | "legendary" = "rare",
+) {
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({ status: 200, json: 튜토리얼카드({ card_id: cardId }) }),
   );
-  await page.route(ATTEMPTS, (route) => route.fulfill({ status: 200, json: 결과() }));
+  await page.route(ATTEMPTS, (route) =>
+    route.fulfill({ status: 200, json: { ...결과(), tier } }),
+  );
   await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
     route.fulfill({
       status: 200,
@@ -1676,6 +1682,40 @@ test("T2 권유가 「다시 써보기」를 키우지 않는다", async ({ page
     return `${s.animationName}|${s.animationIterationCount}`;
   });
   expect(움직임.startsWith("none")).toBe(true);
+});
+
+/**
+ * **⛔ 대표 판정 ① — 최고 티어면 권유를 안 띄운다** (2026-09-16).
+ *
+ * **A-6 이 「두 번째 삽화가 한 티어 오르는 것을 보고 체득한다」로 설계됐는데
+ * 첫 시도가 `legendary` 면 오를 티어가 없다.** PRD 가 안 적은 경우이고
+ * **대표 검수에서 그 화면이 실제로 나왔다.**
+ *
+ * **권유가 붙으면 ① 거짓이 되고 ② 티어가 보상에서 평가로 되돌아간다**
+ * (`MVP_PRD.md` 129행 — 「티어 이름과 삽화로만 표현」).
+ */
+test("⛔ 전설이면 T2 권유를 안 띄운다 — 오를 티어가 없다", async ({ page }) => {
+  await 결과버튼줄까지(page, "t2", "legendary");
+
+  expect(
+    await page.locator("main").innerText(),
+    "전설인데 권유가 붙었다 — 「전설인데도 부족하다」로 읽힌다",
+  ).not.toContain(튜토리얼문구.다시쓰기권유);
+});
+
+/**
+ * **⛔ 없애는 것은 「말」이지 「길」이 아니다.**
+ * `MVP_PRD.md` **75행** — 「다시 써보기는 카드 소진에 포함 안 됨, **횟수 제한 없음**」.
+ * **전설을 받고도 더 쓰고 싶은 아이는 언제든 누른다.**
+ *
+ * **⭐ 우리가 권하면 「네 답이 부족하다」이고 아이가 스스로 누르면 「더 해보고 싶다」다.**
+ */
+test("⛔ 전설이어도 「다시 써보기」 버튼은 그대로 있다 — 길은 안 막는다", async ({
+  page,
+}) => {
+  await 결과버튼줄까지(page, "t2", "legendary");
+  await expect(page.locator("[data-다시써보기]")).toBeVisible();
+  await expect(page.locator("[data-다시써보기]")).toBeEnabled();
 });
 
 test("T3 뒤에 닫는 말이 나오고, 잠금·관문을 말하지 않는다", async ({ page }) => {
