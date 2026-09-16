@@ -20,6 +20,7 @@
 """
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -30,12 +31,14 @@ from app import chapter_run as 진행기
 from app import chapter_store as 저장소
 from app.api.v1.deps import Session, require_child
 from app.book_store import 챕터장번호, 챕터페이지올리기
+from app.chapter_state import 상태추출, 요약재료, 요약하기, 요약할때인가, 최근원문
 from app.daily_turns import 다썼나
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, 평가기록
 from app.events import 남기기, 이벤트
 from app.gm import 도입프롬프트, 서사, 시스템지시, 턴프롬프트
 from app.guide_lines import 완결대사, 자해대사, 종료대사, 차단대사, 하나
+from app.middleware import current_request_id
 from app.models import Chapter
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
@@ -51,6 +54,8 @@ from app.schemas.stage1 import (
     TurnRequest,
     TurnResult,
 )
+
+logger = logging.getLogger(__name__)
 
 Child = Annotated[ChildRow, Depends(require_child)]
 
@@ -289,8 +294,11 @@ async def create_turn(
         # 진행에 쓰는 취급과 **판정이 실제로 무엇이었나**는 다른 값이다.
         진행등급 = "G1"
 
-    # **6. GM 호출** — 등급·뼈대·상태를 실어. **다음 턴의 비트로 묻는다**
+    # **6. GM 호출** — 등급·뼈대·상태·요약·최근 원문을 실어. **다음 턴의 비트로 묻는다**
     다음턴 = 현재.턴 + 1
+    # **⛔ 최근 3턴 원문은 `chapter_turns` 에서 읽는다** (PRD A-2). `state` 에 복사하지
+    # 않는다 — **저장이 아니라 조립이다**(원문 허용 칸에 `state` 가 없다)
+    지난턴들 = await 저장소.턴들(session, 챕터.id)
     출력 = _서사확인(
         await 서사(
             시스템지시(),
@@ -300,6 +308,8 @@ async def create_turn(
                 아이입력=문장,
                 등급=진행등급,
                 보너스=0,  # **4번(B-4)이 채운다.** 지금은 등급만 프롬프트로 간다
+                요약=str(챕터.state.get("summary") or ""),
+                최근=최근원문(지난턴들),
                 시련넘었나=현재.시련넘었나,
             ),
             턴=다음턴,
@@ -308,6 +318,11 @@ async def create_turn(
 
     # **경로 판별은 GM 이 한다** (PRD A-4). 서버가 낱말로 맞히면 **서사와 센 경로가 갈린다**
     진행 = 진행기.다음(현재, 등급=진행등급, 경로=출력.trial_path)
+    # **8. 상태 추출기 — 매 턴** (계약 2절 8번). **9. 요약기 — 3턴마다** (사용자 판정).
+    # **⛔ 둘 다 실패해도 턴은 지나간다** — 서사는 이미 나왔고 이것들은 그 다음이다.
+    새상태 = await _상태갱신(챕터.state, 출력.narrative)
+    새상태 = await _요약갱신(새상태, 진행.턴, [*지난턴들, _막턴(진행, 평가.grade, 문장)])
+
     await 저장소.굴리기(
         session,
         챕터.id,
@@ -318,7 +333,7 @@ async def create_turn(
         문장=문장,  # **마스킹을 지난 문장이고 책에 실린다** (A-7)
         서사=출력.narrative,
         선택지=[것.model_dump() for 것 in 출력.choices],
-        상태=챕터.state,  # **⏳ 상태 추출기는 2번(A-2)이다**
+        상태=새상태,
     )
     await session.commit()
 
@@ -356,7 +371,7 @@ async def create_turn(
         scaffold=None,
         narrative=출력.narrative,
         choices=[Choice(**것.model_dump()) for 것 in 출력.choices],
-        state=_상태보기(챕터.state),
+        state=_상태보기(새상태),
         turns_left=max(0, 진행기.최대턴 - 진행.턴),
         artwork=None,
         chapter_done=진행.완결,
@@ -393,6 +408,50 @@ def _차단(챕터: Chapter, *, 현재, 자해: bool) -> TurnResult:
         ),
         chapter_done=False,
     )
+
+
+class _막한턴:
+    """아직 DB 에 없는 이번 턴을 요약 재료에 넣기 위한 한 줄.
+
+    **⛔ 이번 턴을 빼면 3턴 갱신이 「1..M-1」만 덮어 구멍이 난다** — 그 구멍이
+    이 설계가 막으려던 바로 그것이다.
+    """
+
+    def __init__(self, turn_no: int, beat: str, grade: str, text: str) -> None:
+        self.turn_no, self.beat, self.grade, self.text = turn_no, beat, grade, text
+        self.input_type = "free"
+
+
+def _막턴(진행, 등급: str, 문장: str) -> _막한턴:
+    return _막한턴(진행.턴, 진행.비트, 등급, 문장)
+
+
+async def _상태갱신(지금: dict, 서사: str) -> dict:
+    """**매 턴 돈다** (계약 2절 8번). 실패하면 **직전 상태를 지킨다.**"""
+    try:
+        return await 상태추출(서사, 지금)
+    except Exception:  # 체인이 아이 턴을 죽이지 않는다 — 로그는 체인 안에서 남긴다
+        logger.warning("상태 추출을 건너뛴다", extra={"request_id": current_request_id()})
+        return 지금
+
+
+async def _요약갱신(상태: dict, 턴: int, 턴들: list) -> dict:
+    """**3턴마다 돈다** (사용자 판정 · 돈). **요약은 `1..M` 전부를 덮는다.**
+
+    **⛔ 밀린 턴에 구멍이 없는 이유가 이것이다** — 7·8턴은 요약이 `1..6` 에 머물지만
+    **원문 창(최근 3턴)이 그 뒤를 덮는다.** 요약이 `1..N-3` 만 덮으면 그 겹침이
+    사라지고 **아이가 한 일이 통째로 빠진다.**
+
+    실패하면 **직전 요약을 지킨다** — 요약이 낡으면 GM 이 앞 이야기를 덜 알 뿐이다.
+    """
+    if not 요약할때인가(턴):
+        return 상태
+    try:
+        새요약 = await 요약하기(요약재료(턴들))
+    except Exception:
+        logger.warning("요약을 건너뛴다", extra={"request_id": current_request_id()})
+        return 상태
+    return {**상태, "summary": 새요약} if 새요약 else 상태
 
 
 async def _책한장(session: Session, 아이: ChildRow, 챕터: Chapter, 진행) -> None:
