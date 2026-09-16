@@ -56,11 +56,12 @@ def test_stage1_테이블이_섰고_sessions_는_아직_없다():
     assert "sessions" not in Base.metadata.tables
 
 
-def test_턴_기록에_아이_원문_칸이_없다():
-    """**`card_attempts.text` 가 아이 원문의 유일한 자리다** (PRD 1.1b · 이 파일 머리).
+def test_턴_기록은_길이를_남기고_원문_칸은_아직_없다():
+    """**⛔ 규칙이 2026-09-16 에 바뀌었다** — 사용자가 `api/CLAUDE.md` 에
+    **`chapter_turns.text` 를 더했다.** 원문이 가도 되는 칸이 **둘**이 됐다.
 
-    **Stage 1 턴은 그 자리를 안 늘린다** — 계약 2절 11번이 「등급·경로·소요만」이다.
-    **책에 실릴 문장을 어디에 둘지는 9번(A-7)에서 정한다.**
+    **칸은 9번(A-7)에서 생긴다 — 그때 이 검사를 뒤집는다.** 3번 범위에서 **쓰지도
+    않을 칸을 먼저 만들지 않는다.** **로그 금지는 그대로다.**
     """
     칸 = set(Base.metadata.tables["chapter_turns"].columns.keys())
 
