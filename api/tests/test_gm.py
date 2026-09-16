@@ -113,6 +113,38 @@ def test_시스템지시의_복귀문구가_문서에서_온다():
     assert "그대로" in 지시
 
 
+def test_호출이_thinking_을_끈다():
+    """**Evaluator·안전·PII 셋은 끄는데 GM 만 안 껐다** (2026-09-16에 찾았다).
+
+    **켜져 있으면 생각 토큰이 지연과 단가에 그대로 붙는다** — 그리고 **PRD 9장이
+    이 모델 축의 경고등으로 둔 것이 바로 지연**이다. 합격선은 **완료 8초**(PRD 7장)고
+    **12초는 우리 타임아웃**이지 기준이 아니다.
+    """
+    잡은: dict[str, object] = {}
+
+    class _응답:
+        text = '{"narrative": "톱니가 돈다.", "choices": [], "is_key_scene": false,'
+        text += ' "scene_prompt_hint": ""}'
+        prompt_feedback = None
+        candidates = [type("_후보", (), {"finish_reason": "STOP"})()]
+
+    class _모델들:
+        async def generate_content(self, *, model, contents, config):
+            잡은["config"] = config
+            return _응답()
+
+    class _클라이언트:
+        aio = type("_aio", (), {"models": _모델들()})()
+
+    with pytest.MonkeyPatch.context() as 패치:
+        패치.setattr(gm, "get_client", lambda: _클라이언트())
+        asyncio.run(gm._한번("gemini-테스트", 시스템지시(), "프롬프트"))
+
+    설정 = 잡은["config"]
+    assert 설정.thinking_config is not None, "GM 호출에 thinking_config 가 없다"
+    assert 설정.thinking_config.thinking_budget == 0
+
+
 # ── ⛔ 시련 조건을 일찍 흘리지 않는다 ────────────────────
 
 

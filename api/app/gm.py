@@ -193,6 +193,11 @@ async def _한번(모델: str, 지시: str, 프롬프트: str) -> GM출력:
             system_instruction=지시,
             response_mime_type="application/json",
             response_schema=GM출력,
+            # **끈다** — Evaluator·안전·PII 가 이미 끄고 있고 **GM 만 빠져 있었다**
+            # (2026-09-16). 켜 두면 **생각 토큰이 지연과 단가에 그대로 붙는데**,
+            # PRD 9장이 이 모델 축의 경고등으로 둔 것이 **바로 지연**이다.
+            # 합격선은 **완료 8초**(PRD 7장)이고 위의 12초는 우리 타임아웃이지 기준이 아니다.
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
     if 사유 := 내장차단(응답):
