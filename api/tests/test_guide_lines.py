@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.api.v1 import attempts
 from app.docs_md import 민
 from app.evaluator import 평가결과
-from app.guide_lines import 결과대사, 결과한줄, 종료대사, 차단대사, 카드첫말
+from app.guide_lines import 결과대사, 결과한줄, 복귀문구, 종료대사, 차단대사, 카드첫말
 from app.moderation import 검사결과
 
 
@@ -34,6 +34,26 @@ def test_세_묶음이_다_읽힌다():
     """
     assert len(종료대사()) == 5  # 1.10
     assert len(차단대사()) == 5  # 1.11
+    assert len(복귀문구()) == 3  # 1.23
+
+
+def test_복귀문구가_거절로_읽히지_않는다():
+    """**`문구.md` 1.23 지킬 것 첫째.** 아이가 뭘 잘못했다고 느끼는 순간
+    **그 다음 문장을 안 쓴다** — 이 제품에서 아이가 안 쓰면 아무것도 없다.
+
+    **되묻기 금지 목록(1.12)도 여기 그대로 적용된다**고 문서가 못 박았다."""
+    새면안됨 = ["못 해", "안 돼", "안 해", "부족", "다시 써", "틀렸", "더 길게"]
+
+    for 줄 in 복귀문구():
+        assert not [말 for 말 in 새면안됨 if 말 in 줄], 줄
+
+
+def test_복귀문구가_왜_안_되는지_설명하지_않는다():
+    """**역할 경계를 아이에게 가르치는 자리가 아니다** (1.23 지킬 것 셋째 ·
+    1.10 이 「왜 끝나는지 설명하지 않는다」로 세운 것과 같은 판단)."""
+    for 줄 in 복귀문구():
+        assert "모험만" not in 줄
+        assert "답할 수 없" not in 줄
 
 
 @pytest.mark.parametrize("tier", ["basic", "rare", "legendary"])
@@ -47,6 +67,7 @@ def test_마크다운_강조가_안_섞인다():
     모든대사 = [
         *종료대사(),
         *차단대사(),
+        *복귀문구(),
         *(줄 for 묶음 in 결과대사().values() for 줄 in 묶음),
     ]
 
