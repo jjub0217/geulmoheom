@@ -290,8 +290,9 @@ async def create_turn(
         # **되물을 차례가 아니거나 셀 수 없었다 → `G1` 취급으로 진행한다** (PRD A-5
         # 「2회 후에도 G0이면 G1 취급으로 진행 — 아이를 막지 않음」).
         # **⛔ 여기서 안 올리면 아이가 갇힌다** — 되묻기도 안 받고 턴도 안 가는 상태가
-        # 된다. 응답·로그의 `grade` 는 **평가가 준 값 그대로** 둔다(`/attempts` 선례):
-        # 진행에 쓰는 취급과 **판정이 실제로 무엇이었나**는 다른 값이다.
+        # 된다. **로그·`chapter_turns` 의 `grade` 는 평가가 준 값 그대로** 둔다
+        # (`/attempts` 선례): 진행에 쓰는 취급과 **판정이 실제로 무엇이었나**는 다른
+        # 값이고, **응답에는 둘 다 안 나간다**(2026-09-16 명세 변경).
         진행등급 = "G1"
 
     # **6. GM 호출** — 등급·뼈대·상태·요약·최근 원문을 실어. **다음 턴의 비트로 묻는다**
@@ -368,10 +369,6 @@ async def create_turn(
         outcome="result",
         turn=진행.턴,
         beat=진행.비트,
-        grade=평가.grade,  # type: ignore[arg-type]
-        # **판정은 `grade`, 실제로 통한 정도는 `bonus`** — 둘이 갈리는 경우가 있다
-        # (G0 인데 되묻기를 못 받아 `G1` 취급으로 진행한 턴)
-        bonus=진행기.보너스(진행등급),
         scaffold=None,
         narrative=출력.narrative,
         choices=[Choice(**것.model_dump()) for 것 in 출력.choices],
@@ -399,8 +396,6 @@ def _차단(챕터: Chapter, *, 현재, 자해: bool) -> TurnResult:
         reason="moderation",
         turn=현재.턴,
         beat=현재.비트,
-        grade=None,  # **평가값을 버린다** — 보여주지도 않은 평가가 분포를 오염시킨다
-        bonus=0,
         scaffold=None,
         narrative=None,
         choices=[Choice(**것) for 것 in 챕터.choices],
@@ -533,8 +528,6 @@ async def _되묻기(아이: ChildRow, 챕터: Chapter, 현재) -> TurnResult | 
         outcome="scaffold",
         turn=현재.턴,
         beat=현재.비트,
-        grade="G0",
-        bonus=0,
         scaffold=질문(키, 횟수),
         narrative=None,
         choices=[Choice(**것) for 것 in 챕터.choices],

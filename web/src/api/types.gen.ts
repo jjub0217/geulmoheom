@@ -1236,10 +1236,6 @@ export interface components {
              * @enum {string}
              */
             beat: "intro" | "explore" | "rising_action" | "approach" | "trial" | "resolution";
-            /** Grade */
-            grade?: ("G0" | "G1" | "G2" | "G3") | null;
-            /** Bonus */
-            bonus: number;
             /** Scaffold */
             scaffold?: string | null;
             /** Narrative */

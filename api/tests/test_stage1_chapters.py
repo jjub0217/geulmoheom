@@ -136,7 +136,8 @@ async def test_자유_묘사가_턴을_하나_올린다(client: TestClient):
     몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": 문장}).json()
 
     assert 몸["turn"] == 1
-    assert 몸["grade"] == "G2"
+    # **`grade` 는 응답에 없다** (2026-09-16 명세 변경) — 등급은 서사가 말한다
+    assert "grade" not in 몸
     assert 몸["narrative"]
     assert 몸["scaffold"] is None
     assert 몸["turns_left"] == 11
@@ -175,7 +176,6 @@ async def test_되묻기를_못_세면_턴이_지나간다(client: TestClient, _
 
     assert 몸["scaffold"] is None
     assert 몸["turn"] == 1
-    assert 몸["grade"] == "G0"  # **판정은 판정 그대로 남긴다** — 취급만 G1 이다
 
 
 async def test_선택지로_온_G0_은_되묻지_않고_턴을_먹는다(
@@ -265,8 +265,8 @@ async def test_차단은_오류가_아니라_정상_응답이다(
     # **문구는 1.11 이다** — 종류·카테고리를 아이에게 말하지 않는다
     assert 몸["guide"]["line"] in 차단대사()
     assert 몸["guide"]["expression"] == "compass_dim"
-    # **평가를 안 했으니 등급이 없다.** 차단 건의 평가값은 버린다
-    assert 몸["grade"] is None
+    # **평가를 안 했다** — 차단 건의 평가값은 버린다. 응답에 등급 자리가 아예 없다
+    assert "grade" not in 몸
     # **턴을 안 먹는다** — 막힌 것이 아이 몫을 깎지 않는다
     assert 몸["turn"] == 0 and 몸["turns_left"] == 12
 

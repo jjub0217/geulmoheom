@@ -113,11 +113,18 @@ class TurnResult(BaseModel):
     outcome: Literal["result", "scaffold", "blocked"]
     turn: int
     beat: Beat
-    # **차단이면 없다.** 차단은 **평가·GM 호출 전에** 멈추고(2절 1번) 그 건의 평가값은
-    # 버린다 — **화면에 보여주지도 않은 평가가 등급 분포를 오염시키지 않게** (`adr/0009`)
-    grade: Literal["G0", "G1", "G2", "G3"] | None = None
-    # **등급이 서사에 반영되는 것이고 숫자가 뜨는 게 아니다** — 「점수」는 금지어다.
-    bonus: int
+    # **⛔ `grade` 와 `bonus` 가 여기 없다** (2026-09-16 명세 변경 · PM `5d1f239`).
+    # `용어사전.md` 3장이 **등급을 「화면·API 응답에 넣지 않는다」**로 못 박았고
+    # **Stage 0 이 실제로 그렇게 서 있다** — `/attempts` 는 `tier` 만 내보낸다.
+    #
+    # **`bonus` 가 더 위험했다** — **정수라 화면이 그대로 숫자로 그리고, 그게 「점수」**다
+    # (8장 금지어 · 비전 3장 「아이에게 점수를 안 보인다」). **계약이 값을 내보내면
+    # 화면이 안 그릴 이유가 없다.**
+    #
+    # **⚠ 등급이 사라진 게 아니다** — `chapter_turns.grade` 와 로그 이벤트에 그대로
+    # 있고 **보너스는 GM 프롬프트로 간다.** **나가는 자리만 막는다.**
+    # 화면이 쓸 것은 셋이 이미 있다 — **서사**(등급이 말하는 것) ·
+    # **`trial_progress`**(시련 진행) · **삽화 티어**(보상).
     scaffold: str | None = None
     narrative: str | None = None
     choices: list[Choice] = Field(default_factory=list)

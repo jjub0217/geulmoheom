@@ -158,13 +158,19 @@ def _체인을_끊는다(monkeypatch: pytest.MonkeyPatch) -> dict:
     return 센것
 
 
-async def test_응답의_보너스가_등급대로다(client: TestClient, _체인을_끊는다: dict):
+async def test_보너스가_GM_에게만_가고_응답에는_없다(client: TestClient, _체인을_끊는다: dict):
+    """**⛔ 2026-09-16 명세 변경** (PM `5d1f239`). 종전에는 `TurnResult` 에 `grade` 와
+    `bonus` 가 실렸다 — **`bonus` 는 정수라 화면이 그대로 숫자로 그리고 그게 「점수」다**
+    (8장 금지어 · 비전 3장). `용어사전.md` 3장이 **등급을 응답에 넣지 않는다**로 이미
+    못 박았고 **Stage 0 은 `tier` 만 내보낸다.**
+
+    **값이 사라진 게 아니라 나가는 자리만 막혔다** — GM 프롬프트로는 그대로 간다.
+    """
     판 = client.post(챕터).json()
 
     몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": 문장}).json()
 
-    assert 몸["grade"] == "G3"
-    assert 몸["bonus"] == 2
+    assert "grade" not in 몸 and "bonus" not in 몸
     assert "[보너스] +2" in _체인을_끊는다["프롬프트"][-1]
 
 
@@ -186,6 +192,6 @@ async def test_되묻기를_못_한_G0_은_G1_취급이라_보너스가_0이다(
 
     몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": "공격"}).json()
 
-    assert 몸["grade"] == "G0"  # 판정은 그대로
-    assert 몸["bonus"] == 0  # 취급은 G1
+    assert 몸["turn"] == 1  # 턴은 지나갔다
+    # **GM 에게 간 것이 `G1`/+0 이다** — 응답에는 둘 다 안 나간다(명세 변경)
     assert "[등급] G1 / [보너스] +0" in _체인을_끊는다["프롬프트"][-1]
