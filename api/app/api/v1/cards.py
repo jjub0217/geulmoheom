@@ -20,10 +20,10 @@ from app.card_store import 모험카드들, 오늘상태, 오늘쓴카드들
 from app.card_store import 카드 as 카드읽기
 from app.errors import AppError, ErrorCode
 from app.guide_lines import 카드첫말
-from app.models import TUTORIAL_TYPE
 from app.models import Card as CardRow
 from app.models import Child as ChildRow
 from app.schemas.stage0 import Card
+from app.tutorial import 남은카드, 튜토리얼카드인가
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -35,7 +35,10 @@ def _응답(행: CardRow) -> Card:
     return Card.model_validate(
         {
             "card_id": 행.id,
-            "type": 행.type,
+            # **DB 는 `tutorial` 을 들고 있고 응답은 `null` 이다** (2026-09-16 명세 변경).
+            # **모드를 이야기 유형 축에 얹지 않는다** — T1~T3 는 위기·발견·만남 중
+            # 무엇도 아니고, 문서의 그 열은 **유형이 아니라 목적**이다
+            "type": None if 튜토리얼카드인가(행.id) else 행.type,
             "situation": 행.situation_text,
             "prompt_label": 행.prompt_label,
             "guide": {"expression": "default", "line": 카드첫말()},
@@ -67,6 +70,19 @@ async def next_card(
 
     **아이별 순서는 아직 없다.** 남은 것 중 무작위다.
     """
+    # **⛔ 튜토리얼이 먼저다 — 그리고 잠금·관문이 없다** (A-6 MUST · W7 10번).
+    # `A0-5` 일일 제한을 **적용하지 않는다**: 첫 5~7분이 관문이 되면 **아이는 시작도
+    # 못 한다.** 그래서 상한을 보기 **전에** 갈린다.
+    #
+    # **기본은 꺼져 있다** — T1~T3 가 대표 미검수다 (`장면카드_초안.md`).
+    다음튜토리얼 = await 남은카드(session, 아이.id)
+    if 다음튜토리얼 is not None:
+        행 = await 카드읽기(session, 다음튜토리얼)
+        if 행 is None:
+            # 씨를 안 뿌렸다. `/readyz` 가 이미 degraded 다
+            raise AppError(ErrorCode.INTERNAL_ERROR)
+        return _응답(행)
+
     # **하루 5장에서 멈춘다** (A0-5 · PRD 하드 피니시). 상한은 자녀 행에서 읽는다 —
     # 학부모가 바꿀 수 있는 값이다.
     쓴수, 상한 = await 오늘상태(session, 아이)
@@ -93,9 +109,16 @@ async def next_card(
 async def get_card(card_id: str, _: Child, session: Session) -> Card:
     """재시도 화면 복귀용.
 
-    모르는 카드와 튜토리얼(T1~T3)은 404 다. 튜토리얼은 노출 경로가 따로 있다 (Stage 1 A-6).
+    모르는 카드는 404 다.
+
+    **⛔ 튜토리얼(T1~T3)은 2026-09-16 부터 열린다** (W7 10번). 종전에는 404 였는데
+    **A-6 의 T2 가 「다시 써보기」를 직접 권유**하고 **재시도 화면이 카드를 다시
+    읽는다** — 404 면 **그 권유가 막힌다.**
+    **꺼져 있을 때도 열어 둔다**: 이 경로는 **아이에게 카드를 고르게 하는 자리가
+    아니라 이미 받은 카드로 돌아오는 자리**다. 주는 것은 `/next` 하나뿐이고 **그쪽이
+    스위치를 본다.**
     """
     행 = await 카드읽기(session, card_id)
-    if 행 is None or 행.type == TUTORIAL_TYPE:
+    if 행 is None:
         raise AppError(ErrorCode.NOT_FOUND)
     return _응답(행)

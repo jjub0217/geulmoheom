@@ -63,6 +63,7 @@ from app.schemas.stage0 import (
     Tier,
     TodayState,
 )
+from app.tutorial import 방금끝냈나, 베이스라인, 튜토리얼카드인가
 
 logger = logging.getLogger(__name__)
 
@@ -194,8 +195,12 @@ async def create_attempt(
     # **재시도는 안 걸린다** (`Stage0.md` 4절). 되묻기 뒤 재입력은 `retry_of` 가
     # 비어 있는데(같은 시도의 연장이라 그렇게 정했다), 그건 카드를 아직 안 쓴 상태라
     # 아래 셈에서 자연히 통과한다.
+    # **⛔ 튜토리얼은 잠금·관문이 없다** (A-6 MUST · W7 10번). `A0-5` 일일 제한도
+    # `A0-4` 앨범도 적용하지 않는다 — **첫 5~7분이 관문이 되면 아이는 시작도 못 한다.**
+    튜토리얼인가 = 튜토리얼카드인가(payload.card_id)
+
     쓴수, 상한 = await 오늘상태(session, 아이)
-    if (소진 or 쓴수 >= 상한) and payload.retry_of is None:
+    if (소진 or 쓴수 >= 상한) and payload.retry_of is None and not 튜토리얼인가:
         # **상한 도달률이 H2 지표다** (합격선 40%). 409 로 나가는 길에도 남겨야 센다.
         await 남기기(아이.id, 이벤트("daily_cap_reached", {"cap": 상한}))
         raise _소진()
@@ -316,7 +321,13 @@ async def create_attempt(
     # **책이 여기서 쌓인다** (`Stage0.md` 9절 10b). 카드별 **최고 티어 1건**이 한
     # 페이지이고, 티어가 올랐을 때만 교체된다 — 같은 티어로 다시 쓰면 **처음 해낸
     # 문장을 지킨다.**
-    await 페이지올리기(session, 아이, 시도, 삽화.id)
+    if not 튜토리얼인가:
+        # **⛔ 튜토리얼은 책에 안 쌓인다** (A-6 「A0-4 앨범 미적용」). 석 장이 실리면
+        # **아이 책의 첫 세 장이 연습**이 된다 — 책은 **모험의 기록**이다
+        await 페이지올리기(session, 아이, 시도, 삽화.id)
+    elif await 방금끝냈나(session, 아이.id):
+        # **그 아이의 H2 베이스라인** (A-6 · PRD 5장). 세 장을 다 쓴 그 턴에 한 번만
+        남길것.append(이벤트("tutorial_complete", await 베이스라인(session, 아이.id)))
 
     await 남기기(아이.id, *남길것)
 

@@ -51,6 +51,10 @@ EVENT_FIELDS: dict[str, frozenset[str]] = {
     # **4경로 사용 균형이 이 이벤트로 잰다** (PRD A-4). `passed` 가 붙는 이유는
     # **어느 경로가 더 잘 통하는지**를 봐야 「동등」이 말뿐이 아닌 것이 되기 때문이다
     "trial_path": frozenset({"path", "passed"}),
+    # **그 아이의 H2 베이스라인** (A-6 · 5장). **`t3_path` 는 아직 안 싣는다** —
+    # T3 답이 어느 경로인지 판별하는 것이 없다(Stage 1 시련은 GM 이 판별하고 Stage 0
+    # 시도에는 그 자리가 없다). **지어내지 않고 PM 에게 올렸다**
+    "tutorial_complete": frozenset({"grades", "char_lens", "t3_path"}),
 }
 
 

@@ -65,12 +65,30 @@ def test_되묻기와_화면이_같은_장면을_가리킨다(client: TestClient
         assert 카드.대상 in 상황문
 
 
-@pytest.mark.parametrize("card_id", ["t1", "c99", "없는카드"])
-def test_모르는_카드와_튜토리얼은_404(client: TestClient, card_id: str):
+@pytest.mark.parametrize("card_id", ["c99", "없는카드"])
+def test_모르는_카드는_404(client: TestClient, card_id: str):
     response = client.get(f"/api/v1/cards/{card_id}")
 
     assert response.status_code == 404
     assert response.json()["error"]["message"] == "찾는 것이 여기 없어요"
+
+
+def test_튜토리얼_카드는_이제_열린다(client: TestClient):
+    """**⛔ 2026-09-16 에 뒤집혔다** (W7 10번 · A-6). 종전에는 **튜토리얼도 404** 였고
+    근거는 「노출 경로가 따로 있다」였다.
+
+    **A-6 의 T2 가 「다시 써보기」를 직접 권유하고 재시도 화면이 카드를 다시 읽는다** —
+    404 면 **그 권유가 막힌다.**
+
+    **주는 자리는 여전히 `/next` 하나뿐이다** — 그쪽이 스위치(`tutorial_enabled`)를
+    보고, 이 경로는 **이미 받은 카드로 돌아오는 자리**다.
+    """
+    몸 = client.get("/api/v1/cards/t1").json()
+
+    assert 몸["card_id"] == "t1"
+    # **`type` 이 `null` 이다** — 모드를 이야기 유형 축에 얹지 않는다(프론트가 짚었다).
+    # 문서의 튜토리얼 표는 **유형이 아니라 목적**을 적어 뒀다
+    assert 몸["type"] is None
 
 
 # ── DB 에서 온다 (A0-1 잔여) ───────────────────────────────

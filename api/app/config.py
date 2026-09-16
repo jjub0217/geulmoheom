@@ -111,6 +111,15 @@ class Settings(BaseSettings):
     # 이 값은 **비어 있는 것이 운영**이다 (`gemini_base_url` 과 같은 자리).
     pii_ner_enabled: bool = False
 
+    # **튜토리얼 「나침반 깨우기」** (A-6 · W7 10번). **기본 꺼짐이고 그것이 결정이다** —
+    # `장면카드_초안.md` 가 **T1~T3 만 대표 미검수**라 적어 뒀고, 주차 계획 「위험」이
+    # **「만들되 기본 켜짐으로 두지 않는다 — 검수가 오면 켠다」**다.
+    # **검수 없이 아이에게 안 내보낸다.**
+    #
+    # **`.env.example` 에 넣지 않는다** — `pii_ner_enabled` 와 같은 자리다:
+    # **꺼져 있는 것이 지금의 운영**이고, 켜는 것은 **대표 검수라는 사건**이다.
+    tutorial_enabled: bool = False
+
     # **삽화 저장소. 2026-09-12 에 Cloudflare R2 → AWS S3 로 갈았다** (사용자 지시 ·
     # ADR 은 PM 몫). 이미 쓰는 AWS 계정이 있어 **계정을 새로 만들 이유가 없어졌고**,
     # 배포가 Vercel·Render 로 가면서 **Cloudflare 에 남는 것이 R2 하나뿐**이었다.

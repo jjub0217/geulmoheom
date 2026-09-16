@@ -352,7 +352,14 @@ export interface paths {
          * Get Card
          * @description 재시도 화면 복귀용.
          *
-         *     모르는 카드와 튜토리얼(T1~T3)은 404 다. 튜토리얼은 노출 경로가 따로 있다 (Stage 1 A-6).
+         *     모르는 카드는 404 다.
+         *
+         *     **⛔ 튜토리얼(T1~T3)은 2026-09-16 부터 열린다** (W7 10번). 종전에는 404 였는데
+         *     **A-6 의 T2 가 「다시 써보기」를 직접 권유**하고 **재시도 화면이 카드를 다시
+         *     읽는다** — 404 면 **그 권유가 막힌다.**
+         *     **꺼져 있을 때도 열어 둔다**: 이 경로는 **아이에게 카드를 고르게 하는 자리가
+         *     아니라 이미 받은 카드로 돌아오는 자리**다. 주는 것은 `/next` 하나뿐이고 **그쪽이
+         *     스위치를 본다.**
          */
         get: operations["get_card_api_v1_cards__card_id__get"];
         put?: never;
@@ -864,11 +871,8 @@ export interface components {
         Card: {
             /** Card Id */
             card_id: string;
-            /**
-             * Type
-             * @enum {string}
-             */
-            type: "crisis" | "discovery" | "encounter";
+            /** Type */
+            type?: ("crisis" | "discovery" | "encounter") | null;
             /** Situation */
             situation: string;
             /** Prompt Label */

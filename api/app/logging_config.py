@@ -23,6 +23,11 @@ SAFE_EXTRA_KEYS = (
     "grades",
     "path",
     "passed",
+    # 튜토리얼 베이스라인 (A-6). **등급 목록과 길이 목록이고 문장이 아니다.**
+    # `t3_path` 는 **아직 안 싣지만** 계약(PRD 5장)에 있어 자리를 둔다 — 판별기가
+    # 없어서 비운 것이고, **목록에 없으면 붙는 날 조용히 사라진다**
+    "char_lens",
+    "t3_path",
     "request_id",
     "method",
     "path",

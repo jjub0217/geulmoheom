@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CardAttempt, Chapter, ChapterTurn, Child
+from app.tutorial import 튜토리얼카드들
 
 # **PRD D-2 「기본 15턴/일」.** SHOULD 로 **학부모 설정 10~20턴**이 있는데 그 화면이
 # 아직 없다 — **열이 생기는 것은 그 화면이 설 때**다. 그때까지 코드 기본값이고,
@@ -48,6 +49,11 @@ async def 오늘턴수(session: AsyncSession, 아이: Child) -> tuple[int, int]:
         .where(
             CardAttempt.child_id == 아이.id,
             func.date(CardAttempt.created_at) == func.current_date(),
+            # **⛔ 튜토리얼은 빠진다** (A-6 「일일 제한 미적용」 · W7 10번).
+            # PRD A0-5 가 **「연습 모드 카드도 그날의 턴을 소모」**라고 한 것은
+            # **연습 모드**이고 **튜토리얼은 「제한 미적용」**이다 — 세면
+            # **첫날 모험이 그만큼 깎인다.**
+            CardAttempt.card_id.not_in(튜토리얼카드들()),
         )
     )
     턴 = (await session.execute(턴셈)).scalar_one()
