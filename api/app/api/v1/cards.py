@@ -14,7 +14,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.v1 import _fixtures as fx
 from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
 from app.card_store import 모험카드들, 오늘상태, 오늘쓴카드들
 from app.card_store import 카드 as 카드읽기
@@ -22,7 +21,7 @@ from app.errors import AppError, ErrorCode
 from app.guide_lines import 카드첫말
 from app.models import Card as CardRow
 from app.models import Child as ChildRow
-from app.schemas.stage0 import Card
+from app.schemas.stage0 import Card, Today
 from app.tutorial import 남은카드, 튜토리얼카드인가
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -31,7 +30,21 @@ router = APIRouter(prefix="/cards", tags=["cards"])
 Child = Annotated[ChildRow, Depends(require_child)]
 
 
-def _응답(행: CardRow) -> Card:
+def _응답(행: CardRow, 오늘: Today) -> Card:
+    """**⛔ `today` 를 픽스처로 채우지 않는다** (2026-09-17 정정).
+
+    종전에는 `fx.TODAY`(`{"cards_done": 2, "cap": 5}`)를 그대로 실었다 — **시도가 0인
+    새 아이가 `cards_done: 2` 를 받았다.** 운영 회차에서 실물로 잡혔다.
+
+    **⭐ 막는 쪽은 멀쩡했다** — 상한 판단은 `오늘상태()` 가 DB 로 세고 있었고, **화면도
+    이 값을 안 썼다**(프론트가 `today` 를 안 읽는다). **그래서 아무 데서도 안 터졌다.**
+    **계약 필드 하나가 조용히 거짓이었던 것**이고, 그게 이 부류의 성질이다 — **쓰이기
+    시작하는 날 틀린다.**
+
+    **⛔ 튜토리얼도 진짜 값을 받는다.** A-6 이 뺀 것은 **상한의 적용**이지 **셈**이
+    아니다. 여기서 0 이나 픽스처를 주면 **「튜토리얼 중에는 오늘 쓴 게 없다」는 거짓**이
+    나가고, 튜토리얼을 끝낸 아이의 다음 화면과 어긋난다.
+    """
     return Card.model_validate(
         {
             "card_id": 행.id,
@@ -42,7 +55,7 @@ def _응답(행: CardRow) -> Card:
             "situation": 행.situation_text,
             "prompt_label": 행.prompt_label,
             "guide": {"expression": "default", "line": 카드첫말()},
-            "today": fx.TODAY,
+            "today": 오늘,
         }
     )
 
@@ -75,17 +88,23 @@ async def next_card(
     # 못 한다.** 그래서 상한을 보기 **전에** 갈린다.
     #
     # **기본은 꺼져 있다** — T1~T3 가 대표 미검수다 (`장면카드_초안.md`).
+    #
+    # **⛔ 셈은 튜토리얼 갈래보다 앞에서 한다** (2026-09-17). A-6 이 뺀 것은 **상한의
+    # 적용**이지 **셈**이 아니다 — 응답의 `today` 는 튜토리얼 중에도 참이어야 한다.
+    # **막는 것은 여전히 아래에서만 한다.**
+    쓴수, 상한 = await 오늘상태(session, 아이)
+    오늘 = Today(cards_done=쓴수, cap=상한)
+
     다음튜토리얼 = await 남은카드(session, 아이.id)
     if 다음튜토리얼 is not None:
         행 = await 카드읽기(session, 다음튜토리얼)
         if 행 is None:
             # 씨를 안 뿌렸다. `/readyz` 가 이미 degraded 다
             raise AppError(ErrorCode.INTERNAL_ERROR)
-        return _응답(행)
+        return _응답(행, 오늘)
 
     # **하루 5장에서 멈춘다** (A0-5 · PRD 하드 피니시). 상한은 자녀 행에서 읽는다 —
     # 학부모가 바꿀 수 있는 값이다.
-    쓴수, 상한 = await 오늘상태(session, 아이)
     if 소진 or 쓴수 >= 상한:
         raise _오늘은끝()
 
@@ -102,11 +121,11 @@ async def next_card(
         # 상한을 올리는 날 여기가 빈 응답이나 500 이 되면 **아이 화면이 멈춘다.**
         raise _오늘은끝()
 
-    return _응답(random.choice(남은것))
+    return _응답(random.choice(남은것), 오늘)
 
 
 @router.get("/{card_id}")
-async def get_card(card_id: str, _: Child, session: Session) -> Card:
+async def get_card(card_id: str, 아이: Child, session: Session) -> Card:
     """재시도 화면 복귀용.
 
     모르는 카드는 404 다.
@@ -121,4 +140,5 @@ async def get_card(card_id: str, _: Child, session: Session) -> Card:
     행 = await 카드읽기(session, card_id)
     if 행 is None:
         raise AppError(ErrorCode.NOT_FOUND)
-    return _응답(행)
+    쓴수, 상한 = await 오늘상태(session, 아이)
+    return _응답(행, Today(cards_done=쓴수, cap=상한))

@@ -29,6 +29,60 @@ def test_스무_장이다():
     assert {"t1", "t2", "t3"} <= set(카드들())
 
 
+def test_시도가_없는_아이는_오늘_쓴_수가_0_이다(client: TestClient):
+    """**⛔ 픽스처가 운영 응답에 실려 있었다** (2026-09-17 · 완료 판정 회차에서 잡혔다).
+
+    `_fixtures.TODAY` 가 `{"cards_done": 2, "cap": 5}` 였고 **그대로 나갔다** —
+    **가입 직후 아무것도 안 쓴 아이가 `cards_done: 2`** 를 받았다.
+
+    **⭐ 왜 아무도 못 봤나 — 아무 데서도 안 터졌기 때문이다.** 상한 판단은
+    `오늘상태()` 가 **DB 로 따로 세고 있었고**(막는 쪽은 멀쩡했다), **화면은 이 값을
+    안 읽는다.** **계약 필드 하나가 조용히 거짓이었다** — 그리고 **`today` 를 재는
+    검사가 하나도 없었다.** 그게 이 검사가 있는 이유다.
+    """
+    body = client.get("/api/v1/cards/next").json()
+
+    assert body["today"]["cards_done"] == 0, "픽스처가 다시 샜다"
+    assert body["today"]["cap"] > 0
+
+
+def test_한_장을_쓰면_오늘_쓴_수가_따라_오른다(client: TestClient, monkeypatch):
+    """**셈이 진짜 DB 에서 온다**는 것을 고정값과 가른다.
+
+    위 검사만 있으면 **`0` 을 하드코딩해도 통과한다.** 움직이는 것을 봐야 한다.
+
+    **프로바이더를 갈아끼운다** — 안 끼우면 판정을 못 받아 E-1 이 막고(`blocked`),
+    **시도 행이 안 생겨 0 인 채로 통과**한다. 재려던 것과 반대가 된다.
+    """
+    from app.api.v1 import attempts as 시도모듈
+    from app.evaluator import 평가결과
+    from app.moderation import 검사결과
+
+    async def _판정(text: str, **_) -> 평가결과:
+        return 평가결과(grade="G2", signals=["adj:은빛"], descriptors=["은빛"])
+
+    async def _검사(text: str) -> 검사결과:
+        return 검사결과(blocked=False, category=None)
+
+    async def _안됨(자녀id: str, card_id: str, **_) -> int:
+        return 0
+
+    monkeypatch.setattr(시도모듈, "evaluate", _판정)
+    monkeypatch.setattr(시도모듈, "검사하기", _검사)
+    monkeypatch.setattr(시도모듈, "되묻은횟수", _안됨)
+
+    첫장 = client.get("/api/v1/cards/next").json()
+    답 = client.post(
+        "/api/v1/attempts",
+        json={"card_id": 첫장["card_id"], "text": "은빛 그림자가 살금살금 다가온다"},
+    )
+    assert 답.status_code == 200, 답.text
+
+    다음 = client.get("/api/v1/cards/next").json()
+
+    assert 다음["today"]["cards_done"] == 1
+
+
 @pytest.mark.parametrize("카드", 카드목록, ids=lambda c: c.card_id)
 def test_스무_장이_전부_조회된다(client: TestClient, 카드):
     body = client.get(f"/api/v1/cards/{카드.card_id}").json()
