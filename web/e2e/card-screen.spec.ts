@@ -20,6 +20,8 @@ import { 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
 // 튜토리얼 문구도 박지 않는다 — `docs/문구.md` **1.22** 가 SSOT 다.
 import { 튜토리얼문구 } from "../src/app/tutorial-copy";
+// 문도 박지 않는다 — `docs/문구.md` **1.25** 가 SSOT 다.
+import { 모험문 } from "../src/app/chapter-door-copy";
 
 /**
  * 오늘의 모험 화면(A0-2)이 응답 네 가지를 각각 그리는지 본다.
@@ -1729,3 +1731,108 @@ test("T3 뒤에 닫는 말이 나오고, 잠금·관문을 말하지 않는다",
     expect(화면, `「${금지}」가 튜토리얼 화면에 있다`).not.toContain(금지);
   }
 });
+
+/**
+ * **모험으로 들어가는 문** (`문구.md` **1.25** · W7 **18번**).
+ *
+ * **⛔ 2026-09-17 까지 이 문이 없었다.** Stage 1 부품이 전부 선 뒤에도 **`/chapter` 로
+ * 보내는 코드가 저장소 전체에 0건**이었고, 튜토리얼 1.22 가 **「이제 진짜 모험을 가자」**를
+ * 띄우는데 **갈 데가 없었다** — **문구가 거짓말을 하고 있었다.**
+ *
+ * **⭐ 막히지 않는 누락이 더 오래 간다** — 계약이 어긋났을 때는 누군가 막혀서 물어 왔는데
+ * 이건 **아무도 안 막혔다.** 그래서 **검사로 붙잡는다.**
+ */
+test("튜토리얼이 아닌 날엔 홈에 모험으로 가는 문이 있다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  // **404 = 하던 이야기가 없다** (`NO_ACTIVE_CHAPTER`).
+  await page.route("**/api/v1/chapters/current", (route) =>
+    route.fulfill({
+      status: 404,
+      body: errorBody("NO_ACTIVE_CHAPTER", "지금 이어갈 이야기가 없어요"),
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await page.goto("/");
+
+  await expect(page.locator("[data-모험문]")).toContainText(모험문.기다린다);
+  const 문 = page.getByRole("link", { name: 모험문.떠나기 });
+  await expect(문).toHaveAttribute("href", "/chapter");
+});
+
+test("하던 이야기가 있으면 그리로 보낸다 — 「이어서」를 안 쓴다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+  await page.route("**/api/v1/chapters/current", (route) =>
+    route.fulfill({ status: 200, json: { chapter_id: "c1" } }),
+  );
+  await page.goto("/");
+
+  await expect(page.locator("[data-모험문]")).toContainText(모험문.가던데까지);
+  await expect(page.getByRole("link", { name: 모험문.하던이야기로 })).toBeVisible();
+
+  // **⛔ 1.20 이 「이어서 더 하기」를 금지했다.** 낱말이 겹치면 둘이 같은 것으로 읽힌다.
+  expect(await page.locator("main").innerText()).not.toContain("이어서");
+});
+
+/**
+ * **⛔ 튜토리얼 중에는 문을 안 그린다.**
+ * T1~T3 는 **첫 5~7분**이고 **A-6 이 「잠금·관문 없음」**으로 세운 자리다.
+ * **다른 길을 같이 내면 아이가 무엇부터 할지 고르게 되고 그 5~7분이 관문이 된다.**
+ */
+test("튜토리얼 중에는 문이 없다 — 5~7분에 갈림길을 안 만든다", async ({ page }) => {
+  await page.route(CARDS_NEXT, (route) =>
+    route.fulfill({ status: 200, json: 튜토리얼카드({ card_id: "t1" }) }),
+  );
+  await page.goto("/");
+  await expect(page.getByText(튜토리얼문구.여는말)).toBeVisible();
+  await expect(page.locator("[data-모험문]")).toHaveCount(0);
+});
+
+test("T3 를 끝내면 닫는말이 가리키는 그 버튼이 있다", async ({ page }) => {
+  await 결과버튼줄까지(page, "t3");
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(튜토리얼문구.닫는말);
+  // **말만 있고 버튼이 없으면 그 문장이 거짓이 된다.**
+  await expect(page.getByRole("link", { name: 모험문.떠나기 })).toHaveAttribute(
+    "href",
+    "/chapter",
+  );
+});
+
+/**
+ * **⛔ 문을 카드 위에 넣었으니 쓸 자리가 밀렸는지 재야 한다** (W6 14번 판정 · W7 18번).
+ *
+ * **「그 화면에 온 사람이 해야 할 일은 첫 화면에 있어야 한다.」** 카드 화면에서 아이가
+ * 해야 할 일은 **쓰는 것**이다. **문을 얹어서 그것이 밀려나면 문이 해를 끼친 것**이다.
+ *
+ * **⚠ 기존 「보상까지가 첫 화면 안에」는 결과 화면을 잰다.** 카드 화면을 재는 검사가
+ * 없어서 **문을 넣고도 초록이었다** — 2026-09-17 에 그 빈자리를 메운다.
+ */
+for (const [폭, 높이, 어디] of [
+  [1024, 768, "iPad 가로"],
+  [390, 844, "폰 세로"],
+  [360, 640, "작은 안드로이드"],
+] as const) {
+  test(`문을 얹어도 쓸 자리가 첫 화면 안에 있다 — ${폭}×${높이} (${어디})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 폭, height: 높이 });
+    await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
+    await page.route("**/api/v1/chapters/current", (route) =>
+      route.fulfill({ status: 200, json: { chapter_id: "c1" } }),
+    );
+    await page.goto("/");
+    await expect(page.locator("[data-모험문]")).toBeVisible();
+
+    // **아이가 안 한 것을 검사도 안 한다.**
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    for (const [이름, 자리] of [
+      ["쓰는 칸", await page.locator("#attempt").boundingBox()],
+      ["보내기", await page.getByRole("button", { name: 버튼.보내기 }).boundingBox()],
+    ] as const) {
+      expect(
+        Math.round(자리!.y + 자리!.height),
+        `${이름}이 첫 화면 밖이다 (${폭}×${높이})`,
+      ).toBeLessThanOrEqual(높이);
+    }
+  });
+}

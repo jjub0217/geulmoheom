@@ -9,6 +9,7 @@ import { ArtworkFrame } from "@/components/artwork";
 import { AttemptInput } from "@/components/attempt-input";
 import { GuideFigure } from "@/components/guide";
 import { LeaveButton } from "@/components/leave";
+import { ChapterDoor } from "@/components/chapter-door";
 import { SceneCard } from "@/components/scene-card";
 import { TierBadge } from "@/components/tier-badge";
 import { WrittenLine } from "@/components/written-line";
@@ -27,6 +28,7 @@ import type { PiiKind } from "@/lib/pii";
 import { 내책라벨 } from "./book/copy";
 import { 버튼, 못닿음 } from "./copy";
 import { 상태표시 } from "./status-copy";
+import { 모험문 } from "./chapter-door-copy";
 import { T2권유를띄울까, 튜토리얼문구, 튜토리얼차례 } from "./tutorial-copy";
 
 type Card = components["schemas"]["Card"];
@@ -415,11 +417,26 @@ export default function Home() {
         )}
 
         {(screen.kind === "card" || screen.kind === "sending") && (
-          <div className="flex flex-col gap-8">
+          /* **좁은 화면에서만 `gap-6` 이다** (2026-09-17, 문을 얹으면서).
+             **W6 에서 결과 화면에 쓴 것과 같은 방법**이다 — 그때도 「다시 써보기」가
+             붙으면서 세로가 넘쳤고 **액자를 더 접는 대신 여백을 줄였다.**
+
+             **⛔ 문구도 카드도 안 깎았다.** 자리가 모자라다고 `문구.md` 의 문장이나
+             장면 글을 줄이는 것은 **문서를 코드가 무르는 것**이다. **줄인 것은 여백뿐.**
+
+             **실측** — 360×640 에서 「보내기」가 **667 → 652 → 640 안**으로 들어왔다. */
+          <div className="flex flex-col gap-6 sm:gap-8">
             {/* **튜토리얼 여는 말** (`문구.md` 1.22 · A-6). **T1 에서 카드보다 먼저**다 —
                 **쓰는 것이 곧 깨우는 것**이라는 전제를 말한 뒤에 첫 장면이 온다.
                 **⛔ 새 화면을 만들지 않는다** — A-6 이 「루프를 설정만 바꾼다」이고,
                 안내 화면을 한 장 세우면 **첫 5~7분에 관문이 하나 생긴다.** */}
+            {/* **모험으로 들어가는 문** (`문구.md` 1.25 · W7 18번).
+                **⛔ 튜토리얼 중에는 안 그린다** — T1~T3 는 **첫 5~7분**이고
+                **A-6 이 「잠금·관문 없음」으로 세운 자리**다. 여기에 다른 길을 같이 내면
+                **아이가 무엇부터 할지 고르게 되고 그 5~7분이 관문이 된다.**
+                **T3 를 끝낸 뒤에 열린다** — 아래 결과 화면과 여기 둘 다. */}
+            {튜토리얼차례(screen.card.card_id) === null && <ChapterDoor />}
+
             {튜토리얼차례(screen.card.card_id) === "t1" && (
               <p data-튜토리얼안내 className="text-xl/relaxed text-brass">
                 {튜토리얼문구.여는말}
@@ -558,9 +575,23 @@ export default function Home() {
                   </p>
                 )}
                 {튜토리얼차례(screen.card.card_id) === "t3" && (
-                  <p data-튜토리얼안내 className="text-center text-lg/relaxed text-brass">
-                    {튜토리얼문구.닫는말}
-                  </p>
+                  <>
+                    <p data-튜토리얼안내 className="text-center text-lg/relaxed text-brass">
+                      {튜토리얼문구.닫는말}
+                    </p>
+                    {/* **닫는말이 가리키는 그 버튼이다** (`문구.md` 1.25 다섯째).
+                        **말만 있고 버튼이 없으면 그 문장이 거짓이 된다** —
+                        **2026-09-17 까지 실제로 그랬다.** */}
+                    <div className="flex justify-center">
+                      <Link
+                        href="/chapter"
+                        data-모험문버튼
+                        className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings"
+                      >
+                        {모험문.떠나기}
+                      </Link>
+                    </div>
+                  </>
                 )}
 
                 <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
