@@ -276,6 +276,120 @@ async def test_모델이_짚은_실명을_가린다(monkeypatch):
 
 
 @pytest.mark.usefixtures("_NER_켠다")
+async def test_같은_사람을_성_없이_부른_것도_가린다(monkeypatch):
+    """**⛔ 완료 판정 회차에서 실물로 난 그 문장이다** (2026-09-17 · 안전).
+
+    아이가 쓴 것 — 「김민준이랑 같이 들어갔다. **민준이가** 먼저 손을 뻗었다」
+    그때 책에 남은 것 — 「○○○이랑 같이 들어갔다. **민준이가** 먼저 손을 뻗었다」
+
+    **그리고 GM 이 그 이름을 받아 서사에 썼다** — 입력에서 한 번 샌 것이 출력으로
+    번졌고, **그 문장이 책에 실렸다. A-7 은 인쇄해서 가족에게 보낸다.**
+
+    **⭐ 판정을 좁힌 게 아니라 판정대로 안 돈 것이다.** 대표 판정문은 **「실명을
+    가린다」**이지 「성+이름 **형태**만 가린다」가 아니다 — 「성+이름」은 `_NER_지시` 의
+    **구현 선택**이었고, **같은 사람을 두 번 부른 글에서 하나만 가리면 반만 집행된다.**
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김민준"]  # 모델은 성+이름만 돌려준다
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기(
+        "김민준이랑 같이 들어갔다. 민준이가 먼저 손을 뻗었다", 제외=()
+    )
+
+    assert "김민준" not in 가려진
+    assert "민준" not in 가려진, "성 없는 호칭이 그대로 나갔다 — 회차에서 난 그 결함이다"
+    assert 종류 == ["name"]
+
+
+@pytest.mark.usefixtures("_NER_켠다")
+async def test_전체_이름을_먼저_지운다_성이_남지_않는다(monkeypatch):
+    """**⛔ 순서가 틀리면 성이 남는다.**
+
+    `민준` 을 먼저 지우면 `김민준` 이 **`김○○○`** 이 된다 — **가렸는데 성이 남는
+    것**이고, 성은 그 자체로 사람을 좁힌다. 전체 이름이 **항상 먼저**여야 한다.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김민준"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, _ = await pii.실명까지가리기("김민준이 웃었다", 제외=())
+
+    assert 가려진 == f"{PII_MASK}이 웃었다"
+    assert "김" not in 가려진
+
+
+@pytest.mark.usefixtures("_NER_켠다")
+async def test_한_글자_이름은_안_만든다(monkeypatch):
+    """**⛔ `김철` → `철` 이면 「철」이 든 모든 낱말이 가려진다** — 철사·지하철·철수.
+
+    **두 글자가 이름으로 읽히는 최소 길이**다. 한 글자는 **덜 가리는 쪽으로 진다.**
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김철"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, _ = await pii.실명까지가리기("김철이랑 지하철을 탔다", 제외=())
+
+    assert "김철" not in 가려진
+    assert "지하철" in 가려진, "한 글자 호칭을 만들어 엉뚱한 낱말을 가렸다"
+
+
+@pytest.mark.usefixtures("_NER_켠다")
+async def test_아이가_지은_이름은_호칭도_안_가린다(monkeypatch):
+    """**화이트리스트가 호칭 갈래에도 걸린다** (PRD E-2).
+
+    안 걸면 **「나침반」 같은 가이드 이름의 뒷부분**이 가려질 수 있다 —
+    **서버가 아는 값인데 가리는 것**이라 그냥 손해다.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김나침"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기("김나침이 달려갔다", 제외=("김나침", "나침"))
+
+    assert 가려진 == "김나침이 달려갔다"
+    assert 종류 == []
+
+
+@pytest.mark.usefixtures("_NER_켠다")
+async def test_이름이_흔한_낱말과_같으면_그_낱말도_가려진다(monkeypatch):
+    """**⚠ 이것은 결함이 아니라 고른 값이다.** 남겨서 다음 사람이 알게 한다.
+
+    「김하늘이랑 놀았다. 하늘이 파랗다」 → **뒤의 `하늘` 도 가려진다.**
+
+    **덜 나쁜 쪽을 골랐다** — 가려진 낱말은 **아이 눈에 보여서 말할 수 있고**,
+    안 가려진 실명은 **책에 인쇄돼 나간 뒤에야 안다.** 되돌릴 수 있는 쪽과 없는 쪽이다.
+
+    **⛔ 이 검사가 빨개지면 「고쳤다」가 아니라 「값이 바뀌었다」**이니,
+    바꾸기 전에 위 판단을 다시 읽어라.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김하늘"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, _ = await pii.실명까지가리기("김하늘이랑 놀았다. 하늘이 파랗다", 제외=())
+
+    assert "김하늘" not in 가려진
+    assert 가려진.count(PII_MASK) == 2, "고른 값이 바뀌었다 — docstring 을 읽어라"
+
+
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_문장에_없는_이름을_돌려주면_버린다(monkeypatch):
     """모델이 지어낸 문자열은 **어디를 가릴지 알 수 없다.**
 
