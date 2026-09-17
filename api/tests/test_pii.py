@@ -306,6 +306,73 @@ async def test_같은_사람을_성_없이_부른_것도_가린다(monkeypatch):
 
 
 @pytest.mark.usefixtures("_NER_켠다")
+async def test_등록된_별명과_같은_실명은_통과한다(monkeypatch):
+    """**✅ 2026-09-17 대표 판정 — 「아이 본인 이름은 통과시키고 그 밖의 실명은 가린다」.**
+
+    **이 절반은 판정 전부터 돌고 있었다** — `제외` 가 **자녀 별명**을 받고(PRD E-2),
+    부모가 실명을 별명으로 넣었으면 **서버가 그 이름이 그 아이 것인 줄 안다.**
+    **검사가 없어서 아무도 몰랐을 뿐**이라 여기서 굳힌다.
+
+    **⛔ 이 검사가 깨지면 아이 글에서 아이 이름이 사라진다** — 2026-09-10 대표 판정이
+    **「자기 이름이 든 자기 글을 아이가 뿌듯해한다」**로 지키려던 바로 그것이다.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김서윤"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기("김서윤은 겁이 없다", 제외=("김서윤", "나침이"))
+
+    assert 가려진 == "김서윤은 겁이 없다"
+    assert 종류 == []
+
+
+@pytest.mark.usefixtures("_NER_켠다")
+async def test_본인_이름이_통과하면_성_없는_호칭도_안_가린다(monkeypatch):
+    """**⛔ 두 규칙이 겹치는 자리다.** 성 없는 호칭 가리기(2026-09-17)와 본인 통과.
+
+    **본인은 통과인데 호칭만 가려지면 「김서윤은 겁이 없다. ○○○이가 웃었다」**가 된다 —
+    **같은 사람인데 한 번은 이름이고 한 번은 마스크**다. 아이 눈에 제일 이상한 모양이다.
+
+    **화이트리스트에 걸리면 호칭을 아예 안 만드는 것**으로 지킨다.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김서윤"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기(
+        "김서윤은 겁이 없다. 서윤이가 먼저 갔다", 제외=("김서윤",)
+    )
+
+    assert 가려진 == "김서윤은 겁이 없다. 서윤이가 먼저 갔다"
+    assert 종류 == []
+
+
+@pytest.mark.usefixtures("_NER_켠다")
+async def test_본인이_아닌_이름은_호칭까지_가린다(monkeypatch):
+    """**대조군.** 위 둘이 「전부 통과」로 무너지지 않았다는 것을 본다.
+
+    **친구 이름은 그 아이가 동의한 적이 없다** — 2026-09-17 판정의 근거 첫째다.
+    """
+    from app import pii
+
+    async def _판정(text: str) -> list[str]:
+        return ["김민준"]
+
+    monkeypatch.setattr(pii, "_실명물어보기", _판정)
+
+    가려진, 종류 = await pii.실명까지가리기("김민준이랑 갔다. 민준이가 먼저 갔다", 제외=("김서윤",))
+
+    assert "민준" not in 가려진
+    assert 종류 == ["name"]
+
+
+@pytest.mark.usefixtures("_NER_켠다")
 async def test_전체_이름을_먼저_지운다_성이_남지_않는다(monkeypatch):
     """**⛔ 순서가 틀리면 성이 남는다.**
 
