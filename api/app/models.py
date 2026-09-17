@@ -305,6 +305,26 @@ class ChapterTurn(Base):
             "라벨이라 책에는 안 들어간다 (input_type 으로 가른다)"
         ),
     )
+    # **⛔ 위 `text` 와 성격이 다르다. 규칙을 옮겨 오지 마라** (2026-09-17).
+    # `text` 는 **아이가 쓴 글**이라 `api/CLAUDE.md` 8~9행의 **책 콘텐츠 예외**가 걸리고
+    # **A-7 이 그 값으로 책 한 장을 만든다.** 이 칸은 **AI 가 쓴 글**이다 —
+    # **책에 안 실리고**, 그 예외와 **무관**하다.
+    #
+    # **왜 생겼나** — GM 이 말한 것이 **어디에도 저장되지 않아** 다음 턴에 되먹일 수가
+    # 없었다. 09-17 한 판에서 **4턴이 밝힌 사건의 원인(수정 구슬 지팡이)이 그 뒤 한
+    # 번도 안 나온 채 완결**했다. **잊는 게 아니라 기억할 방법이 없었다** —
+    # `chapters.narrative` 는 **마지막 하나**뿐이라 새로고침 복구용이지 기억이 아니다.
+    #
+    # **⛔ 이 칸을 요약 재료로만 쓴다**(`chapter_state.요약재료()`). 프롬프트에 통째로
+    # 붙이지 않는다 — **요약기가 접게** 둔다. 안 접으면 턴이 갈수록 프롬프트가 커지고
+    # **아이가 기다리는 시간이 는다.**
+    gm_narrative: Mapped[str | None] = mapped_column(
+        Text,
+        comment=(
+            "그 턴의 GM 서사. AI 가 쓴 글이라 책에 안 실린다 — text 와 가른다. "
+            "요약 재료로 되먹여 GM 이 자기가 한 말을 잇게 한다 (PRD A-2)"
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

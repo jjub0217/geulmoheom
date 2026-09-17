@@ -333,7 +333,9 @@ async def create_turn(
     # **8. 상태 추출기 — 매 턴** (계약 2절 8번). **9. 요약기 — 3턴마다** (사용자 판정).
     # **⛔ 둘 다 실패해도 턴은 지나간다** — 서사는 이미 나왔고 이것들은 그 다음이다.
     새상태 = await _상태갱신(챕터.state, 출력.narrative)
-    새상태 = await _요약갱신(새상태, 진행.턴, [*지난턴들, _막턴(진행, 평가.grade, 문장)])
+    새상태 = await _요약갱신(
+        새상태, 진행.턴, [*지난턴들, _막턴(진행, 평가.grade, 문장, 출력.narrative)]
+    )
 
     await 저장소.굴리기(
         session,
@@ -470,15 +472,22 @@ class _막한턴:
 
     **⛔ 이번 턴을 빼면 3턴 갱신이 「1..M-1」만 덮어 구멍이 난다** — 그 구멍이
     이 설계가 막으려던 바로 그것이다.
+
+    **⛔ `gm_narrative` 가 2026-09-17 에 붙었고, 여기가 제일 빠지기 쉬운 자리다.**
+    요약이 **저장보다 먼저** 돌아서(위 순서), **이번 턴만 합성 객체로 들어간다.**
+    여기에 안 실으면 **이번 턴의 GM 서사가 요약에서 빠지고**, 그 턴이 바로
+    **제일 최근에 밝혀진 사실**이라 **잃으면 제일 아프다.**
+    **검사가 이 자리를 본다** (`test_chapter_state.py`).
     """
 
-    def __init__(self, turn_no: int, beat: str, grade: str, text: str) -> None:
+    def __init__(self, turn_no: int, beat: str, grade: str, text: str, gm_narrative: str) -> None:
         self.turn_no, self.beat, self.grade, self.text = turn_no, beat, grade, text
+        self.gm_narrative = gm_narrative
         self.input_type = "free"
 
 
-def _막턴(진행, 등급: str, 문장: str) -> _막한턴:
-    return _막한턴(진행.턴, 진행.비트, 등급, 문장)
+def _막턴(진행, 등급: str, 문장: str, 서사: str) -> _막한턴:
+    return _막한턴(진행.턴, 진행.비트, 등급, 문장, 서사)
 
 
 async def _상태갱신(지금: dict, 서사: str) -> dict:

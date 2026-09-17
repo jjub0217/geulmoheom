@@ -118,6 +118,71 @@ async def test_요약이_그_시점까지_전부를_덮는다(client: TestClient
     assert len(둘째갱신) == 6  # 4~6 이 아니라 1~6 이다
 
 
+async def test_요약_재료에_GM_서사가_들어간다(client: TestClient, _체인을_갈아끼운다: dict):
+    """**⛔ 2026-09-17 — 없던 칸이다. GM 이 말한 것이 어디에도 저장되지 않았다.**
+
+    09-17 한 판에서 **4턴이 밝힌 사건의 원인(수정 구슬 지팡이)이 그 뒤 한 번도 안 나온
+    채 완결**했다. 원인은 **요약기가 나빠서가 아니라 재료에 GM 글이 없어서**였다 —
+    **없는 것을 요약할 수는 없다.** `chapters.narrative` 는 **마지막 하나**뿐이라
+    새로고침 복구용이지 기억이 아니다.
+
+    **⛔ 이 검사가 빨개지면 이야기가 다시 앞뒤가 안 맞기 시작한다.** 그리고 그건
+    **한 판을 끝까지 돌려 사람이 읽어야** 드러나서, **여기서 안 잡으면 늦게 잡힌다.**
+    """
+    판 = client.post(챕터).json()
+
+    _턴돌리기(client, 판, 3)
+
+    (첫갱신,) = _체인을_갈아끼운다["요약재료"]
+    assert all("gm" in 한턴 for 한턴 in 첫갱신), "GM 서사가 재료에 없다"
+    assert all(한턴["gm"] for 한턴 in 첫갱신)
+
+
+async def test_아이_글과_GM_글이_재료에서_갈려_있다(client: TestClient, _체인을_갈아끼운다: dict):
+    """**⛔ 두 칸은 성격이 다르다** — `input` 은 **아이가 쓴 글**이라 책 콘텐츠이고
+    (`api/CLAUDE.md` 8~9행), `gm` 은 **AI 가 쓴 글**이라 책에 안 실린다.
+
+    **한 칸에 합치면 그 갈림이 사라지고**, 다음 사람이 **아이 원문 규칙을 GM 글에
+    적용하거나 그 반대를 한다.** 재료에서부터 갈라 둔다.
+    """
+    판 = client.post(챕터).json()
+
+    _턴돌리기(client, 판, 3)
+
+    (첫갱신,) = _체인을_갈아끼운다["요약재료"]
+    한턴 = 첫갱신[0]
+    assert 한턴["input"] != 한턴["gm"]
+    assert 문장 in 한턴["input"]
+
+
+async def test_요약_지시가_GM_이_밝힌_것을_남기라고_말한다(
+    client: TestClient, _체인을_갈아끼운다: dict
+):
+    """**⛔ 재료만 넣고 지시를 안 고치면 모델이 그것을 버린다.**
+
+    종전 지시는 **「아이가 한 일과 그 결과만 남겨라」**였다. 재료에 `gm` 을 넣어 놓고
+    그대로 두면 **줄일 것이 두 배가 됐는데 남길 것은 그대로**라, 모델이 **GM 이 밝힌
+    사실을 먼저 버린다** — **칸을 만든 이유가 통째로 사라진다.**
+    """
+    from app import chapter_state
+
+    지시들: list[str] = []
+
+    async def _받아적기(모델, 지시, 프롬프트):
+        지시들.append(지시)
+        return None
+
+    import pytest
+
+    with pytest.MonkeyPatch.context() as 잠깐:
+        잠깐.setattr(chapter_state, "_한덩이", _받아적기)
+        await chapter_state.요약하기([{"turn": 1, "gm": "무언가 있었다"}])
+
+    (지시,) = 지시들
+    assert "gm" in 지시
+    assert "이어야" in 지시 or "남겨라" in 지시
+
+
 async def test_갱신이_밀린_턴에도_구멍이_없다(client: TestClient, _체인을_갈아끼운다: dict):
     """7·8턴은 요약이 `1..6` 에 머문다. 그래도 **원문 창(5·6·7)이 그 뒤를 덮는다.**"""
     판 = client.post(챕터).json()
