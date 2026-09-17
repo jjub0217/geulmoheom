@@ -22,7 +22,7 @@
 import { spawn } from "node:child_process";
 import { createServer, request as httpRequest } from "node:http";
 import { createServer as createTlsServer } from "node:https";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { connect } from "node:net";
 import { resolve } from "node:path";
 
@@ -250,11 +250,44 @@ await 한번돌린다("카드 시드", "uv", ["run", "python", "scripts/seed_car
  * **⛔ 안 풀리는 것 하나 — 「같은 판 안에서 등급이 갈리는 것」.** 등급이 고정이라
  * **오르는 순간**은 못 본다. **A-6 의 「보고 체득」이 그 순간이라** 그것만 완료 판정 회차 몫이다.
  *
- * **⚠ 그림은 장면 삽화가 아니라 가이드 표정 PNG 다** — **액자가 사는지**를 보는 것이지
- * **그림을 보는 게 아니다.** 안내 줄에 그렇게 적는다.
+ * **⚠ 그림을 보는 자리가 아니라 액자가 사는지를 보는 자리다.** 안내 줄에 그렇게 적는다.
  */
 const 보여줄등급 = process.env.E2E_SHOW_GRADE ?? null;
-const 보여줄그림 = 보여주기 ? `${API}/../docs/캐릭터/표정/default.png` : null;
+
+/**
+ * 액자에 먹일 그림. **⛔ 요점은 그림이 아니라 비율이다.**
+ *
+ * 진짜 삽화는 **784×1353 — 세로로 긴 것(1:1.73)**이고 가이드 표정은 **1024×1024 정사각**이라
+ * **액자가 다르게 선다.** `globals.css` 의 **`--artwork-cap`** 이 있는 이유가 그 세로 길이고,
+ * 그 주석이 **「360×640 에서 여유가 1px」**이라고 적어 뒀다.
+ * **정사각을 보고 액자를 다듬으면 그 1px 이 어디로 갔는지 아무도 모른다** (2026-09-17 PM).
+ *
+ * **셋으로 고른다 — 환경변수 → 이 기계의 삽화 캐시 → 가이드 표정.**
+ * **`.artworks/` 는 로컬 캐시라 기계마다 있는 파일이 다르고 파일명에 해시가 붙는다.**
+ * 그래서 **경로를 박지 않고 찾고, 없으면 조용히 떨어진다** — CI 와 다른 기계에서 안 깨진다.
+ */
+function 보여줄그림고르기() {
+  const 지정 = process.env.E2E_SHOW_ARTWORK;
+  if (지정) {
+    if (existsSync(지정)) return { 경로: 지정, 출처: "E2E_SHOW_ARTWORK" };
+    console.log(`[하네스] ⚠ E2E_SHOW_ARTWORK 가 가리키는 파일이 없다 — 캐시에서 찾는다: ${지정}`);
+  }
+  const 캐시 = resolve(저장소, ".artworks/artworks");
+  if (existsSync(캐시)) {
+    const 후보 = readdirSync(캐시)
+      .filter((이름) => 이름.endsWith(".jpg"))
+      .sort();
+    // 카드 삽화(`c01_…`)를 먼저 고른다 — 안내 줄에 어느 카드인지가 드러난다.
+    const 고른것 = 후보.find((이름) => /^c\d+_/.test(이름)) ?? 후보[0];
+    if (고른것) return { 경로: resolve(캐시, 고른것), 출처: `삽화 캐시 — ${고른것}` };
+  }
+  return {
+    경로: resolve(저장소, "docs/캐릭터/표정/default.png"),
+    출처: "가이드 표정 — ⚠ 1024×1024 정사각이라 진짜 삽화와 비율이 다르다",
+  };
+}
+
+const 보여줄그림 = 보여주기 ? 보여줄그림고르기() : null;
 
 const 가짜파이썬 = 보여주기
   ? [
@@ -266,7 +299,7 @@ const 가짜파이썬 = 보여주기
       보여줄등급
         ? `글 = 글응답({**기본글, "grade": ${JSON.stringify(보여줄등급)}})`
         : "글 = None",
-      `그림 = 그림응답(open(${JSON.stringify(보여줄그림)}, "rb").read())`,
+      `그림 = 그림응답(open(${JSON.stringify(보여줄그림.경로)}, "rb").read())`,
       "with 가짜앞단(글=글, 그림=그림) as f:",
       "    print(f.base_url, flush=True)",
       "    while True:",
@@ -484,8 +517,10 @@ ${https로
        pnpm 보여주기:낮게     G1 — 낮은 티어. T2 권유가 실제로 뜹니다
        pnpm 보여주기          G3 — 전설. T2 권유는 안 뜹니다(대표 판정 ①)
 
-  ⚠ 액자에 뜨는 그림은 장면 삽화가 아니라 가이드 표정 그림입니다.
-     액자가 제대로 사는지를 보는 것이지 그림을 보는 자리가 아닙니다.
+  액자에 뜨는 그림: ${보여줄그림.출처}
+  ⚠ 그림을 보는 자리가 아니라 액자가 제대로 사는지를 보는 자리입니다.
+     ⛔ 다만 비율은 진짜여야 합니다 — 삽화는 784×1353 으로 세로가 깁니다.
+        다른 그림으로 보시려면: E2E_SHOW_ARTWORK=/경로/그림.jpg pnpm 보여주기
   ⛔ 이건 이 기계의 임시 서버입니다. 운영이 켜진 것이 아닙니다.
 
   끄기: Ctrl+C
