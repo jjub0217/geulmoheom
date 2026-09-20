@@ -58,6 +58,24 @@ class ChapterState(BaseModel):
     location: str
 
 
+class ChapterTurnView(BaseModel):
+    """이어하기 화면이 보여 줄 「지금까지 쓴 것」 한 줄 (`Stage1.md` 1절).
+
+    **⛔ 저장된 것을 읽어 보내는 것뿐이다.** `chapter_turns` 에 **아이 원문(`text`)**도
+    **GM 서사(`gm_narrative`)**도 이미 있다 — **새로 저장하는 것이 없다.**
+
+    **⛔ 등급이 여기 없다.** `grades` 를 안 내보내는 기존 규칙 그대로다 —
+    **내보내면 화면이 그것을 점수로 그린다**(`용어사전.md` 8장 금지어).
+    """
+
+    turn: int
+    # **마스킹을 지난 저장값 그대로** (계약 2절 11번). **화면이 다시 가리지 않는다.**
+    text: str
+    # **없으면 `null`** — `gm_narrative` 칸이 2026-09-20 에 생겨서 **그 전에 시작한
+    # 판에는 값이 없다.** 빈 문자열로 채우면 **「GM 이 아무 말도 안 한 턴」과 구분이 안 된다.**
+    narrative: str | None = None
+
+
 class ChapterView(BaseModel):
     """`POST /chapters` · `GET /chapters/current` 의 응답 (`Stage1.md` 1절).
 
@@ -80,6 +98,17 @@ class ChapterView(BaseModel):
     artwork: ArtworkRef | None = None
     # 시작·이어하기에도 글쓰기와 나침반의 관계를 안내한다.
     guide: Guide | None = None
+    # **⛔ 2026-09-21 명세 변경** (`Stage1.md` 1절 · PM `37a6988` · 사용자 판정).
+    # **쌓이는 것이 화면에 안 보였다** — 아이가 몇 턴을 써도 **완결해야 비로소 책에서**
+    # 자기 글을 본다. **「글이 쌓여 책이 된다」가 약속인데 쌓이는 게 안 보였다.**
+    #
+    # **⛔ `state` 안이 아니라 형제 자리다.** 바로 위 「`state` 는 부분집합만」이 막은
+    # 것은 **「원문을 상태에 섞는 것」**이지 **「아이에게 자기 글을 돌려주는 것」**이
+    # 아니다 — `GET /book` 이 이미 그것을 한다.
+    #
+    # **⛔ `POST /turns` 에는 없다.** 화면이 방금 받은 턴을 이어 붙이면 되고,
+    # **매 턴 전체를 다시 보내면 턴이 갈수록 응답이 불어난다.**
+    turns: list[ChapterTurnView] = Field(default_factory=list)
 
 
 class TurnRequest(BaseModel):

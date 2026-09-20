@@ -1,7 +1,7 @@
 """본편 동료는 실제 진행에 맞춰 안내하며, 등급이나 아이 원문을 추정하지 않는다."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -27,6 +27,12 @@ async def test_시작과_이어하기가_같은_나침반_안내를_준다(턴: 
 
     session = AsyncMock()
     session.scalar.return_value = None
+    # **`_보기` 가 2026-09-21 부터 「지금까지 쓴 것」을 같이 읽는다** (`Stage1.md` 1절).
+    # 이 검사가 재는 것은 **나침반 안내**뿐이라 그 조회는 비워 둔다 — 실제 조회는
+    # `test_chapter_state.py` 가 DB 로 잰다.
+    결과 = MagicMock()
+    결과.scalars.return_value = []
+    session.execute.return_value = 결과
     보기 = await stage1._보기(session, 챕터)
 
     assert 보기.guide is not None

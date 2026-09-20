@@ -18,6 +18,8 @@
 아니라 조립이다.
 """
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -194,6 +196,75 @@ async def test_갱신이_밀린_턴에도_구멍이_없다(client: TestClient, _
     # **최근 3턴 창 + 이번 턴 입력 = 넷이다.** 처음에 셋으로 썼는데 **검사가 틀렸다** —
     # `[이번 턴 입력]` 칸을 잊었다. **창이 넘치지 않는다는 것**이 재려던 값이다
     assert 마지막프롬프트.count(문장) == 상태기.원문창 + 1
+
+
+# ── 이어하기에 「지금까지 쓴 것」이 실린다 ────────────────
+
+
+async def test_이어하기가_지금까지_쓴_것을_돌려준다(client: TestClient):
+    """**⛔ 2026-09-21 명세 변경** (`Stage1.md` 1절 · 사용자 판정).
+
+    **아이가 쌓은 것이 화면에 안 보였다** — 몇 턴을 써도 **완결해야 비로소 책에서**
+    자기 글을 봤다. **「글이 쌓여 책이 된다」가 약속인데 쌓이는 게 안 보였다.**
+
+    **⭐ 저장할 것을 새로 만들지 않았다** — `text` 도 `gm_narrative` 도 이미 있었다.
+    """
+    판 = client.post(챕터).json()
+    _턴돌리기(client, 판, 3)
+
+    쓴것 = client.get(f"{챕터}/current").json()["turns"]
+
+    assert [것["turn"] for 것 in 쓴것] == [1, 2, 3], "오름차순 전부여야 한다"
+    assert all(문장 in 것["text"] for 것 in 쓴것)
+    assert all(것["narrative"] for 것 in 쓴것), "그 턴의 GM 서사가 같이 와야 한다"
+
+
+async def test_이어하기의_턴에_등급이_안_실린다(client: TestClient):
+    """**⛔ 내보내면 화면이 그것을 점수로 그린다** (`용어사전.md` 8장 금지어).
+
+    같은 절이 `state` 에서 `grades` 를 막아 둔 이유 그대로다. **새 자리가 생겼다고
+    그 규칙이 안 따라오면 막아 둔 값이 옆문으로 나간다.**
+    """
+    판 = client.post(챕터).json()
+    _턴돌리기(client, 판, 1)
+
+    (한턴,) = client.get(f"{챕터}/current").json()["turns"]
+
+    assert set(한턴) == {"turn", "text", "narrative"}
+
+
+async def test_고른_턴은_아이_글로_안_실린다(client: TestClient):
+    """**⛔ 고른 턴의 `text` 는 GM 이 쓴 선택지 라벨이다** — 아이가 쓴 글이 아니다.
+
+    실으면 **아이 화면의 「내가 쓴 것」에 남의 글이 섞인다.** **책이 `input_type`
+    으로 가르는 것과 같은 규칙**이다(`models.py` `ChapterTurn`).
+
+    **`adr/0017` 뒤로는 안 생기지만 과거 판에 남아 있다** — 그래서 막아 둔다.
+    """
+    from app.models import ChapterTurn
+
+    판 = client.post(챕터).json()
+    _턴돌리기(client, 판, 1)
+
+    async with db.SessionLocal() as 세션:
+        세션.add(
+            ChapterTurn(
+                chapter_id=uuid.UUID(판["chapter_id"]),
+                turn_no=2,
+                beat="explore",
+                grade="G2",
+                input_type="choice",
+                char_len=10,
+                text="난간을 붙잡고 올라간다",
+                gm_narrative="그 선택으로 이야기가 이어졌다",
+            )
+        )
+        await 세션.commit()
+
+    쓴것 = client.get(f"{챕터}/current").json()["turns"]
+
+    assert [것["turn"] for 것 in 쓴것] == [1]
+    assert all("난간을 붙잡고" not in 것["text"] for 것 in 쓴것)
 
 
 # ── 상태가 누적되고 살아남는다 ────────────────────────────

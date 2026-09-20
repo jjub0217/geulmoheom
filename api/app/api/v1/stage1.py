@@ -62,6 +62,7 @@ from app.schemas.stage0 import ArtworkRef, Guide
 from app.schemas.stage1 import (
     ChapterState,
     ChapterSummary,
+    ChapterTurnView,
     ChapterView,
     Choice,
     HeroState,
@@ -147,7 +148,33 @@ async def _보기(session: Session, 챕터: Chapter) -> ChapterView:
         turns_left=저장소.남은턴(챕터),
         artwork=_삽화참조(await _최근챕터삽화(session, 챕터.id)),
         guide=Guide(expression="default", line=카드첫말()),
+        turns=await _지금까지쓴것(session, 챕터),
     )
+
+
+async def _지금까지쓴것(session: Session, 챕터: Chapter) -> list[ChapterTurnView]:
+    """이 판에서 아이가 쓴 것과 그 턴의 GM 서사 (2026-09-21 명세 변경 · `Stage1.md` 1절).
+
+    **⛔ 아이가 쌓은 것이 화면에 안 보였다.** 몇 턴을 써도 **완결해야 비로소 책에서**
+    자기 글을 봤다. **「글이 쌓여 책이 된다」가 약속인데 쌓이는 게 안 보였다.**
+
+    **⭐ 저장할 것을 새로 만들지 않는다** — `text` 도 `gm_narrative` 도 이미 있다.
+    **읽어 보내기만 한다.**
+
+    **⛔ 고른 턴은 뺀다** (`input_type == "choice"`). 그 `text` 는 **GM 이 쓴 선택지
+    라벨**이라 **아이가 쓴 글이 아니다.** 실으면 **아이 화면에 「내가 쓴 것」으로
+    남의 글이 섞인다.** **책이 `input_type` 으로 가르는 것과 같은 규칙**이다
+    (`models.py` `ChapterTurn`). **`adr/0017` 뒤로는 안 생기지만 과거 판에 남아 있다.**
+
+    **⛔ 자르지 않는다** — 한 챕터가 10~12턴이라 **상한이 이미 구조에 있다.**
+
+    **⛔ 등급을 안 싣는다** — 내보내면 **화면이 그것을 점수로 그린다**(금지어).
+    """
+    return [
+        ChapterTurnView(turn=것.turn_no, text=것.text, narrative=것.gm_narrative)
+        for 것 in await 저장소.턴들(session, 챕터.id)
+        if 것.input_type != "choice"
+    ]
 
 
 def _상태보기(상태: dict) -> ChapterState:
