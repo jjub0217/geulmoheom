@@ -410,7 +410,7 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
     티어이름.rare,
     결과가이드.line,
     버튼.다시써보기,
-    버튼.다음장면열기,
+    버튼.새이야기만나기,
     내책라벨,
   ]);
   expect(화면).not.toContain(못닿음.보내기);
@@ -1833,6 +1833,9 @@ test("튜토리얼이 아닌 날엔 홈에 모험으로 가는 문이 있다", a
   await expect(page.locator("[data-모험문]")).toContainText(모험문.기다린다);
   const 문 = page.getByRole("link", { name: 모험문.떠나기 });
   await expect(문).toHaveAttribute("href", "/chapter");
+  await expect(page.locator("[data-모험문툴팁]")).toBeHidden();
+  await 문.hover();
+  await expect(page.locator("[data-모험문툴팁]")).toHaveText("다음에 무슨 일이 일어날지 직접 쓰면, 네 글대로 이야기가 이어져.");
 });
 
 test("하던 이야기가 있으면 그리로 보낸다 — 「이어서」를 안 쓴다", async ({ page }) => {
