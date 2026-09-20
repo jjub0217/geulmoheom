@@ -11,6 +11,7 @@
 import asyncio
 import io
 import logging
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,8 +21,79 @@ from app.evaluator import TIER_BY_GRADE
 from app.logging_config import SAFE_EXTRA_KEYS
 from app.moderation import 검사
 from app.scene_cards import 모험카드들
+from scripts import gen_fallback_art
 
 아이문장 = "은빛 검을 들고 그림자 뒤로 살금살금 돌아간다"
+
+
+def test_카드와_챕터_공통_생성에서_정사각형을_요청한다(monkeypatch):
+    요청들 = []
+
+    async def generate_content(**요청):
+        요청들.append(요청)
+        그림 = SimpleNamespace(data=b"test-image", mime_type="image/png")
+        내용 = SimpleNamespace(parts=[SimpleNamespace(inline_data=그림)])
+        return SimpleNamespace(candidates=[SimpleNamespace(content=내용)])
+
+    클라이언트 = SimpleNamespace(
+        aio=SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=generate_content,
+            )
+        )
+    )
+    monkeypatch.setattr(artwork, "get_client", lambda: 클라이언트)
+
+    assert asyncio.run(artwork._한번("test-model", "test scene", b"test-reference")) == (
+        b"test-image",
+        "image/png",
+    )
+    assert len(요청들) == 1
+    설정 = 요청들[0]["config"].model_dump(by_alias=True, exclude_none=True)
+    assert 설정["imageConfig"] == {"aspectRatio": "1:1"}
+    assert 설정["responseModalities"] == ["IMAGE"]
+    assert 설정["seed"] == 12345
+
+
+def test_기본_삽화_후보도_정사각형을_요청한다(monkeypatch, tmp_path):
+    from app import llm
+
+    요청들 = []
+
+    async def generate_content(**요청):
+        요청들.append(요청)
+        # 그림 없는 응답으로 끝내 실제 생성·파일 저장 없이 요청 설정만 검사한다.
+        return SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[]))])
+
+    async def 통과(_문장):
+        return SimpleNamespace(blocked=False)
+
+    async def 비용기록안함(*_args, **_kwargs):
+        return None
+
+    클라이언트 = SimpleNamespace(
+        aio=SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=generate_content,
+            )
+        )
+    )
+    monkeypatch.setattr(llm, "get_client", lambda: 클라이언트)
+    monkeypatch.setattr(gen_fallback_art, "_설정된모델", lambda: "test-model")
+    monkeypatch.setattr(gen_fallback_art, "레퍼런스바이트", lambda: b"test-reference")
+    monkeypatch.setattr(gen_fallback_art, "내보내도되나", 통과)
+    monkeypatch.setattr(gen_fallback_art, "record_usd", 비용기록안함)
+    monkeypatch.setattr(gen_fallback_art, "OUT", tmp_path)
+    monkeypatch.setattr(gen_fallback_art, "시드들", [11, 22])
+
+    asyncio.run(gen_fallback_art.main())
+
+    설정들 = [요청["config"].model_dump(by_alias=True, exclude_none=True) for 요청 in 요청들]
+    assert len(설정들) == 2
+    assert [설정["seed"] for 설정 in 설정들] == [11, 22]
+    for 설정 in 설정들:
+        assert 설정["imageConfig"] == {"aspectRatio": "1:1"}
+        assert 설정["responseModalities"] == ["IMAGE"]
 
 
 def _고정(monkeypatch: pytest.MonkeyPatch, 결과: 검사 | Exception) -> None:

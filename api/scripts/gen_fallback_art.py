@@ -64,7 +64,12 @@ async def main() -> None:
                 types.Part.from_bytes(data=레퍼런스, mime_type="image/png"),
                 프롬프트문,
             ],
-            config=types.GenerateContentConfig(response_modalities=["IMAGE"], seed=시드),
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                seed=시드,
+                # 카드·챕터와 같은 정사각형 판형으로 기본 삽화도 준비한다.
+                image_config=types.ImageConfig(aspect_ratio="1:1"),
+            ),
         )
         await record_usd(장당USD, kind="image")
 

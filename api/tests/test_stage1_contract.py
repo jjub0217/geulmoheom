@@ -8,8 +8,8 @@
 
 1. **`/openapi.json` 에 뜬다** — 프론트의 `types.gen.ts` 가 여기서 나온다.
    **문서가 아니라 이 스키마가 SSOT 다**
-2. **`choice_id` 와 `text` 중 정확히 하나** — **챕터를 보기 전에 막힌다.**
-   그래서 판이 없어도 이 검사는 그대로 선다
+2. **직접 쓴 `text`만 받는다** — 선택지 제출은 **챕터를 보기 전에 막힌다.**
+   이전 클라이언트의 `choice_id`에도 직접 쓰기 안내를 돌려준다
 3. **인증이 진짜다** — 목이라고 문을 열어 뒀으면 **목이 사라질 때 그 자리가 안 닫혔다.**
    안 열어 뒀고, 그래서 이 검사가 그때도 지금도 같다
 4. **「보스」가 명세에 없다** (금지어)
@@ -21,6 +21,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.v1 import stage1
 from app.main import create_app
 
 pytestmark = pytest.mark.anyio
@@ -63,20 +64,34 @@ def test_보스라는_낱말이_계약에_없다():
     assert "boss" not in 명세.lower()
 
 
-# ── 둘 중 하나 ──────────────────────────────────────────
+# ── 직접 쓰기만 ─────────────────────────────────────────
 
 
-async def test_choice_id_와_text_가_둘_다_오면_422(client: TestClient):
-    """**목에서도 진짜로 도는 검사다.** 안 막으면 프론트가 둘 다 보내는 화면을 만든다."""
-    응답 = client.post(턴, json={"chapter_id": "x", "choice_id": "c1", "text": "지도를 짚는다"})
+@pytest.mark.parametrize(
+    "입력",
+    [
+        {"choice_id": "c1"},
+        {"choice_id": ""},
+        {"choice_id": "c1", "text": "지도를 짚는다"},
+        {"text": " \t\n "},
+        {},
+    ],
+)
+async def test_직접쓰기_아닌_요청은_챕터를_보기_전에_422(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, 입력: dict
+):
+    async def _조회하면_안됨(*_):
+        pytest.fail("직접 쓰기 확인 전에 챕터를 조회했다")
+
+    monkeypatch.setattr(stage1.저장소, "진행중", _조회하면_안됨)
+    응답 = client.post(턴, json={"chapter_id": "x", **입력})
 
     assert 응답.status_code == 422
-
-
-async def test_choice_id_도_text_도_없으면_422(client: TestClient):
-    응답 = client.post(턴, json={"chapter_id": "x"})
-
-    assert 응답.status_code == 422
+    assert 응답.json()["error"] == {
+        "code": "VALIDATION_ERROR",
+        "message": "어떻게 할지 직접 써 주세요.",
+        "detail": {},
+    }
 
 
 # ── 인증 ────────────────────────────────────────────────

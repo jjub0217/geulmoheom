@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 CardType = Literal["crisis", "discovery", "encounter"]
 Tier = Literal["basic", "rare", "legendary"]
 # **`failed` 를 뺐다** (2026-09-08 계약 변경, `Stage0.md` 5절). 나갈 자리가 없는
-# 값이었다 — 15초 초과도, 생성 실패도, 출력 검사 차단도 전부 **안전한 기본 삽화**로
+# 값이었다 — 60초 초과도, 생성 실패도, 출력 검사 차단도 전부 **안전한 기본 삽화**로
 # 가서 `ready` 로 수렴한다 (PRD B-3 「플레이 중단 없음」).
 # **되살리려면 그 결정을 먼저 뒤집어야 한다.**
 ArtworkStatus = Literal["pending", "ready"]
@@ -147,6 +147,9 @@ class ChildMe(BaseModel):
     child_id: str
     nickname: str
     guide_name: str | None
+    # 구 버전 fixture·클라이언트도 읽을 수 있게 선택값으로 연다.
+    # 실제 `/child/me` 응답은 항상 채운다.
+    first_experience_complete: bool | None = None
     today: ChildToday
 
 
@@ -285,14 +288,14 @@ class Artwork(BaseModel):
     url: str | None
     tier: Tier
     # **설명 문구를 안 넓혔다** (2026-09-09). 2026-09-09 에 티어 폴백이 생기면서
-    # 「15초 초과」가 이 값의 전부가 아니게 됐지만, **설명만 고쳐도 `/openapi.json`
+    # 「60초 초과」가 이 값의 전부가 아니게 됐지만, **설명만 고쳐도 `/openapi.json`
     # 이 바뀌어 `web/src/api/types.gen.ts` 재생성이 따라붙는다.** 프론트 동작은
     # 하나도 안 달라지므로 **결정 잠금(`adr/0011`)의 「더 좋게」**이고, 문구는
     # `docs/api/Stage0.md` 5절(PM 몫)에서 먼저 고친다.
     #
-    # **실제 의미는 셋이다** — 15초 초과 · 같은 카드의 `legendary` 로 떨어짐 ·
+    # **실제 의미는 셋이다** — 60초 초과 · 같은 카드의 `legendary` 로 떨어짐 ·
     # 기본 에셋. 어느 쪽이든 **아이 화면에는 드러내지 않는다**.
-    fallback: bool = Field(description="15초 초과 시 기본 에셋으로 확정된 것 (B-3)")
+    fallback: bool = Field(description="60초 초과 시 기본 에셋으로 확정된 것 (B-3)")
 
 
 # ── 6. 내 책 ─────────────────────────────────────────────
@@ -304,6 +307,8 @@ class BookPage(BaseModel):
     source_id: str
     tier: Tier
     artwork_url: str | None
+    # 책을 막 열었을 때 아직 굽는 그림도 같은 소유권 확인을 거쳐 갱신한다.
+    artwork: ArtworkRef | None = None
     text: str = Field(description="아이 원문 그대로. 맞춤법·AI 보정 없음")
     achieved_at: datetime
 

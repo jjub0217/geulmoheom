@@ -8,7 +8,7 @@
 사고가 아니라 설계된 사용 방식**이다 (비전 2장 「가족 공유」) — 반드시 샌다.
 
 **`status` 는 `pending | ready` 둘뿐이다.** `failed` 는 2026-09-08 계약에서 빠졌다 —
-생성 실패도 저장 실패도 15초 초과도 전부 `ready` + `fallback` 으로 수렴한다.
+생성 실패도 저장 실패도 60초 초과도 전부 `ready` + `fallback` 으로 수렴한다.
 """
 
 import uuid
@@ -42,7 +42,10 @@ Child = Annotated[ChildRow, Depends(require_child)]
 
 @router.get("/{artwork_id}")
 async def get_artwork(artwork_id: str, 아이: Child, session: Session, request: Request) -> Artwork:
-    """프론트: 3초 뒤 첫 폴링, 이후 2초 간격, 15초 초과 시 중단 (`Stage0.md` 5절).
+    """프론트: 3초 뒤 첫 폴링, 이후 2초 간격.
+
+    카드 결과·본편은 15초, 책은 서버의 60초 확정 뒤까지 65초를 상한으로 쓴다
+    (`Stage0.md` 5절).
 
     **남의 삽화는 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
     """

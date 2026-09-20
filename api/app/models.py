@@ -367,7 +367,7 @@ class Artwork(Base):
     # 마이그레이션**이고, 여기 들어가는 값은 처음부터 URL 이 아니라 **오브젝트 키**라
     # 뜻은 안 틀린다. 판단 근거는 `app/config.py` 의 `s3_*` 주석에 있다.
     r2_key: Mapped[str | None] = mapped_column(String(255))
-    # 15초를 넘기면 기본 에셋으로 확정한다 (Stage0.md 5절 B-3)
+    # 60초를 넘기면 기본 에셋으로 확정한다 (Stage0.md 5절 B-3)
     fallback: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

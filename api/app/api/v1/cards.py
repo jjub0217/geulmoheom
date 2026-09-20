@@ -18,7 +18,7 @@ from app.api.v1.deps import Session, mock_daily_cap_reached, require_child
 from app.card_store import 모험카드들, 오늘상태, 오늘쓴카드들
 from app.card_store import 카드 as 카드읽기
 from app.errors import AppError, ErrorCode
-from app.guide_lines import 카드첫말
+from app.guide_lines import 일일카드종료대사, 카드첫말
 from app.models import Card as CardRow
 from app.models import Child as ChildRow
 from app.schemas.stage0 import Card, Today
@@ -64,9 +64,7 @@ def _오늘은끝() -> AppError:
     """소진 응답에도 `guide.line`("내일 또 보자")을 담는다 — 아이가 빈 화면을 보지 않게."""
     return AppError(
         ErrorCode.DAILY_CAP_REACHED,
-        detail={
-            "guide": {"expression": "session_end", "line": "오늘 모험은 여기까지! 내일 또 보자"}
-        },
+        detail={"guide": {"expression": "session_end", "line": 일일카드종료대사()}},
     )
 
 

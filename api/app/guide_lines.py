@@ -19,7 +19,7 @@
 import random
 import re
 from functools import lru_cache
-from typing import Final
+from typing import Final, Literal
 
 from app.config import REPO_ROOT
 from app.docs_md import 민, 읽기
@@ -89,9 +89,23 @@ def 카드첫말() -> str:
 
 
 @lru_cache
+def 일일카드종료대사() -> str:
+    """일일 카드 종료의 고정 배웅 (`문구.md` 1.10).
+
+    챕터는 완결해야 책에 쌓이므로, 턴 상한에 쓰는 번호 대사와 분리한다.
+    """
+    for 줄 in _절(종료):
+        if 줄.startswith(">") and not _대사줄.match(줄):
+            return 민(줄.lstrip("> "))
+    raise RuntimeError("문구.md 1.10 에서 카드 종료 대사를 못 읽었다. 절 모양을 확인한다")
+
+
+@lru_cache
 def 종료대사() -> list[str]:
-    """일일 상한 소진 (`문구.md` 1.10). **다섯 다 「내일」이 들어간다** — 하드 피니시는
-    가드레일이지 차단이 아니다."""
+    """챕터 일일 턴 상한 (`문구.md` 1.21 → 1.10 번호 대사).
+
+    **다섯 다 「내일」이 들어간다** — 하드 피니시는 가드레일이지 차단이 아니다.
+    """
     return _확인(_대사들(_절(종료)), "1.10 종료 인사")
 
 
@@ -247,7 +261,25 @@ def 입력창안내() -> str:
     return _표에서("### 1.18", "placeholder")
 
 
-def _표에서(절제목: str, 자리키워드: str) -> str:
+@lru_cache
+def 챕터진행대사() -> str:
+    """일반 턴에서 다음 글쓰기를 안내한다 (`문구.md` 1.18b)."""
+    return _표에서("### 1.18b", "일반 턴 진행")
+
+
+@lru_cache
+def 시련대사(상황: Literal["enter", "passed", "progress"]) -> str:
+    """서버가 확인한 시련 상황의 한 줄 (`문구.md` 1.19). 경로를 가르지 않는다."""
+    자리 = {
+        "enter": "시련에 들어설 때 — 가이드 한 줄",
+        "passed": "넘었을 때",
+        "progress": "한 번에 못 넘었을 때 (G1)",
+    }
+    # 「넘었을 때」가 「못 넘었을 때」에도 들어 있으므로 정확한 행으로 찾는다.
+    return _표에서("### 1.19", 자리[상황], 정확히=True)
+
+
+def _표에서(절제목: str, 자리키워드: str, *, 정확히: bool = False) -> str:
     """`| 자리 | 문구 |` 표에서 자리 이름으로 문구 한 칸을 꺼낸다.
 
     **자리 이름을 부분 일치로 찾는다** — 문서가 「선택지 아래 — 직접 쓰기 유도」처럼
@@ -256,6 +288,6 @@ def _표에서(절제목: str, 자리키워드: str) -> str:
     """
     for 줄 in _절(절제목):
         칸 = [민(칸) for 칸 in 줄.strip().strip("|").split("|")]
-        if len(칸) >= 2 and 자리키워드 in 칸[0] and 칸[1]:
+        if len(칸) >= 2 and (칸[0] == 자리키워드 if 정확히 else 자리키워드 in 칸[0]) and 칸[1]:
             return 칸[1]
     raise RuntimeError(f"{절제목} 에서 「{자리키워드}」 문구를 못 찾았다: {문구문서.name}")

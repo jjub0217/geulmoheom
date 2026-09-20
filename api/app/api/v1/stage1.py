@@ -26,12 +26,14 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
+from sqlalchemy import select
 
 from app import chapter_run as 진행기
+from app import chapter_skeleton as 뼈대
 from app import chapter_store as 저장소
 from app.api.v1.deps import Session, require_child
 from app.artwork import 내보내도되나, 챕터프롬프트
-from app.artwork_store import 마지막챕터삽화, 챕터굽기, 챕터삽화만들기, 챕터삽화수
+from app.artwork_store import 챕터굽기, 챕터삽화만들기, 챕터삽화수
 from app.book_store import 챕터장번호, 챕터페이지올리기
 from app.chapter_state import 상태추출, 요약재료, 요약하기, 요약할때인가, 최근원문
 from app.daily_turns import 다썼나
@@ -39,9 +41,18 @@ from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, 평가기록
 from app.events import 남기기, 이벤트
 from app.gm import 도입프롬프트, 서사, 시스템지시, 턴프롬프트
-from app.guide_lines import 완결대사, 자해대사, 종료대사, 차단대사, 하나
+from app.guide_lines import (
+    시련대사,
+    완결대사,
+    자해대사,
+    종료대사,
+    차단대사,
+    챕터진행대사,
+    카드첫말,
+    하나,
+)
 from app.middleware import current_request_id
-from app.models import Chapter
+from app.models import Artwork, Chapter
 from app.models import Child as ChildRow
 from app.moderation import 검사하기
 from app.pii import 가리기, 실명까지가리기
@@ -101,7 +112,27 @@ def _턴을다썼다() -> AppError:
     )
 
 
-def _보기(챕터: Chapter) -> ChapterView:
+async def _최근챕터삽화(session: Session, chapter_id: uuid.UUID) -> Artwork | None:
+    """이 챕터의 마지막 핵심 삽화만 읽는다.
+
+    이어 쓰기와 새로고침에서 직전 삽화가 사라지지 않게 하지만, 다른 챕터의 삽화는
+    결코 섞지 않는다. 아직 굽는 행도 그대로 돌려 프론트가 실제 상태를 폴링하게 한다.
+    """
+    return await session.scalar(
+        select(Artwork)
+        .where(Artwork.chapter_id == chapter_id)
+        .order_by(Artwork.created_at.desc())
+        .limit(1)
+    )
+
+
+def _삽화참조(삽화: Artwork | None) -> ArtworkRef | None:
+    if 삽화 is None:
+        return None
+    return ArtworkRef(artwork_id=str(삽화.id), status=삽화.status, url=None)
+
+
+async def _보기(session: Session, 챕터: Chapter) -> ChapterView:
     """행 → 계약 1절의 응답. **`state` 는 부분집합만 나간다** —
     `summary`·`recent_turns`·`grades` 는 안 실린다 (아이 원문·점수)."""
     return ChapterView(
@@ -113,7 +144,8 @@ def _보기(챕터: Chapter) -> ChapterView:
         choices=[Choice(**것) for 것 in 챕터.choices],
         state=_상태보기(챕터.state),
         turns_left=저장소.남은턴(챕터),
-        artwork=None,
+        artwork=_삽화참조(await _최근챕터삽화(session, 챕터.id)),
+        guide=Guide(expression="default", line=카드첫말()),
     )
 
 
@@ -164,7 +196,7 @@ async def open_chapter(아이: Child, session: Session) -> ChapterView:
         # **이어받은 판이다.** `turn_resume` 이 0 보다 크면 **새로고침이 이야기를
         # 안 잃었다**는 뜻이고, 그것이 이 이벤트를 남기는 이유다 (PRD 5장)
         await 남기기(아이.id, 이벤트("chapter_start", {"turn_resume": 있는것.turn}))
-        return _보기(있는것)
+        return await _보기(session, 있는것)
 
     상태 = 진행기.첫상태()
     출력 = _서사확인(await 서사(시스템지시(), 도입프롬프트(상태=상태), 턴=0))
@@ -177,7 +209,7 @@ async def open_chapter(아이: Child, session: Session) -> ChapterView:
     )
     await session.commit()
     await 남기기(아이.id, 이벤트("chapter_start", {"turn_resume": 0}))
-    return _보기(챕터)
+    return await _보기(session, 챕터)
 
 
 @router.get("/current")
@@ -191,7 +223,7 @@ async def current_chapter(아이: Child, session: Session) -> ChapterView:
         if await 저장소.오늘완결했나(session, 아이):
             raise _오늘끝났다()
         raise AppError(ErrorCode.NO_ACTIVE_CHAPTER)
-    return _보기(있는것)
+    return await _보기(session, 있는것)
 
 
 @router.get("/{chapter_id}/summary")
@@ -228,15 +260,13 @@ async def create_turn(
     session: Session,
     뒤에서: BackgroundTasks,
 ) -> TurnResult:
-    """턴 하나 (계약 2절). **선택지든 자유 묘사든 한 자리로 받는다.**
+    """아이가 직접 쓴 문장으로 턴 하나를 진행한다 (계약 2절).
 
-    **⛔ `choice_id` 와 `text` 중 정확히 하나다** — 둘 다 오거나 둘 다 없으면 422.
-    **⚠ `choice_id` 로 온 턴도 등급이 매겨진다** — 선택지 라벨을 그 아이의 입력으로
-    평가한다. **그래야 「고르기만 해도 된다」가 안 된다**(비전 1장). 다만 **G0
-    스캐폴딩은 안 띄운다** — 고른 것을 되물으면 뜻이 없다.
+    인증 의존성을 통과한 뒤, 챕터 조회·평가·상태 변경 전에 선택지 제출을 막는다.
+    `choice_id` 필드는 이전 클라이언트에 422 안내를 돌려주기 위해서만 남긴다.
     """
-    if (payload.choice_id is None) == (payload.text is None):
-        raise AppError(ErrorCode.VALIDATION_ERROR)
+    if payload.choice_id is not None or payload.text is None or not payload.text.strip():
+        raise AppError(ErrorCode.VALIDATION_ERROR, message="어떻게 할지 직접 써 주세요.")
 
     챕터 = await 저장소.진행중(session, 아이)
     if 챕터 is None:
@@ -252,7 +282,7 @@ async def create_turn(
     if await 다썼나(session, 아이):
         raise _턴을다썼다()
 
-    입력, 입력종류 = _입력고르기(payload, 챕터)
+    입력, 입력종류 = payload.text, "free"
 
     # **1~2. 검사·평가 앞에 정규식 마스킹을 세운다** (`/attempts` 와 같은 순서).
     # 저장 직전에 가리면 늦다 — 그 사이에 **검사와 평가가 원문을 프로바이더로 보낸다.**
@@ -292,7 +322,7 @@ async def create_turn(
     현재 = 저장소.진행으로(챕터)
 
     진행등급 = 평가.grade
-    if 진행기.스캐폴딩할까(평가.grade, 선택지로왔나=입력종류 == "choice"):
+    if 진행기.스캐폴딩할까(평가.grade, 선택지로왔나=False):
         되물음 = await _되묻기(아이, 챕터, 현재)
         if 되물음 is not None:
             return 되물음
@@ -370,11 +400,12 @@ async def create_turn(
     if 진행.비트 == "trial" and 진행.시련경로:
         # **4경로 사용 균형을 이 이벤트로 잰다** (PRD A-4 · 5장)
         남길것.append(이벤트("trial_path", {"path": 진행.시련경로, "passed": 진행.시련넘었나}))
+    완결삽화: ArtworkRef | None = None
     if 진행.완결:
         # **완결 = 책 한 장** (A-7). **이벤트보다 먼저 만든다** — `남기기()` 는 실패를
         # 삼키는데(측정이 아이 요청을 죽이면 안 된다) 책이 그 뒤에 있으면
         # **삼킨 실패 다음에 아이 책이 안 생긴다.** `/attempts` 와 같은 순서다
-        await _책한장(session, 아이, 챕터, 진행)
+        완결삽화 = await _책한장(session, 아이, 챕터, 진행)
         남길것.append(await _완결이벤트(session, 챕터, 진행))
     await 남기기(아이.id, *남길것)
 
@@ -390,9 +421,33 @@ async def create_turn(
         turns_left=max(0, 진행기.최대턴 - 진행.턴),
         artwork=삽화,
         chapter_done=진행.완결,
+        guide=_진행가이드(챕터.id, 진행, 대표삽화=완결삽화),
         trial_path=진행.시련경로 if 시련중 else None,
         trial_progress=진행.시련진행 if 시련중 else None,
     )
+
+
+def _진행가이드(챕터id: object, 진행: 진행기.진행, *, 대표삽화: ArtworkRef | None = None) -> Guide:
+    """진행 사실을 안내한다. 글자 수나 등급으로 표정·대사를 추정하지 않는다."""
+    if 진행.완결 and 대표삽화 is not None:
+        if 대표삽화.status == "ready":
+            return Guide(
+                expression="session_end",
+                line="이야기를 완성했어! 네가 쓴 글과 그림이 책에 담겼어.",
+            )
+        return Guide(
+            expression="session_end",
+            line="이야기를 완성했어! 네 글은 책에 담겼고, 그림도 곧 완성돼.",
+        )
+    if 진행.완결:
+        return Guide(expression="session_end", line=하나(완결대사(), 챕터id))
+    if 진행.비트 == "trial":
+        상황 = "passed" if 진행.시련넘었나 else "progress" if 진행.시련진행 > 0 else "enter"
+        return Guide(expression="default", line=시련대사(상황))
+    if 진행.턴 == 뼈대.시련턴 - 1:
+        # 8→9 제출이 시련의 첫 평가다. 그 입력을 쓰기 전에 중요한 장면을 알린다.
+        return Guide(expression="default", line=시련대사("enter"))
+    return Guide(expression="default", line=챕터진행대사())
 
 
 def _차단(챕터: Chapter, *, 현재, 자해: bool) -> TurnResult:
@@ -518,7 +573,7 @@ async def _요약갱신(상태: dict, 턴: int, 턴들: list) -> dict:
     return {**상태, "summary": 새요약} if 새요약 else 상태
 
 
-async def _책한장(session: Session, 아이: ChildRow, 챕터: Chapter, 진행) -> None:
+async def _책한장(session: Session, 아이: ChildRow, 챕터: Chapter, 진행) -> ArtworkRef | None:
     """완결한 챕터를 책 한 장으로 (A-7 · `Stage1.md` 5절).
 
     **⛔ 고른 턴을 뺀다.** 그 문장은 **GM 이 쓴 선택지 라벨**이고, 실으면 **아이가 안
@@ -526,20 +581,23 @@ async def _책한장(session: Session, 아이: ChildRow, 챕터: Chapter, 진행
 
     **⛔ 요약·다듬기가 없다** — 쓴 순서대로 이어 붙이기만 한다 (비전 2장).
 
-    **⏳ 삽화는 아직 안 붙는다** — 14번 자리다. 그때까지 장에 그림이 없다.
+    **⏳ 삽화가 굽는 중이어도 그 참조를 붙인다.** 책은 같은 삽화를 잠시 확인하다가
+    준비되면 그 면에서 바로 보여 준다. 그림이 늦어도 아이 글로 만든 장은 먼저 남는다.
     """
     턴들 = await 저장소.턴들(session, 챕터.id)
     아이가쓴것 = [것.text for 것 in 턴들 if 것.input_type == "free" and 것.text]
     # **그 챕터의 마지막 핵심 씬이 그 장의 그림이다** — **보상의 순간(9턴)**이고
     # `adr/0015` 가 「아이 문장으로 굽는 자리」로 적어 둔 그 턴이다
+    삽화 = await _최근챕터삽화(session, 챕터.id)
     await 챕터페이지올리기(
         session,
         아이,
         챕터.id,
         tier=진행기.티어(진행),
         문장들=아이가쓴것,
-        artwork_id=await 마지막챕터삽화(session, 챕터.id),
+        artwork_id=삽화.id if 삽화 is not None else None,
     )
+    return _삽화참조(삽화)
 
 
 async def _완결이벤트(session: Session, 챕터: Chapter, 진행) -> 이벤트:
@@ -558,20 +616,6 @@ async def _완결이벤트(session: Session, 챕터: Chapter, 진행) -> 이벤�
             "grades": [것.grade for 것 in 턴들],
         },
     )
-
-
-def _입력고르기(payload: TurnRequest, 챕터: Chapter) -> tuple[str, str]:
-    """선택지면 **그 라벨이 아이의 입력**이다 (계약 2절).
-
-    **없는 선택지는 평가할 것이 없다** — 422. 라벨을 지어내면 **아이가 고르지 않은
-    문장이 평가되고 서사에 반영된다.**
-    """
-    if payload.choice_id is not None:
-        라벨 = next((것["label"] for 것 in 챕터.choices if 것.get("id") == payload.choice_id), None)
-        if not 라벨:
-            raise AppError(ErrorCode.VALIDATION_ERROR)
-        return 라벨, "choice"
-    return payload.text or "", "free"
 
 
 async def _되묻기(아이: ChildRow, 챕터: Chapter, 현재) -> TurnResult | None:

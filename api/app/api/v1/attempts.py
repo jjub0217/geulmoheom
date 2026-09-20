@@ -44,7 +44,7 @@ from app.card_store import 오늘상태, 오늘쓴카드들
 from app.errors import AppError, ErrorCode
 from app.evaluator import evaluate, highlights, 평가결과, 평가기록
 from app.events import 남기기, 이벤트
-from app.guide_lines import 결과한줄, 자해대사, 종료대사, 차단대사, 하나
+from app.guide_lines import 결과한줄, 일일카드종료대사, 자해대사, 차단대사, 하나
 from app.middleware import current_request_id
 from app.models import Artwork, Card, CardAttempt
 from app.models import Child as ChildRow
@@ -128,12 +128,12 @@ def _소진() -> AppError:
     """**`guide.line` 을 같이 싣는다.** 화면은 `error.message`(존댓말) 대신 이것만
     보여준다 (`문구.md` 0장) — 아이가 빈 화면을 보지 않게.
 
-    문장은 `문구.md` 1.10 에서 읽는다. **다섯 다 「내일」이 들어간다** — 하드 피니시는
-    가드레일이지 차단이 아니고, 「그만해」로 읽히면 그 구분이 무너진다.
+    문장은 `문구.md` 1.10 의 카드 전용 고정 대사를 읽는다. 카드를 불러오는 쪽과
+    같은 배웅을 전하고, 아직 완결하지 않은 챕터의 턴 상한 대사와 분리한다.
     """
     return AppError(
         ErrorCode.DAILY_CAP_REACHED,
-        detail={"guide": {"expression": "session_end", "line": 하나(종료대사())}},
+        detail={"guide": {"expression": "session_end", "line": 일일카드종료대사()}},
     )
 
 

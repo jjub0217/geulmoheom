@@ -42,8 +42,8 @@ from app.schemas.stage0 import Tier
 
 logger = logging.getLogger(__name__)
 
-# `Stage0.md` 5절이 **15초**를 상한으로 못 박았다 — 넘으면 프론트가 폴링을 끊고
-# 서버도 기본 에셋으로 확정한다. 그래서 생성 호출이 그보다 오래 살아 있을 이유가 없다.
+# 생성 호출 자체는 **15초**를 상한으로 둔다. 서버는 검사·업로드까지 포함해 60초 뒤에만
+# 기본 에셋으로 확정하므로, 프론트는 그 확정 응답을 받을 때까지 별도로 확인한다.
 # **재시도를 두지 않는다.** 실측 평균 6.2초라 한 번 더 던지면 상한을 넘는다
 # (`benchmarks/W1-image-bench.md`).
 TIMEOUT_SECONDS: Final = 15.0
@@ -327,7 +327,12 @@ async def _한번(모델: str, 프롬프트문: str, 레퍼런스: bytes) -> tup
         ],
         # 시드를 고정한다 — 같은 카드·같은 티어는 같은 그림이 나와야 재생성이
         # 「다른 그림」이 되지 않는다 (`adr/0006` · B-5 가 W5 에서 이어받는다).
-        config=types.GenerateContentConfig(response_modalities=["IMAGE"], seed=12345),
+        config=types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
+            seed=12345,
+            # 결과와 책에서 같은 정사각형 판형을 쓴다 (2026-09-19 사용자 확정).
+            image_config=types.ImageConfig(aspect_ratio="1:1"),
+        ),
     )
     파트 = [p for p in 응답.candidates[0].content.parts if p.inline_data]
     if not 파트:

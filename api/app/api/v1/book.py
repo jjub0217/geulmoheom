@@ -16,13 +16,15 @@ from fastapi import APIRouter, Depends, Request
 
 from app.api.v1.artworks import 그림경로
 from app.api.v1.deps import Session, require_child
-from app.book_store import 삽화주소들, 세어보기, 책, 페이지들
+from app.book_store import 삽화들, 삽화주소들, 세어보기, 책, 페이지들
 from app.events import 남기기, 이벤트
+from app.models import Artwork as ArtworkRow
 from app.models import Book as BookRow
 from app.models import BookPage as PageRow
 from app.models import Child as ChildRow
 from app.pii import 실명까지가리기
 from app.schemas.stage0 import (
+    ArtworkRef,
     Book,
     BookCounts,
     BookPage,
@@ -37,7 +39,7 @@ router = APIRouter(prefix="/book", tags=["book"])
 Child = Annotated[ChildRow, Depends(require_child)]
 
 
-def _page(행: PageRow, 삽화주소: str | None) -> BookPage:
+def _page(행: PageRow, 삽화주소: str | None, 삽화: ArtworkRow | None) -> BookPage:
     return BookPage(
         page_no=행.page_no,
         source=행.source,
@@ -46,6 +48,11 @@ def _page(행: PageRow, 삽화주소: str | None) -> BookPage:
         # **저장소 주소가 아니라 우리 프록시 주소다** (미결 11-7). 굽는 중이면 `None` —
         # 미리 주면 프론트가 깨진 이미지를 그린다.
         artwork_url=삽화주소,
+        artwork=(
+            ArtworkRef(artwork_id=str(삽화.id), status=삽화.status, url=삽화주소)
+            if 삽화 is not None
+            else None
+        ),
         text=행.text,
         achieved_at=행.achieved_at,
     )
@@ -63,7 +70,8 @@ async def _펼치기(
         return 그림경로(request, artwork_id)
 
     주소 = await 삽화주소들(session, 행들, 주소만들기)
-    return 그책, [_page(행, 주소.get(행.id)) for 행 in 행들]
+    삽화 = await 삽화들(session, 행들)
+    return 그책, [_page(행, 주소.get(행.id), 삽화.get(행.id)) for 행 in 행들]
 
 
 @router.get("")

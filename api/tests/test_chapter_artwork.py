@@ -207,6 +207,21 @@ async def test_내_챕터_삽화를_폴링으로_찾는다(client: TestClient):
     assert 응답.status_code == 200, 응답.text
 
 
+async def test_새로고침해도_현재_챕터의_대표삽화를_다시받는다(client: TestClient):
+    """`GET /chapters/current` 는 메모리 밖에서도 마지막 핵심 씬을 돌려준다.
+
+    상태가 pending 이어도 id를 보존해야 브라우저가 소유권 확인을 거친 폴링을 이어 갈 수
+    있다. 이 응답이 없으면 새로고침 직후 그림 자리가 영구히 비어 있었다.
+    """
+    판 = client.post(챕터).json()
+    첫턴 = _턴(client, 판)
+
+    현재 = client.get(f"{챕터}/current")
+
+    assert 현재.status_code == 200, 현재.text
+    assert 현재.json()["artwork"] == 첫턴["artwork"]
+
+
 async def test_남의_챕터_삽화는_못_본다(client: TestClient, 학부모행, 비밀번호: str):
     """**403 으로 가르지 않는다** — 가르는 순간 「그 삽화는 존재한다」가 샌다."""
     판 = client.post(챕터).json()

@@ -1,7 +1,7 @@
 """챕터·턴 엔드포인트가 **실물로** 돈다 (A-4 · W7 3번 ② · `docs/api/Stage1.md` 1·2절).
 
 **목 검사는 `test_stage1_mock.py` 가 따로 본다** — 거기는 계약 모양(`/openapi.json` ·
-둘 중 하나 · 인증)이고, **여기는 한 판이 실제로 굴러가는지**다.
+직접 쓰기 · 인증)이고, **여기는 한 판이 실제로 굴러가는지**다.
 
 **⛔ 유료 호출을 안 한다.** GM·평가·검사는 이 파일에서 다 갈아끼운다 — 그래야
 **한 판을 끝까지 굴리는 검사가 돈이 안 든다.**
@@ -9,7 +9,7 @@
 **여기서 지키는 것**
 
 1. **새로고침이 이야기를 안 잃는다** — 두 번 열어도 같은 판, `current` 가 그 판
-2. **되묻기는 턴을 안 먹는다** (계약 4절) · **선택지로 온 G0 은 안 되묻는다** (2절)
+2. **되묻기는 턴을 안 먹는다** (계약 4절) · **선택지 제출은 평가·진행 전에 거부한다**
 3. **⛔ 차단된 입력은 GM 까지 안 간다** — 검사가 먼저다 (2절 처리 순서 1번)
 4. **⛔ 아이 원문이 이벤트에 안 남는다** (PRD 1.1b)
 """
@@ -24,6 +24,7 @@ from app import db
 from app.api.v1 import stage1
 from app.evaluator import 평가결과
 from app.gm import GM출력, 서사결과, 선택지
+from app.guide_lines import 시련대사, 완결대사, 챕터진행대사, 카드첫말
 from app.models import Chapter, Child, Event
 from app.moderation import 검사결과
 
@@ -38,12 +39,14 @@ pytestmark = pytest.mark.anyio
 def _유료호출을_끊는다(monkeypatch: pytest.MonkeyPatch) -> dict:
     """**GM·평가·검사를 다 갈아끼운다.** 센 횟수를 돌려준다 — 「GM 을 안 불렀다」를
     검사하려면 **부른 횟수**가 필요하다."""
-    센것 = {"gm": 0, "등급": "G2", "되묻기횟수": 1}
+    센것 = {"gm": 0, "검사": 0, "평가": 0, "등급": "G2", "되묻기횟수": 1}
 
     async def _통과(text: str):
+        센것["검사"] += 1
         return 검사결과(blocked=False)
 
     async def _평가(text: str, *, 기록: bool = True):
+        센것["평가"] += 1
         return 평가결과(grade=센것["등급"], signals=[], descriptors=[])
 
     async def _서사(지시: str, 프롬프트: str, *, 턴: int, 허용재시도: int = 1):
@@ -88,6 +91,7 @@ async def test_챕터를_열면_GM_도입이_실린다(client: TestClient, _유�
     assert 몸["narrative"]
     assert 몸["choices"]
     assert 몸["turns_left"] == 12
+    assert 몸["guide"] == {"expression": "default", "line": 카드첫말()}
     assert _유료호출을_끊는다["gm"] == 1
 
 
@@ -142,6 +146,7 @@ async def test_자유_묘사가_턴을_하나_올린다(client: TestClient):
     assert 몸["scaffold"] is None
     assert 몸["turns_left"] == 11
     assert 몸["chapter_done"] is False
+    assert 몸["guide"] == {"expression": "default", "line": 챕터진행대사()}
 
 
 async def test_G0_은_되묻고_턴을_안_먹는다(client: TestClient, _유료호출을_끊는다: dict):
@@ -158,6 +163,7 @@ async def test_G0_은_되묻고_턴을_안_먹는다(client: TestClient, _유료
     assert 몸["narrative"] is None
     assert 몸["turn"] == 0
     assert 몸["turns_left"] == 12
+    assert 몸["guide"] == {"expression": "compass_dim", "line": 몸["scaffold"]}
     assert _유료호출을_끊는다["gm"] == 1  # 도입 한 번뿐이다
 
 
@@ -178,23 +184,30 @@ async def test_되묻기를_못_세면_턴이_지나간다(client: TestClient, _
     assert 몸["turn"] == 1
 
 
-async def test_선택지로_온_G0_은_되묻지_않고_턴을_먹는다(
-    client: TestClient, _유료호출을_끊는다: dict
+@pytest.mark.parametrize("등급", ["G0", "G2"])
+async def test_있는_선택지도_검사와_평가_전에_거부하고_진행을_보존한다(
+    client: TestClient, _유료호출을_끊는다: dict, 등급: str
 ):
-    """**고른 것을 되물으면 뜻이 없다** (계약 2절). 그래도 턴은 지나간다."""
+    """이전 클라이언트가 유효한 선택지를 보내도 직접 쓰기를 건너뛸 수 없다."""
     판 = await _열기(client)
-    _유료호출을_끊는다["등급"] = "G0"
+    _유료호출을_끊는다["등급"] = 등급
+    호출전 = _유료호출을_끊는다.copy()
     고른것 = 판["choices"][0]["id"]
 
-    몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "choice_id": 고른것}).json()
+    응답 = client.post(턴, json={"chapter_id": 판["chapter_id"], "choice_id": 고른것})
 
-    assert 몸["scaffold"] is None
-    assert 몸["turn"] == 1
-    assert 몸["turns_left"] == 11
+    assert 응답.status_code == 422
+    assert 응답.json()["error"]["message"] == "어떻게 할지 직접 써 주세요."
+    assert _유료호출을_끊는다 == 호출전
+    현재 = client.get(f"{챕터}/current").json()
+    assert 현재["turn"] == 0
+    assert 현재["turns_left"] == 12
+    assert 현재["narrative"] == 판["narrative"]
+    assert 현재["state"] == 판["state"]
 
 
 async def test_없는_선택지를_고르면_422(client: TestClient):
-    """**라벨을 평가에 태우므로** 없는 선택지는 평가할 것이 없다."""
+    """알 수 없는 선택지도 같은 직접 쓰기 안내로 거부한다."""
     판 = await _열기(client)
 
     응답 = client.post(턴, json={"chapter_id": 판["chapter_id"], "choice_id": "없는것"})
@@ -336,12 +349,18 @@ async def test_시련을_넘으면_다음_턴이_완결이다(client: TestClient
     10턴이 `resolution` 이며 그 턴에 `chapter_done` 이다."""
     판 = await _열기(client)
     몸 = {}
-    for _ in range(10):
+    for 번 in range(1, 11):
         몸 = client.post(턴, json={"chapter_id": 판["chapter_id"], "text": 문장}).json()
+        if 번 == 8:
+            assert 몸["guide"] == {"expression": "default", "line": 시련대사("enter")}
+        elif 번 == 9:
+            assert 몸["guide"] == {"expression": "default", "line": 시련대사("passed")}
 
     assert 몸["turn"] == 10
     assert 몸["beat"] == "resolution"
     assert 몸["chapter_done"] is True
+    assert 몸["guide"]["expression"] == "session_end"
+    assert 몸["guide"]["line"] in 완결대사()
 
     async with db.SessionLocal() as session:
         행 = (await session.execute(select(Chapter))).scalar_one()

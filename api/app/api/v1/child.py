@@ -21,7 +21,7 @@ from app.auth import CHILD_COOKIE, PARENT_COOKIE, clear_auth_cookie, set_auth_co
 from app.child_auth_limit import 클라이언트IP, 기기식별자, 기기풀기, 막을까, 실패기록
 from app.errors import AppError, ErrorCode
 from app.middleware import current_request_id
-from app.models import Child
+from app.models import CardAttempt, Child
 from app.schemas.stage0 import (
     ChildAuthRequest,
     ChildAuthResponse,
@@ -32,6 +32,7 @@ from app.schemas.stage0 import (
     UpdateGuideResponse,
 )
 from app.tokens import issue
+from app.tutorial import 튜토리얼카드들
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +147,33 @@ async def me(
     아이.last_active_at = datetime.now(UTC)
     await session.commit()
 
+    튜토리얼 = 튜토리얼카드들()
+    일반시도가있나 = (
+        await session.scalar(
+            select(CardAttempt.id)
+            .where(
+                CardAttempt.child_id == 아이.id,
+                CardAttempt.card_id.not_in(튜토리얼),
+            )
+            .limit(1)
+        )
+    ) is not None
+    튜토리얼을끝냈나 = len(
+        set(
+            await session.scalars(
+                select(CardAttempt.card_id).where(
+                    CardAttempt.child_id == 아이.id,
+                    CardAttempt.card_id.in_(튜토리얼),
+                )
+            )
+        )
+    ) == len(튜토리얼)
+
     return ChildMe(
         child_id=str(아이.id),
         nickname=아이.nickname,
         guide_name=아이.guide_name,
+        first_experience_complete=일반시도가있나 or 튜토리얼을끝냈나,
         today=ChildToday(
             cards_done=아이.daily_cap if 소진 else 2,
             cap=아이.daily_cap,

@@ -70,6 +70,20 @@ async def 삽화주소들(
     return {p.id: 주소만들기(str(p.artwork_id)) for p in 페이지목록 if p.artwork_id in 준비된}
 
 
+async def 삽화들(session: AsyncSession, 페이지목록: list[BookPage]) -> dict[uuid.UUID, Artwork]:
+    """책 각 면에 연결된 삽화 행을 상태 그대로 읽는다.
+
+    주소는 준비된 삽화에만 주되, 아직 굽는 삽화의 id와 상태도 책 화면에 전달해
+    같은 소유권 확인을 거친 폴링으로 갱신할 수 있게 한다.
+    """
+    아이디들 = [p.artwork_id for p in 페이지목록 if p.artwork_id]
+    if not 아이디들:
+        return {}
+    행들 = await session.scalars(select(Artwork).where(Artwork.id.in_(아이디들)))
+    행_by_id = {행.id: 행 for 행 in 행들}
+    return {p.id: 행_by_id[p.artwork_id] for p in 페이지목록 if p.artwork_id in 행_by_id}
+
+
 async def 세어보기(session: AsyncSession, book_id: uuid.UUID) -> dict[str, int]:
     """티어별 페이지 수. **셋 다 0 으로 시작한다** — 없는 키를 프론트가 만나지 않게."""
     문 = (

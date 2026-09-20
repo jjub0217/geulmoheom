@@ -10,10 +10,18 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.v1 import attempts
+from app.api.v1 import attempts, cards
 from app.docs_md import 민
 from app.evaluator import 평가결과
-from app.guide_lines import 결과대사, 결과한줄, 복귀문구, 종료대사, 차단대사, 카드첫말
+from app.guide_lines import (
+    결과대사,
+    결과한줄,
+    복귀문구,
+    일일카드종료대사,
+    종료대사,
+    차단대사,
+    카드첫말,
+)
 from app.moderation import 검사결과
 
 
@@ -56,15 +64,16 @@ def test_복귀문구가_왜_안_되는지_설명하지_않는다():
         assert "답할 수 없" not in 줄
 
 
-@pytest.mark.parametrize("tier", ["basic", "rare", "legendary"])
-def test_티어마다_다섯이다(tier):
-    """`문구.md` 1.6 — 티어별 5개."""
-    assert len(결과대사()[tier]) == 5
+@pytest.mark.parametrize(("tier", "count"), [("basic", 1), ("rare", 5), ("legendary", 1)])
+def test_티어별_현재_결과_문구를_읽는다(tier, count):
+    """확정 문구가 하나인 단계는 같은 문장을 되풀이해 보이지 않는다."""
+    assert len(결과대사()[tier]) == count
 
 
 def test_마크다운_강조가_안_섞인다():
     """문서는 `**문장**` 으로 적혀 있다. **별표가 아이 화면에 갈 이유가 없다.**"""
     모든대사 = [
+        일일카드종료대사(),
         *종료대사(),
         *차단대사(),
         *복귀문구(),
@@ -81,6 +90,26 @@ def test_종료_인사는_다섯_다_내일을_말한다():
     """**하드 피니시를 벌로 만들지 않는다** (`문구.md` 1.10 지킬 것). 끝이 아니라
     다음이 있는 것이다 — 「그만해」로 읽히면 가드레일이 아니라 차단이 된다."""
     assert all("내일" in 줄 or "다음" in 줄 for 줄 in 종료대사())
+
+
+def test_일일카드_종료는_두_경로에서_같고_챕터_대사와_분리된다():
+    """GET·POST 소진의 배웅이 같고, 미완결 챕터에 책 저장 안내를 확장하지 않는다."""
+    from app.api.v1 import stage1
+    from app.errors import ErrorCode
+
+    기대대사 = 민(_한줄("### 1.10"))
+    assert 일일카드종료대사() == 기대대사
+    assert "내일" in 기대대사
+    for 오류 in (cards._오늘은끝(), attempts._소진()):
+        assert 오류.code == ErrorCode.DAILY_CAP_REACHED
+        assert 오류.status_code == 409
+        assert 오류.detail["guide"] == {"expression": "session_end", "line": 기대대사}
+
+    assert 기대대사 not in 종료대사()
+    턴종료 = stage1._턴을다썼다()
+    assert 턴종료.code == ErrorCode.TURN_LIMIT
+    assert 턴종료.status_code == 429
+    assert 턴종료.detail["guide"]["line"] in 종료대사()
 
 
 def test_결과_대사에_금지어가_없다():

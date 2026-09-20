@@ -7,8 +7,8 @@ PM 이 9번 착수에 그것을 다시 못 박았다. **요약·다듬기를 넣
 **⭐ 「내 책」(A0-4)이 이미 있다 — 넣는 것만 새것이다.** `book_pages` 가 `source` 로
 `card`·`chapter` 를 이미 갈라 뒀고 응답 스키마도 그렇다. **새 테이블·새 응답이 없다.**
 
-**⛔ 선택지로 넘긴 턴은 책에 안 들어간다.** 그 라벨은 **GM 이 쓴 문장**이다 —
-책에 실으면 **아이가 안 쓴 글이 아이 책에 아이 글로 남는다.**
+**⛔ 선택지 제출은 거부하고 책에는 직접 쓴 문장만 남긴다.** 선택지 라벨은
+**GM 이 쓴 문장**이라 아이 글로 실을 수 없다.
 """
 
 import pytest
@@ -65,17 +65,20 @@ def _유료호출을_끊는다(monkeypatch: pytest.MonkeyPatch) -> dict:
     return 센것
 
 
-def _한판(client: TestClient, *, 선택지턴: set[int] = frozenset()) -> dict:
-    """10턴으로 완결까지. `선택지턴` 에 든 턴은 **고르기**로 넘긴다."""
+def _한판(client: TestClient, *, 선택지시도턴: set[int] = frozenset()) -> dict:
+    """10번 직접 써서 완결한다. 선택지 시도는 거부된 뒤 같은 턴에 직접 쓴다."""
     판 = client.post(챕터).json()
     마지막 = {}
     for 번 in range(1, 11):
-        몸 = (
-            {"chapter_id": 판["chapter_id"], "choice_id": "c1"}
-            if 번 in 선택지턴
-            else {"chapter_id": 판["chapter_id"], "text": 문장들[번 % len(문장들)]}
+        if 번 in 선택지시도턴:
+            거부 = client.post(턴, json={"chapter_id": 판["chapter_id"], "choice_id": "c1"})
+            assert 거부.status_code == 422
+            assert client.get(f"{챕터}/current").json()["turn"] == 번 - 1
+        응답 = client.post(
+            턴, json={"chapter_id": 판["chapter_id"], "text": 문장들[번 % len(문장들)]}
         )
-        마지막 = client.post(턴, json=몸).json()
+        assert 응답.status_code == 200, 응답.text
+        마지막 = 응답.json()
     assert 마지막["chapter_done"] is True, 마지막
     return 판
 
@@ -92,6 +95,9 @@ async def test_완결하면_책에_한_장이_남는다(client: TestClient):
     assert len(장들) == 1
     assert 장들[0]["source_id"] == 판["chapter_id"]
     assert 장들[0]["tier"] == "rare"  # `G2` → rare (`TIER_BY_GRADE`)
+    # 굽는 중에도 artwork 참조를 건네야 책을 먼저 열어도 그 면에서 폴링할 수 있다.
+    assert 장들[0]["artwork"] is not None
+    assert 장들[0]["artwork"]["artwork_id"]
 
 
 async def test_완결_전에는_장이_안_생긴다(client: TestClient):
@@ -116,14 +122,14 @@ async def test_문장이_아이_원문_그대로다(client: TestClient):
         assert 쓴것 in 장["text"], 쓴것
 
 
-async def test_GM_이_쓴_선택지_라벨은_책에_안_들어간다(client: TestClient):
-    """**그 라벨은 GM 이 쓴 문장이다.** 책에 실으면 **아이가 안 쓴 글이 아이 책에
-    아이 글로 남는다** — 「아이 원문 그대로」가 거짓이 된다."""
-    _한판(client, 선택지턴={2, 5})
+async def test_거부된_선택지_대신_직접_쓴_열_문장만_책에_남는다(client: TestClient):
+    """선택지 시도는 진행하지 않고, 이후 직접 쓴 문장을 원래 순서로 보존한다."""
+    _한판(client, 선택지시도턴={2, 5})
 
     장 = next(것 for 것 in client.get(내책).json()["pages"] if 것["source"] == "chapter")
 
     assert "GM 이 쓴 선택지 라벨이다" not in 장["text"]
+    assert 장["text"] == "\n".join(문장들[번 % len(문장들)] for 번 in range(1, 11))
 
 
 async def test_완결_화면이_그_장_번호를_가리킨다(client: TestClient):
