@@ -53,6 +53,18 @@
 .compass-sparkle:nth-child(4) { animation-delay: -2400ms; }
 .compass-instrument[data-compass-awake="true"] .compass-sparkle { animation-play-state: running; }
 
+/* 나침반이 날아오는 **출발점 표식**이다. 보이지도 않고 **자리를 차지해서도 안 된다.**
+   ⛔ 이 규칙이 `.game-stage__world` 안에만 있어서, 밖에서는 이 빈 `span` 이
+   **그리드 한 칸을 먹었다** — 결과 화면에서 동료 그림이 말풍선 칸으로 밀려나
+   **말풍선이 좁은 칸에 접힌 채 화면 밖에 섰다** (2026-09-21 실측: 말풍선 폭 154px,
+   `y` 787 이 읽는 영역 하단 618 보다 아래). 흐름 밖에 두는 것이 이 표식의 본래 자리다. */
+.compass-source {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
 /* 소개용 복제본은 문서 흐름 밖에서만 움직인다. 최종 나침반의 자리와 크기는 바뀌지 않는다. */
 .compass-arrival-source-light {
   position: fixed;

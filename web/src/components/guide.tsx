@@ -40,6 +40,7 @@ export function GuideFigure({
   className = "",
   messageRef,
   messageClassName = "",
+  figureData,
 }: {
   guide: Guide;
   stage?: boolean;
@@ -47,13 +48,27 @@ export function GuideFigure({
   className?: string;
   messageRef?: Ref<HTMLDivElement>;
   messageClassName?: string;
+  /**
+   * `figure` 에 그대로 얹는 표식. **화면을 안 바꾸고 「이게 누구의 자리인가」만 남긴다.**
+   *
+   * **⛔ 표식이 갈래마다 따로 붙어 있어서 한쪽에서 사라졌다** (2026-09-20).
+   * 본편 동료가 **「보내는 중」 갈래에만** `data-chapter-companion` 을 달고 있었고,
+   * 평시 갈래는 이 컴포넌트를 쓰면서 표식을 잃었다 — **검사 24건이 그 요소를 못 찾았다.**
+   */
+  figureData?: Record<string, string | undefined>;
 }) {
   const introduction = useCompassIntroduction();
   const dialogue = introduction?.line === guide.line ? introduction : null;
   const speaking = dialogue !== null && dialogue.phase !== "narrative" && dialogue.phase !== "complete";
   const partial = dialogue !== null && dialogue.visible !== guide.line;
   return (
-    <figure className={`guide-figure${className ? ` ${className}` : ""}`} data-guide-phase={dialogue?.phase}>
+    <figure
+      className={`guide-figure${className ? ` ${className}` : ""}`}
+      data-guide-phase={dialogue?.phase}
+      // 표정은 서버가 준 것을 그대로 비춘다 — 프론트가 고르지 않는다 (`web/CLAUDE.md`).
+      data-expression={guide.expression}
+      {...figureData}
+    >
       {stage && <span className="compass-source" data-compass-source aria-hidden="true" />}
       <Image
         // 무대용은 같은 표정의 투명 배경본이다. 서버가 고른 표정은 그대로 둔다.

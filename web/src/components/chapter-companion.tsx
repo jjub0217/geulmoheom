@@ -32,6 +32,7 @@ export function ChapterCompanion({ guide, length, sending, messageRef }: {
         className="chapter-companion"
         messageRef={messageRef}
         messageClassName="chapter-companion-line"
+        figureData={{ "data-chapter-companion": "" }}
       />
     );
   }

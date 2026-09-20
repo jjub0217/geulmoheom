@@ -35,8 +35,21 @@ type Introduction = {
   advance: () => void;
   /** 입력 이벤트 등에서 전체 연출을 끝내는 호환 경로. */
   finish: () => void;
+  /**
+   * **연출이 어떻게 끝났나.** `phase` 만으로는 **「보고 끝낸 것」과 「건너뛴 것」이 구분되지 않는다** —
+   * 둘 다 `complete` 다.
+   *
+   * **⛔ 이 값이 필요한 이유는 검사가 아니라 사실이다.** 나침반 단계는 움직임을 줄인 환경에서
+   * **220ms 한 번**이라, 지나가고 나면 **돌았는지 아닌지를 아무도 알 수 없었다.**
+   * 눈에 보이는 것은 하나도 더하지 않고 **사실만 남긴다** (2026-09-21 사용자 지시).
+   */
+  연출완료: 완료종류;
 };
-type Playback = { encounter: string; identity: string; phase: Phase; narrativeCount: number; count: number };
+type 완료종류 = "아직" | "연출함" | "건너뜀";
+type Playback = {
+  encounter: string; identity: string; phase: Phase;
+  narrativeCount: number; count: number; 연출완료: 완료종류;
+};
 
 const IntroductionContext = createContext<Introduction | null>(null);
 
@@ -66,18 +79,22 @@ export function CompassIntroduction({
   const [state, setState] = useState<Playback>({ encounter, identity,
     phase: skipOpening ? "complete" : "narrative",
     narrativeCount: skipOpening ? Array.from(situation).length : 0,
-    count: skipOpening ? Array.from(line).length : 0 });
+    count: skipOpening ? Array.from(line).length : 0,
+    // **건너뛰고 시작한 것을 「연출했다」로 적지 않는다.** 이미 본 아이와 처음 보는 아이가 섞인다.
+    연출완료: skipOpening ? "건너뜀" : "아직" });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skip = useRef<() => void>(() => {});
   // 현재 마운트에서 끝낸 카드만 기억한다. 새로고침·재진입 때는 새 소개가 시작된다.
   const completedEncounter = useRef<string | null>(null);
 
-  const finish = useCallback(() => {
+  const finish = useCallback((건너뜀 = false) => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
     skip.current = () => {};
     completedEncounter.current = encounter;
-    setState({ encounter, identity, phase: "complete", narrativeCount: Array.from(situation).length, count: Array.from(line).length });
+    setState({ encounter, identity, phase: "complete",
+      narrativeCount: Array.from(situation).length, count: Array.from(line).length,
+      연출완료: 건너뜀 ? "건너뜀" : "연출함" });
   }, [encounter, identity, line, situation]);
   const advance = useCallback(() => skip.current(), []);
 
@@ -101,7 +118,7 @@ export function CompassIntroduction({
     };
     const show = (next: Phase) => {
       phase = next;
-      setState({ encounter, identity, phase, narrativeCount, count });
+      setState({ encounter, identity, phase, narrativeCount, count, 연출완료: "아직" });
     };
     const complete = () => {
       phase = "complete";
@@ -162,7 +179,9 @@ export function CompassIntroduction({
     };
     schedule(() => {
       // 같은 카드의 제출 응답·되묻기는 새 장면이 아니다. 초점과 입력을 유지한다.
-      if (skipOpening || completedEncounter.current === encounter) complete();
+      // **이미 본 아이다.** `complete()` 가 아니라 **건너뜀으로** 끝낸다 —
+      // 이번 진입에서 연출이 돈 것처럼 기록하면 두 아이가 구분되지 않는다.
+      if (skipOpening || completedEncounter.current === encounter) { phase = "complete"; finish(true); }
       else {
         completedEncounter.current = null;
         narrativeCount = motion.matches ? narrative.length : 0;
@@ -202,8 +221,10 @@ export function CompassIntroduction({
 
   const current = state.identity === identity ? state
     : state.encounter === encounter && state.phase === "complete"
-      ? { phase: "complete" as const, narrativeCount: Array.from(situation).length, count: Array.from(line).length }
-      : { phase: "narrative" as const, narrativeCount: 0, count: 0 };
+      // 같은 카드의 다른 대사다. **앞서 어떻게 끝냈는지를 그대로 이어받는다.**
+      ? { phase: "complete" as const, narrativeCount: Array.from(situation).length,
+          count: Array.from(line).length, 연출완료: state.연출완료 }
+      : { phase: "narrative" as const, narrativeCount: 0, count: 0, 연출완료: "아직" as const };
   return (
     // 단계가 바뀌어도 Provider와 입력창 자체를 리마운트하지 않는다.
     <IntroductionContext value={{
@@ -214,6 +235,7 @@ export function CompassIntroduction({
       phase: current.phase,
       advance,
       finish,
+      연출완료: current.연출완료,
     }}>
       {children}
     </IntroductionContext>
