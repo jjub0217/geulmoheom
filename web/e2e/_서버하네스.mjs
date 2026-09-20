@@ -280,7 +280,7 @@ function mime추정(경로) {
 function 보여줄그림고르기() {
   const 지정 = process.env.E2E_SHOW_ARTWORK;
   if (지정) {
-    if (existsSync(지정)) return { 경로: 지정, mime: mime추정(지정), 출처: "E2E_SHOW_ARTWORK" };
+    if (existsSync(지정)) return { 경로: 지정, 출처: "E2E_SHOW_ARTWORK" };
     console.log(`[하네스] ⚠ E2E_SHOW_ARTWORK 가 가리키는 파일이 없다 — 캐시에서 찾는다: ${지정}`);
   }
   // 사용자 승인(2026-09-19): 한 면이 정사각형인 그림책 판형을 보여 준다.
@@ -293,16 +293,29 @@ function 보여줄그림고르기() {
       .sort();
     // 카드 삽화(`c01_…`)를 먼저 고른다 — 안내 줄에 어느 카드인지가 드러난다.
     const 고른것 = 후보.find((이름) => /^c\d+_/.test(이름)) ?? 후보[0];
-    if (고른것) return { 경로: resolve(캐시, 고른것), mime: mime추정(고른것), 출처: `삽화 캐시 — ${고른것}` };
+    if (고른것) return { 경로: resolve(캐시, 고른것), 출처: `삽화 캐시 — ${고른것}` };
   }
   return {
     경로: resolve(저장소, "docs/캐릭터/표정/default.png"),
-    mime: "image/png",
     출처: "가이드 표정 — ⚠ 1024×1024 정사각이라 진짜 삽화와 비율이 다르다",
   };
 }
 
-const 보여줄그림 = 보여주기 ? 보여줄그림고르기() : null;
+/**
+ * **⛔ `mime` 을 갈래마다 붙이지 않는다. 여기 한 곳에서 붙인다** (2026-09-20).
+ *
+ * 처음에는 갈래마다 `mime` 을 들려 보냈는데, **2026-09-19 에 정사각 샘플 갈래가 하나 늘면서
+ * 거기만 빠졌다.** 그러면 `undefined` 가 파이썬 코드에 그대로 박혀
+ * **`NameError: name 'undefined' is not defined` 로 가짜 앞단이 뜨다 죽는다** —
+ * 그 파일이 있는 기계에서는 **`pnpm 보여주기` 가 아예 안 뜬다**(백엔드가 실측해 알려 줬다).
+ *
+ * **고친 값보다 고친 자리가 중요하다** — 갈래를 늘리는 사람이 `mime` 을 기억해야 하는 구조였다.
+ * **경로 하나로 정해지는 값이니 경로를 아는 곳에서 한 번만 뽑는다.**
+ */
+const 보여줄그림 = 보여주기 ? (() => {
+  const 고른것 = 보여줄그림고르기();
+  return { ...고른것, mime: mime추정(고른것.경로) };
+})() : null;
 
 const 가짜파이썬 = 보여주기
   ? [
