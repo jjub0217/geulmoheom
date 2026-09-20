@@ -84,7 +84,7 @@ test(`정적 빌드의 사파리도 ${모양} 원본 비율과 그림 전체를 
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
@@ -164,7 +164,7 @@ test("사파리의 낮은 화면에서도 입력 직후 보내기를 한 번 누
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill(쓴글);
   await expect(입력창).toBeFocused();
-  const 보내기 = page.getByRole("button", { name: 버튼.보내기, exact: true });
+  const 보내기 = page.getByRole("button", { name: 버튼.그림으로보기, exact: true });
   await expect(보내기).toBeInViewport();
 
   // Safari는 마우스로 버튼을 눌러도 초점을 옮기지 않는다. 입력 초점이 풀리는 순간

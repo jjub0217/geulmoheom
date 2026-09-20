@@ -18,7 +18,6 @@ import { SceneCard } from "@/components/scene-card";
 import { SessionEnding } from "@/components/session-ending";
 import { StoryOpening, StoryReading } from "@/components/story-opening";
 import { TierBadge } from "@/components/tier-badge";
-import { TierBadgeWritingIntroduction, 다시쓰기안내 } from "@/components/tier-badge-writing-intro";
 import { WrittenLine } from "@/components/written-line";
 import {
   ApiError,
@@ -473,10 +472,12 @@ export default function Home() {
             skipOpening={screen.card.card_id === restoredCard || previousResult !== null}
           >
           <div className="game-stage__world">
-            {/* **튜토리얼 여는 말** (`문구.md` 1.22 · A-6). **T1 에서 카드보다 먼저**다 —
-                **쓰는 것이 곧 깨우는 것**이라는 전제를 말한 뒤에 첫 장면이 온다.
-                **⛔ 새 화면을 만들지 않는다** — A-6 이 「루프를 설정만 바꾼다」이고,
-                안내 화면을 한 장 세우면 **첫 5~7분에 관문이 하나 생긴다.** */}
+            {/* **⛔ 화면 맨 위의 튜토리얼 여는 말을 걷어냈다** (2026-09-21 사용자 판정).
+                「나침반이 아직 자고 있어」가 **아래 말풍선의 「네가 이야기를 쓰면 반짝여」와 뜻이
+                겹쳤고**, 자고 있다·깨어난다·반짝인다 **세 설정이 한 화면에 섞였다.**
+                **나침반이 이미 화면에 보이는데 「아직 자고 있다」는 눈에 보이는 것과 안 맞는다.**
+                **⛔ 다른 것으로 채우지 않는다** — 덜어낸 자리다. 화면 이름을 대신 넣는 방안이
+                거론됐으나 그건 **없던 문구를 새로 세우는 것**이라 같은 판정에 걸린다. */}
             {/* **모험으로 들어가는 문** (`문구.md` 1.25 · W7 18번).
                 **⛔ 튜토리얼 중에는 안 그린다** — T1~T3 는 **첫 5~7분**이고
                 **A-6 이 「잠금·관문 없음」으로 세운 자리**다. 여기에 다른 길을 같이 내면
@@ -487,11 +488,6 @@ export default function Home() {
                 text.length === 0 && previousResult === null && screen.kind === "card"
                   ? <ChapterDoor /> : <BookLink disabled={screen.kind === "sending"} />
               )}
-              {튜토리얼차례(screen.card.card_id) === "t1" && (
-                <p data-튜토리얼안내 className="text-lg/relaxed text-accent">
-                  {튜토리얼문구.여는말}
-                </p>
-              )}
             </div>
             <div className="game-story">
               <SceneCard card={screen.card} />
@@ -500,9 +496,6 @@ export default function Home() {
             <GuideFigure guide={screen.guide} stage compass={<StageCompass length={text.length} />} />
           </div>
           <GameConsole>
-            <TierBadgeWritingIntroduction
-              onConfirm={() => document.querySelector<HTMLTextAreaElement>(".game-console textarea")?.focus()}
-            />
             {/* 입력창은 **아래 전폭**이다. 오른쪽 절반에 가두면 줄이 짧아지고,
                 짧은 칸은 짧게 쓰게 만든다 — H2 합격선이 회당 150자다. */}
             <AttemptInput
@@ -512,7 +505,7 @@ export default function Home() {
               onChange={setText}
               onMasked={가림알림}
               disabled={screen.kind === "sending"}
-              보내기라벨={screen.kind === "sending" ? "그림을 준비하는 중…" : "내 이야기를 그림으로 보기"}
+              보내기라벨={screen.kind === "sending" ? 버튼.그림준비중 : 버튼.그림으로보기}
               // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
               // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
               보낼수있나={text.trim() !== "" && screen.kind !== "sending"}
@@ -550,7 +543,11 @@ export default function Home() {
               {삽화.kind !== "기다림" && (
                 <div className="result-content">
                   <WrittenLine text={text} highlights={screen.result.highlights} />
-                  <TierBadge tier={screen.result.tier} introduce />
+                  {/* **⛔ 배지 아래 「첫 안내」 줄을 걷어냈다** (2026-09-21 사용자 판정).
+                      **설명이 세 겹이었다** — 배지에 올리면 툴팁, 누르면 설명 창,
+                      그 아래 또 한 줄. **조건은 앞의 둘이 살아 있는 것**이었고
+                      `tier-badge.tsx` 의 `role="tooltip"` 과 `TierBadgeHelp` 가 그대로다. */}
+                  <TierBadge tier={screen.result.tier} />
                   <GuideFigure guide={screen.result.guide} stage />
                 </div>
               )}
@@ -562,7 +559,7 @@ export default function Home() {
                 {튜토리얼차례(screen.card.card_id) === "t2" &&
                   T2권유를띄울까(screen.result.tier) && (
                   <p data-튜토리얼안내 className="text-center text-lg/relaxed text-accent">
-                    {다시쓰기안내}
+                    {튜토리얼문구.다시쓰기권유}
                   </p>
                 )}
                 {튜토리얼차례(screen.card.card_id) === "t3" && (

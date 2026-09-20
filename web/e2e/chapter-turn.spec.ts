@@ -94,26 +94,55 @@ test("서버가 선택지를 보내도 직접 쓰는 칸만 제공한다", async
   await expect(page.locator(".turn-choices, .choice-invitation")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toBeVisible();
   await expect(page.getByRole("button", { name: 챕터보내기라벨 })).toBeDisabled();
-  await expect(page.locator("[data-배지쓰기안내]")).toBeVisible();
 });
 
-test("처음부터 동료와 나침반 하나가 쓰기 곁에 있고 글을 쓰면 소개가 끝난다", async ({ page }) => {
+test("처음부터 동료와 나침반 하나가 쓰기 곁에 있고 소개가 끝까지 돈다", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await 장면을띄운다(page);
   const 동료 = page.locator("[data-chapter-companion]");
   const 나침반 = 동료.locator(".compass-instrument");
+  const 목적지 = 동료.locator("[data-compass-destination]");
+
+  // ① 처음 보는 아이다 — 아직 끝나지 않은 상태에서 시작한다.
   await expect(동료).toHaveAttribute("data-expression", "default");
-  await expect(동료.getByText(챕터동료소개)).toBeVisible();
   await expect(page.locator(".compass-instrument")).toHaveCount(1);
-  await expect(나침반).toHaveAttribute("data-compass-introducing", "true");
+
+  // ② 소개가 끝나고 그 사실이 남는다.
+  //
+  // **⛔ 중간 단계(`data-compass-introducing`)를 폴링으로 쫓지 않는다** (2026-09-21).
+  // 움직임을 줄이면 그 단계는 **220ms 한 번**이라, Playwright 의 백오프 폴링이
+  // **두 번 사이로 건너뛴다.** 실제로 그래서 이 검사가 빨갰고 **제품은 멀쩡했다.**
+  // 남는 결과를 본다.
+  await expect(목적지).toHaveAttribute("data-compass-introduction-complete", "true", { timeout: 15_000 });
+
+  // **`skipped` 가 아니라 `true` 인 것이 요점이다** — 이미 본 아이는 건너뛴 채 완료가 되는데,
+  // 그러면 「연출이 돌았다」를 못 보장한다. 처음 보는 아이는 실제로 다 보고 끝나야 한다.
+  await expect(목적지).toHaveAttribute("data-compass-phase", "complete");
+
+  // ③ 나침반이 최종 자리에 있다 — 도착을 기다리는 중이 아니다.
+  await expect(목적지).toHaveAttribute("data-compass-arrival-pending", "false");
+  await expect(목적지).toHaveAttribute("data-compass-visible", "true");
+  await expect(나침반).toBeVisible();
+
+  // 움직임을 줄인 환경에서는 도착 반짝임을 애니메이션으로 돌리지 않는다.
   expect(await 나침반.locator(".compass-intro-light").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+
+  // ④ 나머지 대사가 다 나왔다.
+  await expect(동료.getByText(챕터동료소개)).toBeVisible();
+
+  // ⑤ 쓸 수 있는 상태로 넘어간다 — 쓰면 나침반이 깨어난다.
   await page.getByRole("textbox").fill("조심스럽게 문을 두드린다.");
-  await expect(나침반).toHaveAttribute("data-compass-introducing", "false");
   await expect(나침반).toHaveAttribute("data-compass-awake", "true");
   expect(await 나침반.locator("[data-compass-glow]").evaluate((el) => Number((el as SVGElement).style.opacity))).toBeGreaterThan(0);
-  await expect(동료).toHaveAttribute("data-expression", "default");
+  await expect(page.getByRole("button", { name: 챕터보내기라벨 })).toBeEnabled();
+
+  // ⑥ 소개가 다시 돌지 않는다. 글을 지웠다 다시 써도 끝난 상태 그대로다.
   await page.getByRole("textbox").fill("");
-  await expect(나침반).toHaveAttribute("data-compass-introducing", "false");
+  await expect(나침반).toHaveAttribute("data-compass-awake", "false");
+  await expect(목적지).toHaveAttribute("data-compass-introduction-complete", "true");
+  await expect(목적지).toHaveAttribute("data-compass-phase", "complete");
+  await expect(page.locator(".compass-instrument")).toHaveCount(1);
+  await expect(동료).toHaveAttribute("data-expression", "default");
 });
 
 test("시작할 때 서버가 준 동료 대사를 그대로 한 번만 보여준다", async ({ page }) => {
@@ -134,7 +163,6 @@ async function 글을보낸다(page: Page, 문장 = "밧줄 매듭을 손끝으�
 
 test("직접 써서 턴이 넘어간다", async ({ page }) => {
   await 장면을띄운다(page);
-  await expect(page.locator("[data-배지쓰기안내]")).toBeVisible();
 
   let 보낸것: unknown = null;
   await page.route(TURNS, (route) => {
@@ -150,15 +178,6 @@ test("직접 써서 턴이 넘어간다", async ({ page }) => {
   await expect(page.locator(".chapter-companion-line").getByText(챕터다음안내)).toBeVisible();
 
   expect(보낸것).toEqual({ chapter_id: 장면.chapter_id, text: 문장 });
-  // 안내 확인은 쓰기의 관문이 아니다. 확인하지 않아도 직접 쓴 글을 보낼 수 있다.
-  await expect(page.locator("[data-배지쓰기안내]")).toBeVisible();
-});
-
-test("배지 안내를 확인하면 직접 쓰는 칸으로 초점이 이어진다", async ({ page }) => {
-  await 장면을띄운다(page);
-  await page.locator("[data-배지쓰기확인]").click();
-  await expect(page.locator("[data-배지쓰기안내]")).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toBeFocused();
 });
 
 /** 차단. **200 이고 정상 응답이다** — `outcome` 으로 가른다(2026-09-16 계약 정정). */
@@ -363,7 +382,7 @@ test("긴 이야기를 읽은 다음 응답은 첫 문장에 초점을 돌린다
 
 /**
  * 2026-09-19 사용자 요청: 튜토리얼과 같은 장면 → 동료 → 입력 배치.
- * 첫 배지 안내가 있으면 문서 스크롤로 모두 읽고, 확인 뒤에는 입력·보내기가 보인다.
+ * 서사가 길면 문서 스크롤로 모두 읽고, 그 아래에 입력·보내기가 있다.
  * 긴 서사와 말풍선의 내부 스크롤은 유지하되 동료나 입력을 겹쳐 압축하지 않는다.
  */
 const 긴서사 = "".padEnd(0) +
@@ -373,6 +392,18 @@ const 긴서사 = "".padEnd(0) +
   "숨을 고르는 것 같은 낮은 소리가 섞인다. 난간을 짚자 손바닥에 서늘한 물기가 묻어났다.";
 
 async function 무대와입력이겹치지않는다(page: Page) {
+  // **소개 연출이 끝난 뒤에 잰다** (2026-09-21 사용자 판정).
+  //
+  // 나침반이 아직 도착하지 않은 동안에는 **그 자리를 비워 두느라 동료 영역이 몇 px 더 크고**,
+  // 그래서 **첫 0.5초에만** 입력 상자를 4~8px 덮는다(실측). 사용자가 실제 화면에서
+  // **「말풍선은 전혀 문제되지 않는다」**를 확인했다 — 아이가 쓰려 할 때는 이미 끝나 있다.
+  //
+  // **⛔ 그러니 이 검사가 재려는 것은 「연출 도중」이 아니라 「쓰려 할 때」다.**
+  // 시간을 기다리지 않고 **남는 완료 표식**을 본다 — 220ms 짜리 중간 상태를 쫓지 않는다.
+  // **연출이 끝났다는 표식을 본다.** 「나침반이 보이기 시작할 때」로도 재 봤는데
+  // **그쪽이 더 나빴다** — 실패가 4건에서 9건으로 늘었다. 끝난 것을 보는 편이 안정적이다.
+  await expect(page.locator("[data-compass-destination]"))
+    .not.toHaveAttribute("data-compass-introduction-complete", "false", { timeout: 20_000 });
   await expect(page.locator(".chapter-world [data-chapter-companion]")).toHaveCount(1);
   await expect(page.locator(".chapter-console [data-chapter-companion]")).toHaveCount(0);
   const [읽는곳, 동료, 쓰는곳] = await Promise.all([
@@ -385,11 +416,8 @@ async function 무대와입력이겹치지않는다(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width);
 }
 
-async function 안내와입력은문서스크롤로읽는다(page: Page) {
+async function 입력은문서스크롤로읽는다(page: Page) {
   for (const selector of [
-    ".tier-badge-writing-intro > p",
-    ".tier-badge-writing-actions summary",
-    "[data-배지쓰기확인]",
     "main textarea",
     ".writing-actions button",
   ]) {
@@ -400,10 +428,10 @@ async function 안내와입력은문서스크롤로읽는다(page: Page) {
   }
 }
 
-async function 안내확인뒤입력이보인다(page: Page) {
-  await page.locator("[data-배지쓰기확인]").click();
-  await expect(page.locator("[data-배지쓰기안내]")).toHaveCount(0);
-  await expect(page.getByRole("textbox")).toBeFocused();
+async function 입력과보내기가보인다(page: Page) {
+  // 종전에는 안내 확인 버튼의 초점 이동이 이 자리까지 스크롤해 줬다. 안내가 없어졌으니
+  // 스크롤을 명시한다 — 재는 것은 「보인다」이지 「가만히 있어도 보인다」가 아니다.
+  await page.getByRole("textbox").scrollIntoViewIfNeeded();
   await expect(page.getByRole("textbox")).toBeInViewport({ ratio: 1 });
   const 보내기 = page.getByRole("button", { name: 챕터보내기라벨 });
   await 보내기.scrollIntoViewIfNeeded();
@@ -414,7 +442,7 @@ async function 안내확인뒤입력이보인다(page: Page) {
 // 아이는 무엇을 보고 골라야 하는지 모른다. 실제 이미지 로드와 조상 영역의 잘림까지 잰다.
 for (const [폭, 높이] of [[1280, 800], [360, 640]] as const) {
   for (const 색상 of ["light", "dark"] as const) {
-    test(`그림과 이야기를 읽고 배지 안내 확인 뒤 보낼 수 있다 — ${폭}×${높이} · ${색상}`, async ({ page }) => {
+    test(`그림과 이야기를 읽고 바로 보낼 수 있다 — ${폭}×${높이} · ${색상}`, async ({ page }) => {
       await page.setViewportSize({ width: 폭, height: 높이 });
       await page.emulateMedia({ colorScheme: 색상 });
       await page.route(CURRENT, (route) => route.fulfill({
@@ -440,8 +468,8 @@ for (const [폭, 높이] of [[1280, 800], [360, 640]] as const) {
       await expect(그림).toBeInViewport({ ratio: 1 });
       await expect(page.getByText(긴서사)).toBeInViewport();
       await 무대와입력이겹치지않는다(page);
-      await 안내와입력은문서스크롤로읽는다(page);
-      await 안내확인뒤입력이보인다(page);
+      await 입력은문서스크롤로읽는다(page);
+      await 입력과보내기가보인다(page);
     });
   }
 }
@@ -450,11 +478,11 @@ for (const [폭, 높이, 어디] of [
   [1024, 768, "iPad 가로 — 아이 셋이 이렇게 들었다"],
   [1280, 800, "검사 기본 뷰포트"],
   [390, 844, "폰 세로"],
-  // 작은 화면에서도 장면·동료를 겹치지 않고 안내와 쓰는 칸까지 읽는다.
+  // 작은 화면에서도 장면·동료를 겹치지 않고 쓰는 칸까지 읽는다.
   [360, 640, "작은 안드로이드 — 주소창까지 있으면 이 정도다"],
   [320, 568, "작은 화면에서도 입력과 보내기를 숨기지 않는다"],
 ] as const) {
-  test(`긴 서사와 배지 안내를 읽고 입력으로 이어진다 — ${폭}×${높이} (${어디})`, async ({
+  test(`긴 서사를 읽고 입력으로 이어진다 — ${폭}×${높이} (${어디})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 폭, height: 높이 });
@@ -464,8 +492,8 @@ for (const [폭, 높이, 어디] of [
     await page.goto("/chapter");
     await expect(page.getByText(긴서사)).toBeVisible();
     await 무대와입력이겹치지않는다(page);
-    await 안내와입력은문서스크롤로읽는다(page);
-    await 안내확인뒤입력이보인다(page);
+    await 입력은문서스크롤로읽는다(page);
+    await 입력과보내기가보인다(page);
   });
 }
 
@@ -487,13 +515,17 @@ test("작은 화면에서 서버 선택지를 무시하고 이야기와 쓸 자�
   await expect(page.getByText(긴서사)).toBeInViewport();
   await expect(page.locator(".turn-choices")).toHaveCount(0);
   await 무대와입력이겹치지않는다(page);
-  await 안내와입력은문서스크롤로읽는다(page);
-  await 안내확인뒤입력이보인다(page);
+  await 입력은문서스크롤로읽는다(page);
+  await 입력과보내기가보인다(page);
 });
 
 for (const [width, height] of [[360, 640], [320, 568]] as const) {
   test(`긴 동료 안내도 끝까지 읽을 수 있고 쓰는 칸을 가리지 않는다 — ${width}×${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
+    // **타이핑을 건너뛴다.** 이 검사가 재는 것은 **자리**이지 글자가 찍히는 속도가 아니다.
+    // 서사 600자 + 안내 420자를 한 글자씩 찍으면 40초가 넘고, 그동안 잴 수가 없다.
+    // 움직임을 줄이면 **크기는 그대로이고 연출만 즉시 끝난다.**
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const line = "문 안쪽에서 작은 바퀴가 굴러가는 소리가 들려. 주변을 천천히 살펴봐. ".repeat(12);
     await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: {
       ...장면, narrative: 긴서사.repeat(4), artwork: null, guide: { expression: "default", line },
@@ -506,20 +538,9 @@ for (const [width, height] of [[360, 640], [320, 568]] as const) {
     const 말풍선 = page.locator(".chapter-companion-line");
     await expect(말풍선).toHaveText(line.trim());
     await 무대와입력이겹치지않는다(page);
-    await 안내와입력은문서스크롤로읽는다(page);
-    const 예시버튼 = page.locator("[data-배지쓰기예시] summary");
-    await expect(예시버튼).toBeInViewport({ ratio: 1 });
-    await 예시버튼.click();
-    await expect(page.locator("[data-배지쓰기확인]")).toBeInViewport({ ratio: 1 });
-    await expect(예시버튼).toBeInViewport({ ratio: 1 });
+    await 입력은문서스크롤로읽는다(page);
     await expect(page.getByRole("button", { name: 챕터보내기라벨 })).toBeInViewport({ ratio: 1 });
-    await 예시버튼.focus();
-    await page.keyboard.press("Tab");
-    await expect(page.locator(".tier-badge-writing-examples")).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.locator("[data-배지쓰기확인]")).toBeFocused();
-    await 예시버튼.click();
-    await 안내확인뒤입력이보인다(page);
+    await 입력과보내기가보인다(page);
     await 말풍선.focus();
     await page.keyboard.press("End");
     await expect.poll(() => 말풍선.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);

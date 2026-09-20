@@ -87,7 +87,7 @@ test("가입부터 책까지 한 갈래가 진짜 서버를 지난다", async ({
 
   // ── ⑤ 문장을 보내고 등급을 받는다 (B-2) ────────────────────────────
   await 입력창.fill(쓸문장);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // ── ⑥ 그림이 구워진다 (B-3) ────────────────────────────────────────
   // **가짜 앞단이 답했는지를 등급으로 문다** (백엔드가 세운 잣대 그대로).
@@ -190,7 +190,7 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   // ── ③ 직접 써서 턴이 넘어간다 (A-3) ────────────────────────────────
   const 입력창 = page.locator("main textarea");
   await 입력창.fill(챕터문장);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // **⛔ 「서사가 바뀌었다」를 잣대로 쓰지 않는다.**
   // ① **가짜 앞단은 매번 같은 서사를 준다** — 고정 픽스처라 영영 안 바뀐다
@@ -229,7 +229,7 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   const 다음응답대기 = page.waitForResponse((r) =>
     r.url().includes("/api/v1/turns") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   const 다음응답 = await 다음응답대기;
   const 보낸몸 = 다음응답.request().postDataJSON();
   expect(Object.keys(보낸몸).sort()).toEqual(["chapter_id", "text"]);

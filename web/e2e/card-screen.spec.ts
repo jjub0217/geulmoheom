@@ -19,7 +19,6 @@ import { 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
 // 튜토리얼 문구도 박지 않는다 — `docs/문구.md` **1.22** 가 SSOT 다.
 import { 튜토리얼문구 } from "../src/app/tutorial-copy";
-import { 다시쓰기안내 } from "../src/components/tier-badge-writing-intro";
 // 문도 박지 않는다 — `docs/문구.md` **1.25** 가 SSOT 다.
 import { 모험문 } from "../src/app/chapter-door-copy";
 
@@ -160,7 +159,7 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
   // **`main` 안에서 센다.** 밖까지 세면 개발 빌드의 Next 오버레이 버튼(`#next-logo`)이 함께 잡혀
   // **우리 UI 와 무관한 이유로 빨간불**이 된다 — 라우트가 둘이 되고 중간에 컴파일이 일어나자 실제로 그랬다.
   await expect(page.locator("main").getByRole("button")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: 버튼.보내기 })).toBeEnabled();
+  await expect(page.getByRole("button", { name: 버튼.그림으로보기 })).toBeEnabled();
 
   await 가로스크롤없음(page);
 
@@ -179,7 +178,10 @@ test("쓸수록 나침반이 밝아진다 — 숫자도 진행바도 없이", as
   await page.goto("/");
 
   // 빛은 그라디언트로 칠한 원 하나다. 밝기는 그 원의 `opacity` 로만 나타난다.
-  const 빛 = page.locator('main svg circle[fill^="url("]');
+  // **표식이 붙은 원 하나만 본다.** 종전에는 `fill="url(..."` 로 골랐는데 화면이 다듬어지며
+  // **그런 원이 넷**이 됐다 — 바깥 테두리·안쪽 빛까지 걸려 strict mode 에서 죽었다.
+  // 재려는 것은 **글을 쓸수록 밝아지는 그 빛**이고, 거기에만 `data-compass-glow` 가 있다.
+  const 빛 = page.locator("main svg circle[data-compass-glow]");
   const 밝기 = async () =>
     Number(await 빛.evaluate((el) => getComputedStyle(el).opacity));
 
@@ -226,7 +228,7 @@ test("쓴 것을 보낸다 — 글자 수로 잠기지 않고, retry_of 는 비�
   );
   await page.goto("/");
 
-  const 보내기 = page.getByRole("button", { name: 버튼.보내기 });
+  const 보내기 = page.getByRole("button", { name: 버튼.그림으로보기 });
   const 입력창 = page.getByLabel(CARD.prompt_label);
 
   // 아무것도 안 썼을 때만 막힌다. **30자와 무관하다.**
@@ -297,7 +299,7 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // 굽는 동안 화면의 유일한 말은 **액자 안 대기 대사**다 (`문구.md` 1.5).
   const 대기대사 = page.locator("main [data-대기대사]");
@@ -369,7 +371,7 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   const 쓴것 = "등대 계단을 한 칸씩 올라간다";
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill(쓴것);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // 굽는 동안에는 자리가 잡혀 있고 그 안에서 대기 대사가 기다린다.
   const 자리 = page.locator("main [data-삽화자리]");
@@ -387,7 +389,19 @@ test("그림이 끝내 안 와도 가이드는 그대로 그린다 — 실패 �
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
   // **아무 말도 안 한다** (`문구.md` 1.7). 금지어 목록으로 막지 않고 **화면에 남은 것을 통째로
   // 센다** — 목록은 **적어 둔 낱말만** 막지만, 여기서 막아야 하는 것은 **새 문장이 생기는 것**이다.
-  const 화면 = await page.locator("main").innerText();
+  // **장식은 글이 아니다.** `aria-hidden` 인 것(「내 책 펼치기」의 화살표 등)을 빼고 센다 —
+  // 이 검사가 잡으려는 것은 **새 문장이 생기는 것**이지 장식이 바뀌는 것이 아니다.
+  // 스크린리더도 그것을 안 읽는다.
+  const 화면 = await page.locator("main").evaluate((el) => {
+    const 사본 = el.cloneNode(true) as HTMLElement;
+    사본.querySelectorAll('[aria-hidden="true"]').forEach((장식) => { 장식.remove(); });
+    사본.style.position = "absolute";
+    사본.style.left = "-9999px";
+    el.ownerDocument.body.append(사본);
+    const 글 = 사본.innerText;
+    사본.remove();
+    return 글;
+  });
   // 줄 사이 빈 줄은 **블록이 나뉜 자국일 뿐**이라 센 것에서 뺀다. 세는 것은 **문장의 목록**이다.
   const 줄들 = 화면
     .split("\n")
@@ -452,7 +466,7 @@ test("쓴 문장이 그대로 나오고 묘사어 자리에 표시가 붙는다"
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill(쓴것);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // **한 글자도 안 잃는다.** 아이 문장은 창작물이라 표시하려다 깎으면 안 된다.
   const 문장 = page.locator("main [data-쓴문장]");
@@ -496,7 +510,7 @@ test("굽는 동안에는 쓴 문장도 표시도 안 보인다 — 표시가 �
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("낡은 문을 연다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   await expect(page.locator("main [data-대기대사]")).toBeVisible();
   await expect(page.locator("main [data-쓴문장]")).toHaveCount(0);
@@ -522,7 +536,7 @@ test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", 
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill("문을 연다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // 질문은 가이드 대사로 온다. 표정도 서버가 준 것으로 바뀐다.
   await expect(
@@ -532,7 +546,7 @@ test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", 
 
   // **입력창이 그대로 있고 쓴 문장도 그대로다.** 다시 보낼 수 있어야 한다.
   await expect(입력창).toHaveValue("문을 연다");
-  await expect(page.getByRole("button", { name: 버튼.보내기 })).toBeEnabled();
+  await expect(page.getByRole("button", { name: 버튼.그림으로보기 })).toBeEnabled();
 });
 
 test("차단돼도 쓴 문장을 지우지 않는다", async ({ page }) => {
@@ -558,7 +572,7 @@ test("차단돼도 쓴 문장을 지우지 않는다", async ({ page }) => {
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill("문을 열고 들어간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   await expect(page.getByText("다르게 말해줄래?")).toBeVisible();
   await expect(입력창).toHaveValue("문을 열고 들어간다");
@@ -613,7 +627,7 @@ test("여섯 번째를 보내도 가이드가 말한다 — 두 목소리가 나
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("문을 연다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // **목소리 규칙** (`문구.md` 0장) — 한 화면에 둘이 오면 `guide.line` 만 나온다.
   // 여기가 빠져 있어 **보내는 쪽만 앱 목소리로 떨어졌다**: 가이드가 하던 말이 갑자기 존댓말이 된다.
@@ -701,7 +715,7 @@ test("개인정보를 쓰면 그 자리에서 가려진다 — 막지 않고 가
   await page.goto("/");
 
   const 입력창 = page.getByLabel(CARD.prompt_label);
-  const 보내기 = page.getByRole("button", { name: 버튼.보내기 });
+  const 보내기 = page.getByRole("button", { name: 버튼.그림으로보기 });
 
   await 입력창.fill("등대지기한테 010-1234-5678 로 전화한다");
 
@@ -850,7 +864,7 @@ test("보내기가 못 닿으면 쓴 문장을 지킨다 — 화면을 넘기지
   const 문장 = "낡은 등대 문틈으로 손전등을 비추자 젖은 발자국이 이어져 있었다";
   const 입력창 = page.getByLabel(CARD.prompt_label);
   await 입력창.fill(문장);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // **`문구.md` 2.4 뼈대다** — 장면을 못 연 것이 아니라 **못 보낸 것**이다.
   await expect(page.getByText(못닿음.보내기)).toBeVisible();
@@ -891,7 +905,7 @@ test("결과는 정사각형 원본을 같은 비율의 액자에 온전히 보�
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
@@ -932,7 +946,7 @@ test("그림이 화면을 다 먹지 않는다 — 아래 것들이 접히면 �
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
@@ -982,7 +996,7 @@ test("낮은 화면에서도 액자가 비율을 지킨다 — 실기기가 여�
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
@@ -1030,7 +1044,7 @@ test("이미 구워진 그림은 그 자리에서 뜬다 — 3초를 기다리�
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("낡은 등대 문틈으로 살금살금 손전등을 비췄다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // 그림이 **첫 폴링 시각(3초)보다 훨씬 전에** 떠야 한다.
   await expect(page.locator(`main img[src="${즉시그림}"]`)).toBeVisible({ timeout: 첫폴링 - 500 });
@@ -1079,7 +1093,7 @@ async function 결과화면까지(
 
   await page.goto("/");
   await page.getByLabel(카드응답.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   await expect(page.locator("[data-다음장면]")).toBeVisible();
 }
 
@@ -1195,7 +1209,7 @@ test("쓰는 도중 세션이 끊기면 인증 화면으로 보낸다 — 막다
     }),
   );
 
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   // **문구만 띄우면 아이는 갇힌다** — 「나가기」도 인증 확인 뒤에만 그려서 **누를 것이 하나도 없다.**
   // **표식을 달고 간다** (`문구.md` 3.3) — 인증 화면이 **왜 왔는지**를 알아야
@@ -1377,7 +1391,7 @@ test("다시 쓴 것은 앞 시도에 붙여 보낸다 — 카드를 한 장 더
   const 보낸것 = await 보낸것을받으며결과까지(page);
   await page.getByRole("button", { name: 버튼.다시써보기 }).click();
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 천천히 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   await expect(page.locator("[data-다음장면]")).toBeVisible();
 
   // **첫 시도는 `null`, 다시 쓴 것은 앞 `attempt_id`** (`Stage0.md` 4절).
@@ -1388,7 +1402,7 @@ test("다시 쓴 것은 앞 시도에 붙여 보낸다 — 카드를 한 장 더
   // **다음 장면으로 가면 다시 `null` 이다.** 안 비우면 **새 카드가 앞 시도의 재시도로 실린다.**
   await page.locator("[data-다음장면]").click();
   await page.getByLabel(CARD.prompt_label).fill("무너진 다리를 건넌다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   expect(보낸것[2].retry_of).toBe(null);
 });
 
@@ -1399,12 +1413,12 @@ test("다시 쓰다 되묻기가 와도 앞 시도에 계속 붙인다", async (
 
   되묻기.할차례 = true;
   await page.getByLabel(CARD.prompt_label).fill("빛이 있다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   await expect(page.getByText("그 빛은 어떤 색이야?")).toBeVisible();
 
   되묻기.할차례 = false;
   await page.getByLabel(CARD.prompt_label).fill("파란 빛이 계단 끝에서 흔들린다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   await expect(page.locator("[data-다음장면]")).toBeVisible();
 
   // **되묻기는 시도가 끝난 것이 아니라 같은 시도의 연장이다** (`Stage0.md` 4절) —
@@ -1455,7 +1469,7 @@ async function 보낸것을받으며결과까지(page: Page, 되묻기 = { 할�
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   await expect(page.locator("[data-다음장면]")).toBeVisible();
   return 보낸것;
 }
@@ -1495,7 +1509,7 @@ test(`결과 액자는 최대 크기 안에서 ${방향} 원본 비율과 가장
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
@@ -1596,7 +1610,7 @@ test("그림이 오기 전 빈 자리는 1:1 이다 — 평시 경로의 모양�
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
@@ -1645,7 +1659,7 @@ test("문장을 보내는 동안 이야기를 읽는다고 말한다 — 등급�
 
   await page.goto("/");
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
 
   await expect(page.locator("[data-읽는중]")).toHaveText("네 이야기를 읽고 있어.");
   // **쓴 문장이 그대로 있다** — 보내는 중에 사라지면 아이는 날아간 줄 안다.
@@ -1679,22 +1693,23 @@ const 튜토리얼카드 = (over: Partial<CardResponse> = {}): CardResponse => (
   ...over,
 });
 
-test("T1 에서 여는 말이 카드보다 먼저 온다", async ({ page }) => {
+/**
+ * **⛔ 카드 화면 맨 위에는 안내 줄을 두지 않는다** (2026-09-21 사용자 판정).
+ *
+ * 종전 T1 여는 말(「나침반이 아직 자고 있어…」)은 **아래 말풍선의 「네가 이야기를 쓰면
+ * 반짝여」와 뜻이 겹쳤고**, 자고 있다·깨어난다·반짝인다 **세 설정이 한 화면에 섞였다.**
+ * **T1 도 예외가 아니다** — 여기서 T1 을 같이 재는 이유다.
+ */
+test("카드 화면 맨 위에는 안내 줄이 없다 — T1 도 마찬가지다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({ status: 200, json: 튜토리얼카드() }),
   );
   await page.goto("/");
-
-  const 안내 = page.locator("[data-튜토리얼안내]");
-  await expect(안내).toHaveText(튜토리얼문구.여는말);
-
-  // **카드보다 위다.** 전제를 말한 뒤에 첫 장면이 온다 — 순서가 곧 뜻이다.
-  const 안내자리 = (await 안내.boundingBox())!;
-  const 카드자리 = (await page.getByText(CARD.situation).boundingBox())!;
-  expect(안내자리.y).toBeLessThan(카드자리.y);
+  await expect(page.getByText(CARD.situation)).toBeVisible();
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveCount(0);
 });
 
-test("튜토리얼이 아닌 카드에는 안 나온다", async ({ page }) => {
+test("튜토리얼이 아닌 카드에도 안 나온다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
   await page.goto("/");
   await expect(page.getByText(CARD.situation)).toBeVisible();
@@ -1739,14 +1754,14 @@ async function 결과버튼줄까지(
   );
   await page.goto("/");
   await page.locator("#attempt").fill("낡은 등대 문틈으로 손전등을 비춰 안쪽을 살핀다");
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
   await expect(page.locator("[data-다시써보기]")).toBeVisible();
 }
 
 test("T2 권유가 「다시 써보기」를 키우지 않는다", async ({ page }) => {
   await 결과버튼줄까지(page, "t2");
 
-  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(다시쓰기안내);
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(튜토리얼문구.다시쓰기권유);
 
   // **두 버튼의 글자 크기가 같다.** 「다시 써보기」만 커지면 그게 재촉이다.
   const 크기 = (칸: string) =>
@@ -1778,7 +1793,7 @@ test("⛔ 전설이면 T2 권유를 안 띄운다 — 오를 티어가 없다", 
   expect(
     await page.locator("main").innerText(),
     "전설인데 권유가 붙었다 — 「전설인데도 부족하다」로 읽힌다",
-  ).not.toContain(다시쓰기안내);
+  ).not.toContain(튜토리얼문구.다시쓰기권유);
 });
 
 /**
@@ -1845,8 +1860,11 @@ test("하던 이야기가 있으면 그리로 보낸다 — 「이어서」를 �
   );
   await page.goto("/");
 
-  await expect(page.locator("[data-모험문]")).toContainText("하던 모험을 계속해 볼까?");
-  await expect(page.getByRole("link", { name: "하던 모험으로", exact: true })).toBeVisible();
+  // **문장을 검사에 박지 않는다.** 박아 뒀더니 문구가 2026-09-20 에 확정되면서 이 검사만
+  // 중간 단계(「하던 모험을 계속해 볼까?」)를 붙들고 빨개졌다 — `문구.md` 646행이
+  // **「그날 안에 지나간 중간 단계다. 되돌리지 않는다」**로 못 박은 그 문장이다.
+  await expect(page.locator("[data-모험문]")).toContainText(모험문.가던데까지);
+  await expect(page.getByRole("link", { name: 모험문.하던이야기로, exact: true })).toBeVisible();
 
   // **⛔ 1.20 이 「이어서 더 하기」를 금지했다.** 낱말이 겹치면 둘이 같은 것으로 읽힌다.
   expect(await page.locator("main").innerText()).not.toContain("이어서");
@@ -1864,7 +1882,6 @@ for (const cardId of ["t1", "t2", "t3"] as const) {
     );
     await page.goto("/");
     await expect(page.locator(".scene-card")).toBeVisible();
-    if (cardId === "t1") await expect(page.getByText(튜토리얼문구.여는말)).toBeVisible();
     await expect(page.locator("[data-모험문]")).toHaveCount(0);
     await expect(page.getByLabel(CARD.prompt_label)).toBeVisible();
     await expect(page.locator("[data-모험문버튼]")).toHaveCount(0);
@@ -1913,7 +1930,7 @@ for (const [폭, 높이, 어디] of [
 
     for (const [이름, 자리] of [
       ["쓰는 칸", await page.locator("#attempt").boundingBox()],
-      ["보내기", await page.getByRole("button", { name: 버튼.보내기 }).boundingBox()],
+      ["보내기", await page.getByRole("button", { name: 버튼.그림으로보기 }).boundingBox()],
     ] as const) {
       expect(
         Math.round(자리!.y + 자리!.height),

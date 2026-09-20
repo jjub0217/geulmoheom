@@ -14,7 +14,6 @@ import { 챕터구조안내, 챕터보내기라벨, 챕터보내는중라벨, �
 import { CompassIntroduction } from "@/components/compass-introduction";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
-import { TierBadgeWritingIntroduction } from "@/components/tier-badge-writing-intro";
 import { 턴문구 } from "@/components/turn-copy";
 import { ApiError, apiGet, apiPost, 인증이풀렸다, 역할이다르다 } from "@/lib/api";
 import { 끊겨서보낼곳 } from "@/lib/kicked";
@@ -269,7 +268,7 @@ export default function ChapterPage() {
 
   return (
     /* 튜토리얼과 같은 장면 → 동료 → 글쓰기 순서다.
-       긴 서사는 읽기 영역에서 넘기고, 첫 배지 안내가 열리면 문서도 자연스럽게 늘어난다.
+       긴 서사는 읽기 영역에서 넘기고, 서사가 길면 문서도 자연스럽게 늘어난다.
        고정 높이에 모두 압축해 동료나 입력을 가리지 않는다. */
     <CompassIntroduction
       guide={안내가이드}
@@ -301,7 +300,6 @@ export default function ChapterPage() {
       {/* 글쓰기 영역은 동료와 분리하고, 튜토리얼의 공통 콘솔을 재사용한다. */}
       <div ref={쓰는곳} className="game-console chapter-console">
         <p data-chapter-structure-guide className="chapter-writing-guide">{챕터구조안내}</p>
-        <TierBadgeWritingIntroduction onConfirm={() => 쓰는곳.current?.querySelector("textarea")?.focus()} />
         <div className="game-response">
           <div className="game-response__content chapter-controls" aria-busy={보내는중}>
             <AttemptInput
