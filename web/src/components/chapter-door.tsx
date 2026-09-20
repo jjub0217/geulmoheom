@@ -7,6 +7,10 @@ import { ApiError, apiGet } from "@/lib/api";
 
 import { 모험문 } from "@/app/chapter-door-copy";
 
+// 2026-09-20 사용자 요청 · docs/문구.md 1.25. 책의 복귀 버튼과 같은 '모험'을 쓴다.
+const 하던모험안내 = "쓰던 모험이 기다리고 있어.";
+const 하던모험버튼 = "모험 계속하기";
+
 /**
  * 모험으로 들어가는 문 (`문구.md` **1.25** · W7 **18번**).
  *
@@ -64,19 +68,17 @@ export function ChapterDoor() {
        깎는 것은 **문서를 코드가 무르는 것**이다. **줄인 것은 배치뿐이다.** */
     <div
       data-모험문
-      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2
-        sm:flex-col sm:gap-3"
+      className="chapter-door"
     >
-      <p className="text-lg/relaxed sm:text-xl/relaxed">
-        {이어간다 ? 모험문.가던데까지 : 모험문.기다린다}
+      <p>
+        {이어간다 ? 하던모험안내 : 모험문.기다린다}
       </p>
       <Link
         href="/chapter"
         data-모험문버튼
-        className="pressable shrink-0 rounded-full bg-scarf px-6 py-2 text-lg text-markings
-          sm:px-8 sm:py-3 sm:text-xl"
+        className="pressable action-primary shrink-0"
       >
-        {이어간다 ? 모험문.하던이야기로 : 모험문.떠나기}
+        {이어간다 ? 하던모험버튼 : 모험문.떠나기}
       </Link>
     </div>
   );

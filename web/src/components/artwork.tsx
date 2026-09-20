@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 
-import { 결과액자최대높이, 빈자리비율, 액자자리 } from "@/lib/artwork-frame";
-import { useState } from "react";
+import { 빈자리비율, 액자자리 } from "@/lib/artwork-frame";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { 대기대사하나 } from "@/components/artwork-copy";
 import type { 삽화상태 } from "@/lib/artwork";
@@ -24,7 +24,10 @@ import type { 삽화상태 } from "@/lib/artwork";
  * **기다리는 동안 이 액자가 화면의 유일한 말이다** (`문구.md` 1.5). 결과 대사는 **그림이 뜬 뒤**에
  * 온다 — 순서가 뒤집히면 아이가 반응을 먼저 읽고 그림을 나중에 본다.
  */
-export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
+export function ArtworkFrame({ 상태, waitingContent }: {
+  상태: 삽화상태;
+  waitingContent?: ReactNode;
+}) {
   /**
    * **한 번 고르고 안 바꾼다.** 폴링이 2초마다 리렌더를 부르는데 그때마다 새로 고르면
    * **대사가 6~8초 동안 서너 번 갈아치워진다** — 읽던 아이가 문장을 잃는다.
@@ -49,7 +52,7 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
    * **못 받았으면 자리를 통째로 뺀다.** 빈 액자를 남기면 아이가 「여기 그림이 있어야 하는데
    * 없다」로 읽는데, 그건 **실패 화면을 안 만든다는 결정을 연출로 뒤집는 것**이다.
    *
-   * 서버가 15초에 기본 에셋으로 확정하므로 **여기 오는 것은 서버가 통째로 안 닿는 경우**뿐이다.
+   * 서버가 60초에 기본 에셋으로 확정하므로 **여기 오는 것은 서버가 통째로 안 닿는 경우**뿐이다.
    * 그때도 등급·가이드 대사는 그대로 그린다 — 그림만 없다.
    */
   if (상태.kind === "못받음") return null;
@@ -58,30 +61,31 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
   const 비율 = 잰것 !== null && 잰것.url === 지금주소 ? 잰것.비율 : 빈자리비율;
 
   return (
-    // **기다리는 동안에도 같은 크기의 자리를 잡아둔다.** 그림이 뜨는 순간 아래 것들이
-    // 밀려 내려가면, 6~8초를 기다린 끝에 **보상이 아니라 화면이 흔들리는 것**으로 온다.
-    // 기다리는 동안에는 이 안에 대기 대사가 들어차 있다 (`문구.md` 1.5).
+    // 원본 비율을 알기 전에는 정사각형 자리에서 기다린다.
+    // 그림이 오면 긴 변의 상한을 지키면서 원본 비율에 맞게 액자를 줄인다.
     <div
       // **자리가 있는지 없는지가 곧 상태다.** 「못받음」이면 이 요소가 통째로 사라진다 —
       // E2E 가 그 사라짐을 기다려 **상한을 실제로 넘겨보고 확인한다.**
       data-삽화자리
-      // **상자를 그림에 맞춘다** (`lib/artwork-frame.ts` · `Stage0.md` 5절).
-      // 전에는 `aspect-4/3` 가로 상자였고 **위아래 각 28% 가 잘려 나갔다.**
-      // **오기 전에는 `빈자리비율`(1:1), 온 뒤에는 그 그림의 실제 비율**이다 (2026-09-15).
-      style={액자자리(비율, 결과액자최대높이)}
+      // 원본 비율로 액자 자체를 맞춘다. 결과와 챕터는 각 무대의 높이 상한을 따른다.
+      style={{
+        ...액자자리(비율, "var(--result-frame-size, var(--artwork-cap))"),
+        "--artwork-ratio": 비율,
+      } as CSSProperties}
       // **`mx-auto` 가 필요하다** — 폭 상한이 걸리면 flex 열에서 왼쪽으로 붙는다.
-      className="relative mx-auto w-full overflow-hidden rounded-3xl bg-vest/10"
+      className="artwork-frame"
     >
       {상태.kind === "기다림" && (
         // **액자 안이다** (`문구.md` 1.5). 그림이 뜨면 그 자리를 그림이 그대로 덮는다 —
         // 대사가 다른 자리에 있으면 그림이 온 뒤에도 남아 **결과 대사와 나란히 선다.**
-        <p
+        <div
           data-대기대사
+          role="status"
           className="absolute inset-0 flex items-center justify-center p-6
             text-center text-xl/relaxed wide:text-2xl/relaxed"
         >
-          {대기대사}
-        </p>
+          {waitingContent ?? <p>{대기대사}</p>}
+        </div>
       )}
       {상태.kind === "떴다" && (
         <Image
@@ -92,11 +96,7 @@ export function ArtworkFrame({ 상태 }: { 상태: 삽화상태 }) {
           // 여기에 설명을 지어 넣으면 **프론트가 그림을 해석하는 것**이 된다.
           alt=""
           fill
-          // **`cover` 가 아니다. 자르지 않는다** — 보상의 순간에 아이 그림의 일부를 버리는 것이다.
-          // 상자가 그림 비율이라 지금은 `contain` 과 `cover` 가 같은 그림을 그리지만,
-          // **계약이 비율을 강제하지는 않는다**(`Stage0.md` 5절). 다른 비율이 오는 날
-          // `cover` 는 **말없이 자르고** `contain` 은 **작아진 채로 다 보여준다** —
-          // 틀렸을 때 **눈에 보이는 쪽**을 고른다.
+          // 액자도 원본 비율을 따르므로 전체 그림이 가장자리까지 보인다.
           className="object-contain"
           sizes="(min-width: 64rem) 50vw, 100vw"
           // **그림이 자기 모양을 말하는 자리다.** 여기서 재지 않으면 상자가 계약 상수에

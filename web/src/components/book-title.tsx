@@ -1,17 +1,20 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import { 책이름, 책이름상한 } from "@/app/book/copy";
 import { 못닿음 } from "@/app/copy";
 import { ApiError, NetworkError, apiPatch, 인증이풀렸다 } from "@/lib/api";
 import { PII_MASK, maskPii, 가림안내, type PiiKind } from "@/lib/pii";
 
+// 사용자 승인으로 더한 편집 취소 문구. docs/문구.md 1.16에 함께 기록한다.
+export const 책이름취소라벨 = "취소";
+
 /**
  * 책 이름 고치기 (`문구.md` **1.16**, A0-4 후속 · `PATCH /book`).
  *
  * **⛔ 낱말은 「책 이름」이다.** 아이 화면에 「제목」을 쓰지 않는다 (`용어사전.md` 1장) —
- * 변수명·주석은 자유지만 **화면에 렌더되는 문자열**은 `책이름` 상수에서만 온다.
+ * 변수명·주석은 자유지만 **화면에 렌더되는 문자열**은 문서에 등록한 상수에서 온다.
  *
  * **여기 담기는 값은 아이의 창작물이다** — 카드 입력창과 같다 (PRD 1.1b).
  * 로깅·오류 리포터로 흘리지 않고, `onMasked` 로 나가는 것도 **종류뿐이고 문장이 아니다.**
@@ -37,7 +40,11 @@ export function BookTitle({
   const [알림, set알림] = useState<string | null>(null);
   const [보내는중, set보내는중] = useState(false);
 
+  const 편집폼id = useId();
   const 입력칸 = useRef<HTMLInputElement>(null);
+  const 고치기버튼 = useRef<HTMLButtonElement>(null);
+  const 편집뒤포커스 = useRef(false);
+  const 조합중 = useRef(false);
   /**
    * **한글 조합 중에는 값을 갈아치우지 않는다.** 조합 중인 글자를 바꿔치기하면
    * IME 가 조합을 잃고 글자가 깨진다 — 카드 입력창과 **같은 함정, 같은 처리**다.
@@ -50,6 +57,16 @@ export function BookTitle({
     되돌릴커서.current = null;
     입력칸.current.setSelectionRange(자리, 자리);
   }, [값]);
+
+  useLayoutEffect(() => {
+    if (고치는중) {
+      입력칸.current?.focus();
+    } else if (편집뒤포커스.current) {
+      // 입력 폼이 사라져도 키보드로 책 이름 근처에서 계속 움직일 수 있게 한다.
+      고치기버튼.current?.focus();
+      편집뒤포커스.current = false;
+    }
+  }, [고치는중]);
 
   const 비었다 = 값.trim() === "";
 
@@ -75,10 +92,26 @@ export function BookTitle({
   };
 
   const 연다 = () => {
+    if (고치는중) {
+      입력칸.current?.focus();
+      return;
+    }
     set값(title);
     set가림(null);
     set알림(null);
+    조합중.current = false;
     set고치는중(true);
+  };
+
+  const 취소한다 = () => {
+    if (보내는중) return;
+    set값(title);
+    set가림(null);
+    set알림(null);
+    되돌릴커서.current = null;
+    조합중.current = false;
+    편집뒤포커스.current = true;
+    set고치는중(false);
   };
 
   const 보낸다 = async () => {
@@ -104,6 +137,7 @@ export function BookTitle({
       // 내 값을 그리면 **화면과 책이 갈린다.**
       onChanged(r.title);
       set값(r.title);
+      편집뒤포커스.current = true;
       set고치는중(false);
       set가림(null);
       set알림(책이름.바꿨다);
@@ -122,82 +156,109 @@ export function BookTitle({
     }
   };
 
-  if (!고치는중) {
-    return (
-      <div className="flex flex-col items-center gap-2">
+  return (
+    <div className="book-title">
+      <h1 className="book-cover-title">
         <button
+          ref={고치기버튼}
           type="button"
           data-책이름바꾸기
           onClick={연다}
-          className="pressable rounded-full border-2 border-brass/40 px-5 py-2 text-lg opacity-80"
+          aria-label={`${title}: ${책이름.바꾸기}`}
+          title={책이름.바꾸기}
+          aria-expanded={고치는중}
+          aria-controls={고치는중 ? 편집폼id : undefined}
+          className="book-title-trigger"
         >
-          {책이름.바꾸기}
+          <span className="book-title-label">{title}</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 4 5 5M4 20l1-6L16 3l5 5-11 11-6 1Z" />
+          </svg>
         </button>
-        {/* **바꾼 뒤 한 줄** (1.16). `role="status"` 라 화면 낭독기도 읽는다.
-            **닫은 뒤에도 남긴다** — 아이가 결과를 읽기 전에 사라지면 안 말한 것과 같다. */}
-        {알림 !== null && (
-          <p data-책이름알림 role="status" className="text-lg">
-            {알림}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <form
-      className="flex flex-col items-center gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void 보낸다();
-      }}
-    >
-      {/* **라벨을 따로 두지 않는다** — 바로 위가 책 이름이고 버튼이 「이 이름으로 하기」라
-          무엇을 쓰는 칸인지 이미 말하고 있다. `문구.md` 1.16 에도 라벨 행이 없다. */}
-      <input
-        ref={입력칸}
-        type="text"
-        data-책이름칸
-        aria-label={책이름.바꾸기}
-        value={값}
-        // **더 안 써지게 하는 것이 상한을 말하는 방법이다** (`문구.md` 6.y) —
-        // 「30자까지만 쓸 수 있어요」를 띄우면 **그것이 혼내는 말이 된다.**
-        maxLength={책이름상한}
-        onChange={(e) => 가리고둔다(e.target.value, e.target.selectionStart ?? e.target.value.length)}
-        className="w-full rounded-2xl border-2 border-brass/50 bg-markings/70 px-4 py-3
-          text-center text-2xl outline-2 outline-offset-2 outline-transparent
-          focus:border-glow focus:outline-glow dark:bg-glow-deep/40"
-      />
-
-      {/* 가림 안내는 **1.1 그대로**다 — 카드 화면과 같은 문장, 같은 규칙. */}
-      {가림 !== null && (
-        <p data-책이름가림 role="status" className="text-lg">
-          {가림}
-        </p>
-      )}
-
-      {/* **다 지웠을 때 무슨 일인지 말한다** (1.16). 버튼을 막기만 하면
-          **왜 안 눌리는지**를 안 말한다. */}
-      {비었다 && (
-        <p data-책이름비었다 role="status" className="text-lg">
-          {책이름.이름이있어야해}
-        </p>
-      )}
-
-      {알림 !== null && (
-        <p data-책이름알림 role="status" className="text-lg">
+      </h1>
+      {/* **바꾼 뒤 한 줄** (1.16). `role="status"` 라 화면 낭독기도 읽는다.
+          **닫은 뒤에도 남긴다** — 아이가 결과를 읽기 전에 사라지면 안 말한 것과 같다. */}
+      {!고치는중 && 알림 !== null && (
+        <p data-책이름알림 role="status" className="book-title-notice">
           {알림}
         </p>
       )}
+      {고치는중 && (
+        <form
+          id={편집폼id}
+          className="book-title-editor"
+          aria-busy={보내는중}
+          onKeyDown={(e) => {
+            // Escape가 한글 조합을 끝내는 동안에는 편집 자체를 취소하지 않는다.
+            if (e.key !== "Escape" || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229 || 조합중.current || 보내는중) return;
+            e.preventDefault();
+            취소한다();
+          }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void 보낸다();
+          }}
+        >
+          {/* **라벨을 따로 두지 않는다** — 바로 위가 책 이름이고 버튼이 「이 이름으로 하기」라
+              무엇을 쓰는 칸인지 이미 말하고 있다. `문구.md` 1.16 에도 라벨 행이 없다. */}
+          <input
+            ref={입력칸}
+            type="text"
+            data-책이름칸
+            aria-label={책이름.바꾸기}
+            value={값}
+            readOnly={보내는중}
+            // **더 안 써지게 하는 것이 상한을 말하는 방법이다** (`문구.md` 6.y) —
+            // 「30자까지만 쓸 수 있어요」를 띄우면 **그것이 혼내는 말이 된다.**
+            maxLength={책이름상한}
+            onCompositionStart={() => { 조합중.current = true; }}
+            onCompositionEnd={() => { 조합중.current = false; }}
+            onChange={(e) => 가리고둔다(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+            className="form-field book-title-input"
+          />
 
-      <button
-        type="submit"
-        data-책이름보내기
-        disabled={비었다 || 보내는중}
-        className="pressable rounded-full bg-scarf px-8 py-3 text-xl text-markings disabled:opacity-50"
-      >
-        {책이름.이이름으로}
-      </button>
-    </form>
+          {/* 가림 안내는 **1.1 그대로**다 — 카드 화면과 같은 문장, 같은 규칙. */}
+          {가림 !== null && (
+            <p data-책이름가림 role="status" className="book-title-notice">
+              {가림}
+            </p>
+          )}
+
+          {/* **다 지웠을 때 무슨 일인지 말한다** (1.16). 버튼을 막기만 하면
+              **왜 안 눌리는지**를 안 말한다. */}
+          {비었다 && (
+            <p data-책이름비었다 role="status" className="book-title-notice">
+              {책이름.이름이있어야해}
+            </p>
+          )}
+
+          {알림 !== null && (
+            <p data-책이름알림 role="status" className="book-title-notice">
+              {알림}
+            </p>
+          )}
+
+          <div className="book-title-editor-actions">
+            <button
+              type="submit"
+              data-책이름보내기
+              disabled={비었다 || 보내는중}
+              className="pressable action-primary"
+            >
+              {책이름.이이름으로}
+            </button>
+            <button
+              type="button"
+              data-책이름취소
+              disabled={보내는중}
+              onClick={취소한다}
+              className="pressable action-secondary"
+            >
+              {책이름취소라벨}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { components } from "@/api/types.gen";
+import { AccountEntry } from "@/components/account-entry";
 import { ApiError, NetworkError, apiGet, apiPost, 역할이다르다, 인증이풀렸다 } from "@/lib/api";
 
 import { 상태표시 } from "@/app/status-copy";
@@ -140,59 +141,67 @@ export default function ChildAuth() {
   const 보낼수있다 = code.length === 코드길이 && !보내는중;
 
   return (
-    <main className="page-frame flex flex-1 flex-col justify-center gap-8 py-12">
+    <AccountEntry kind="child" showParentAccess={screen.kind === "코드입력"}>
       {screen.kind === "확인중" && (
-        <p className="opacity-70">{상태표시.확인중}</p>
+        <div className="child-entry-state" role="status">
+          <p className="child-entry-status">{상태표시.확인중}</p>
+        </div>
       )}
 
       {screen.kind === "코드입력" && (
         <form
-          className="flex flex-col gap-6"
+          className="account-auth-form child-entry-form"
+          aria-busy={보내는중}
           onSubmit={(e) => {
             e.preventDefault();
             if (보낼수있다) void 들어가기();
           }}
         >
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold">{코드입력.제목}</h1>
+          <div className="account-heading child-entry-heading">
+            <h1>{코드입력.제목}</h1>
             {/* 무엇을 넣어야 하는지 모양을 미리 알려준다 — 오류를 나눠 말할 수 없으니
                 **엉뚱한 것을 넣기 전에 막는 것**이 유일한 수단이다. */}
             {/* **끊겨서 왔으면 기본 안내 대신 이 줄이다** (`문구.md` 3.3).
                 주어가 **부모**인 것이 전부다 — 「다시 한 번 들어와 주세요」는
                 **아이가 뭘 잘못한 것처럼 읽히는데 실제로 끊은 쪽은 어른**이다. */}
-            <p data-안내 className="opacity-80">
+            <p id="child-code-help" data-안내 className="account-description">
               {screen.끊김 ? 코드입력.끊겨서왔을때 : 코드입력.안내}
             </p>
           </div>
 
-          <label className="flex flex-col gap-1">
-            <span>{코드입력.라벨}</span>
-            <input
-              // `text` + `inputMode="numeric"` — `type="number"` 는 앞자리 0 을 흘리고
-              // 스피너가 붙는다. 6자리 코드는 **수가 아니라 글자**다.
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              // **`maxLength` 를 두지 않는다.** 두면 브라우저가 아래 필터보다 **먼저**
-              // 원문을 6자로 자른다 — `12ab34cd56` 이 `12ab34` 이 된 뒤 숫자만 남아
-              // **`1234`** 가 된다. 아이가 코드를 붙여넣을 때 **숫자가 조용히 사라진다.**
-              // 길이는 아래 `slice` 가 이미 지킨다 (2026-09-07, E2E 가 잡았다).
-              value={code}
-              // 숫자만 남긴다. 서버는 어차피 같은 401 을 주지만, **아이가 무엇을 잘못
-              // 넣었는지 듣지 못하므로** 애초에 넣을 수 없게 하는 편이 낫다.
-              onChange={(e) =>
-                setCode(e.target.value.replace(/\D/g, "").slice(0, 코드길이))
-              }
-              required
-              className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-                text-2xl tracking-[0.4em] dark:bg-glow-deep/40"
-            />
-          </label>
+          <div className="child-entry-ticket">
+            <label className="account-field child-entry-code">
+              <span className="field-label child-entry-code-label">{코드입력.라벨}</span>
+              <input
+                // `text` + `inputMode="numeric"` — `type="number"` 는 앞자리 0 을 흘리고
+                // 스피너가 붙는다. 6자리 코드는 **수가 아니라 글자**다.
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                aria-describedby={screen.line === null ? "child-code-help" : "child-code-help child-code-error"}
+                aria-invalid={screen.line !== null || undefined}
+                // **`maxLength` 를 두지 않는다.** 두면 브라우저가 아래 필터보다 **먼저**
+                // 원문을 6자로 자른다 — `12ab34cd56` 이 `12ab34` 이 된 뒤 숫자만 남아
+                // **`1234`** 가 된다. 아이가 코드를 붙여넣을 때 **숫자가 조용히 사라진다.**
+                // 길이는 아래 `slice` 가 이미 지킨다 (2026-09-07, E2E 가 잡았다).
+                value={code}
+                // 숫자만 남긴다. 서버는 어차피 같은 401 을 주지만, **아이가 무엇을 잘못
+                // 넣었는지 듣지 못하므로** 애초에 넣을 수 없게 하는 편이 낫다.
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 코드길이))
+                }
+                required
+                readOnly={보내는중}
+                spellCheck={false}
+                className="form-field account-code-input child-entry-code-input"
+              />
+            </label>
+          </div>
 
           {/* **서버가 준 문구다.** 화면이 지은 말이 아니고, 자리도 입력칸 곁이다 —
               무엇에 대한 말인지 아이가 찾지 않아도 되게. */}
           {screen.line !== null && (
-            <p data-오류 className="text-xl/relaxed">
+            <p id="child-code-error" data-오류 role="alert" className="account-feedback child-entry-feedback">
               {screen.line}
             </p>
           )}
@@ -202,26 +211,28 @@ export default function ChildAuth() {
               **그날 첫 아이가 정확히 그 화면을 본다.**
               **문구는 이미 있었다** — `문구.md` **2.5** 의 「접속 코드를 확인하는 중」.
               **자리가 비어 있었던 것이지 없는 말이 아니다.** */}
-          {보내는중 && <p data-확인중>{상태표시.확인중}</p>}
+          {보내는중 && <p data-확인중 role="status" className="child-entry-status">{상태표시.확인중}</p>}
 
           <button
             type="submit"
             disabled={!보낼수있다}
-            className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
-              disabled:opacity-40"
+            className="pressable action-primary account-submit child-entry-submit"
           >
             {코드입력.버튼}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         </form>
       )}
 
-      {screen.kind === "거절" && <p className="text-xl/relaxed">{screen.line}</p>}
+      {screen.kind === "거절" && <p role="alert" className="account-feedback child-entry-feedback child-entry-state">{screen.line}</p>}
 
       {screen.kind === "못닿음" && (
-        <div className="flex flex-col gap-6">
+        <div className="child-entry-state child-entry-unreachable">
           {/* **`문구.md` 2.4 다.** 서버가 아무 말도 못 했으므로 화면이 고르지만,
               그렇다고 화면이 짓는 것은 아니다 — 문서에 자리가 있다. */}
-          <p className="text-xl/relaxed">{못닿음}</p>
+          <p role="status">{못닿음}</p>
           {screen.hints.length > 0 && (
             // 개발 빌드 전용이다. 운영 번들에서는 `hints` 가 비어 이 블록이 안 그려진다.
             <ul
@@ -236,6 +247,6 @@ export default function ChildAuth() {
           )}
         </div>
       )}
-    </main>
+    </AccountEntry>
   );
 }

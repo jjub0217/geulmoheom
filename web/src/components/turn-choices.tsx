@@ -45,8 +45,8 @@ export function TurnChoices({
   if (choices.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-3">
+    <div className="turn-choices">
+      <ul>
         {choices.map((choice) => (
           <li key={choice.id}>
             <button
@@ -56,9 +56,7 @@ export function TurnChoices({
               // 테두리·글자 크기가 **입력창과 같다.** 둘이 같은 무게라는 것을 자리로 말한다.
               // `text-left` 인 것은 **라벨이 한 줄을 넘칠 수 있기** 때문이다 — GM 이 쓴 문장이라
               // 길이를 우리가 모른다. 가운데 정렬은 두 줄이 되는 순간 읽기가 나빠진다.
-              className="pressable w-full rounded-3xl border-2 border-brass/50 bg-markings/70
-                px-5 py-4 text-left text-xl/relaxed text-foreground
-                disabled:opacity-40 dark:bg-glow-deep/40"
+              className="pressable turn-choice"
             >
               {choice.label}
             </button>
@@ -68,7 +66,7 @@ export function TurnChoices({
 
       {/* **선택지 「아래」다** — 1.18 이 「선택지를 먼저 보여준 뒤에 오는 말」로 못 박았다.
           위에 두면 「아니면」이 가리킬 것이 아직 없다. */}
-      <p className="text-lg text-brass">{턴문구.직접쓰기유도}</p>
+      <p className="choice-invitation">{턴문구.직접쓰기유도}</p>
     </div>
   );
 }

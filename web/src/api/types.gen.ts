@@ -428,7 +428,10 @@ export interface paths {
         };
         /**
          * Get Artwork
-         * @description 프론트: 3초 뒤 첫 폴링, 이후 2초 간격, 15초 초과 시 중단 (`Stage0.md` 5절).
+         * @description 프론트: 3초 뒤 첫 폴링, 이후 2초 간격.
+         *
+         *     카드 결과·본편은 15초, 책은 서버의 60초 확정 뒤까지 65초를 상한으로 쓴다
+         *     (`Stage0.md` 5절).
          *
          *     **남의 삽화는 404 다.** 403 으로 가르면 「그 삽화는 존재한다」가 샌다.
          */
@@ -624,12 +627,10 @@ export interface paths {
         put?: never;
         /**
          * Create Turn
-         * @description 턴 하나 (계약 2절). **선택지든 자유 묘사든 한 자리로 받는다.**
+         * @description 아이가 직접 쓴 문장으로 턴 하나를 진행한다 (계약 2절).
          *
-         *     **⛔ `choice_id` 와 `text` 중 정확히 하나다** — 둘 다 오거나 둘 다 없으면 422.
-         *     **⚠ `choice_id` 로 온 턴도 등급이 매겨진다** — 선택지 라벨을 그 아이의 입력으로
-         *     평가한다. **그래야 「고르기만 해도 된다」가 안 된다**(비전 1장). 다만 **G0
-         *     스캐폴딩은 안 띄운다** — 고른 것을 되물으면 뜻이 없다.
+         *     인증 의존성을 통과한 뒤, 챕터 조회·평가·상태 변경 전에 선택지 제출을 막는다.
+         *     `choice_id` 필드는 이전 클라이언트에 422 안내를 돌려주기 위해서만 남긴다.
          */
         post: operations["create_turn_api_v1_turns_post"];
         delete?: never;
@@ -673,7 +674,7 @@ export interface components {
             tier: "basic" | "rare" | "legendary";
             /**
              * Fallback
-             * @description 15초 초과 시 기본 에셋으로 확정된 것 (B-3)
+             * @description 60초 초과 시 기본 에셋으로 확정된 것 (B-3)
              */
             fallback: boolean;
         };
@@ -828,6 +829,7 @@ export interface components {
             tier: "basic" | "rare" | "legendary";
             /** Artwork Url */
             artwork_url: string | null;
+            artwork?: components["schemas"]["ArtworkRef"] | null;
             /**
              * Text
              * @description 아이 원문 그대로. 맞춤법·AI 보정 없음
@@ -938,6 +940,7 @@ export interface components {
             /** Turns Left */
             turns_left: number;
             artwork?: components["schemas"]["ArtworkRef"] | null;
+            guide?: components["schemas"]["Guide"] | null;
         };
         /** ChildAuthRequest */
         ChildAuthRequest: {
@@ -968,6 +971,8 @@ export interface components {
             nickname: string;
             /** Guide Name */
             guide_name: string | null;
+            /** First Experience Complete */
+            first_experience_complete?: boolean | null;
             today: components["schemas"]["ChildToday"];
         };
         /** ChildSummary */
@@ -1197,14 +1202,10 @@ export interface components {
         };
         /**
          * TurnRequest
-         * @description **⛔ `choice_id` 와 `text` 중 정확히 하나다.** 둘 다 오거나 둘 다 없으면 422.
+         * @description 아이가 직접 쓴 `text`만 제출한다.
          *
-         *     **⭐ 엔드포인트를 안 가른다** — 가르면 화면이 두 갈래를 따로 그리게 되고,
-         *     A-3 이 **「선택지와 자유 묘사를 한 입력창에」**로 쓰여 있다.
-         *
-         *     **⚠ `choice_id` 로 온 턴도 등급이 매겨진다** — 선택지 라벨을 그 아이의 입력으로
-         *     평가한다. **그래야 「고르기만 해도 된다」가 안 된다.** 다만 **G0 스캐폴딩은 안
-         *     띄운다** — 고른 것을 되물으면 뜻이 없다.
+         *     `choice_id`는 이전 클라이언트에 명확한 422 안내를 돌려주기 위한 호환 필드다.
+         *     인증 후 `choice_id`가 null이 아니거나 `text`가 없거나 공백뿐이면 거부한다.
          */
         TurnRequest: {
             /** Chapter Id */

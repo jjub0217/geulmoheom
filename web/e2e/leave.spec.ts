@@ -32,6 +32,29 @@ const CARD: CardResponse = {
 const CARDS_NEXT = "**/api/v1/cards/next";
 const LOGOUT = "**/api/v1/child/logout";
 
+test.use({ serviceWorkers: "block" });
+
+test.beforeEach(async ({ page, baseURL }) => {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  await page.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origin) return route.abort();
+    if (url.pathname.endsWith("/healthz")) return route.fulfill({ status: 200, json: { status: "ok" } });
+    if (!url.pathname.startsWith("/api/")) return route.continue();
+    if (url.pathname.endsWith("/events")) return route.fulfill({ status: 204 });
+    if (url.pathname.endsWith("/child/me")) {
+      if (new URL(page.url()).pathname === "/child/auth") {
+        return route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED", message: "검사용 인증 응답" } } });
+      }
+      return route.fulfill({ status: 200, json: { child_id: "leave-test-child", nickname: "검수탐험가", guide_name: null, today: { cards_done: 1, cap: 5, locked: false } } });
+    }
+    if (url.pathname.endsWith("/chapters/current")) {
+      return route.fulfill({ status: 404, json: { error: { code: "NO_ACTIVE_CHAPTER", message: "검사용 응답" } } });
+    }
+    return route.fulfill({ status: 404, json: { error: { code: "MOCK_ONLY", message: "검사용 응답" } } });
+  });
+});
+
 /** 모험 화면을 정상 상태로 띄운다. 나가기는 이 화면 맨 아래에 있다. */
 async function 모험화면(page: Page) {
   await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
@@ -153,6 +176,59 @@ test("「나가기」는 서버를 부르고 접속 코드 화면으로 돌아�
 
   // **화면을 새로 만들지 않는다. 3.3 으로 돌아간다** (`문구.md` 2.3).
   await expect(page).toHaveURL(/\/child\/auth$/);
+});
+
+test("전송 중에는 취소·중복 전송을 막고 실패하면 머물거나 다시 나갈 수 있다", async ({ page }) => {
+  let 부른횟수 = 0;
+  let 첫응답풀기!: () => void;
+  const 첫응답대기 = new Promise<void>((resolve) => { 첫응답풀기 = resolve; });
+  await page.route(LOGOUT, async (route) => {
+    부른횟수 += 1;
+    if (부른횟수 === 1) {
+      await 첫응답대기;
+      return route.abort("failed");
+    }
+    return route.fulfill({ status: 204 });
+  });
+  await 모험화면(page);
+  await 나가기버튼(page).click();
+  const 머무는쪽 = 확인창(page).getByRole("button", { name: 나가기문구.확인.머문다 });
+  const 나가는쪽 = 확인창(page).getByRole("button", { name: 나가기문구.확인.나간다 });
+
+  try {
+    // 같은 프레임에 연달아 눌러도 응답을 기다리는 요청은 하나다.
+    await 나가는쪽.evaluate((button: HTMLButtonElement) => {
+      button.click();
+      button.click();
+    });
+    await expect.poll(() => 부른횟수).toBe(1);
+    await expect(머무는쪽).toBeDisabled();
+    await expect(나가는쪽).toBeDisabled();
+    await expect(확인창(page)).toHaveAttribute("aria-busy", "true");
+    await expect(page.locator("[data-나가기대기]")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(확인창(page)).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
+    expect(부른횟수).toBe(1);
+
+    첫응답풀기();
+    await expect(page.locator("[data-나가기실패]")).toHaveText(나가기문구.못닿음);
+    await expect(머무는쪽).toBeEnabled();
+    await expect(나가는쪽).toBeEnabled();
+    await expect(머무는쪽).toBeFocused();
+    await expect(확인창(page)).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator("[data-나가기대기]")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(확인창(page)).toBeHidden();
+
+    await 나가기버튼(page).click();
+    await expect(page.locator("[data-나가기실패]")).toHaveCount(0);
+    await 나가는쪽.click();
+    await expect(page).toHaveURL(/\/child\/auth$/);
+    expect(부른횟수).toBe(2);
+  } finally {
+    첫응답풀기();
+  }
 });
 
 test("서버에 닿지 못하면 나간 척하지 않는다", async ({ page }) => {

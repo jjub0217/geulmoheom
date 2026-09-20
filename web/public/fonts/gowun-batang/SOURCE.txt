@@ -1,0 +1,15 @@
+Gowun Batang / 고운바탕
+Designer: Yanghee Ryu
+Copyright 2021 The Gowun Batang Project Authors
+License: SIL Open Font License 1.1 (see OFL.txt)
+
+Google Fonts: https://fonts.google.com/specimen/Gowun+Batang
+Distribution: https://github.com/google/fonts/tree/main/ofl/gowunbatang
+Upstream: https://github.com/yangheeryu/Gowun-Batang
+Downloaded: 2026-09-19
+
+GowunBatang-Regular.woff2 (400) and GowunBatang-Bold.woff2 (700) were
+converted from the Google Fonts TTF files with fontTools 4.60.2 / Brotli.
+All glyphs and character mappings are retained; no subsetting or visual
+changes were made. They are served locally; rendering a child's book
+name sends no text to Google.

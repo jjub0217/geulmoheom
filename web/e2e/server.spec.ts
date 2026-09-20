@@ -184,12 +184,8 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   await expect(서사).toBeVisible({ timeout: 60_000 });
   expect((await 서사.innerText()).trim().length).toBeGreaterThan(0);
 
-  // **선택지도 서버가 준다.** 개수를 박지 않는다 — **넷으로 박으면 4칸 그리드를
-  // 다시 들여오는 셈**이고, 경로 나열을 막으려고 개수를 안 정한 것이 계약이다.
-  const 선택지 = page.locator("main li button");
-  await expect(선택지.first()).toBeVisible({ timeout: 60_000 });
-  const 선택지수 = await 선택지.count();
-  expect(선택지수).toBeGreaterThan(0);
+  // **선택지는 없다.** 새로 들어왔을 때도 직접 쓴 글로만 이야기를 진행한다.
+  await expect(page.locator("main li button, .turn-choices")).toHaveCount(0);
 
   // ── ③ 직접 써서 턴이 넘어간다 (A-3) ────────────────────────────────
   const 입력창 = page.locator("main textarea");
@@ -225,19 +221,22 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
     .poll(() => 이어하기응답.at(-1), { timeout: 30_000 })
     .toBe(200);
 
-  // ── ⑤ 선택지로도 턴이 간다 (A-3) ───────────────────────────────────
-  // **`choice_id` 갈래가 진짜 서버를 지나는지**를 본다. 자유 묘사와 **같은 엔드포인트**인데
-  // **몸이 다르다** — 계약이 「둘 중 정확히 하나」라 **틀리면 422** 다.
-  // 가로채는 갈래에서는 **우리가 200 을 만들어 주므로 그 422 가 안 보인다.**
-  const 고를것 = page.locator("main li button").first();
-  await expect(고를것).toBeVisible();
-  const 선택응답 = page.waitForResponse((r) => r.url().includes("/api/v1/turns"));
-  await 고를것.click();
-  const 골라서온것 = await (await 선택응답).json();
-  expect((await 선택응답).status()).toBe(200);
-  // **고른 것도 등급이 매겨진다** — 「고르기만 해도 된다」가 안 되게 하는 자리다
-  // (`Stage1.md` 2절). **등급값 자체는 안 본다** — 가짜가 정하는 값이라 잣대가 아니다.
-  expect(골라서온것.outcome).toBe("result");
+  // ── ⑤ 돌아온 뒤에도 직접 쓴 글로 다음 턴을 보낸다 (A-3) ────────────
+  // 사용자 승인(2026-09-19): 선택지는 없고 `text`만 진짜 서버로 보낸다.
+  // 응답을 가로채지 않고 요청의 필드와 가상 문장 일치 여부만 확인한다.
+  await expect(page.locator("main li button, .turn-choices")).toHaveCount(0);
+  await 입력창.fill(챕터문장);
+  const 다음응답대기 = page.waitForResponse((r) =>
+    r.url().includes("/api/v1/turns") && r.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  const 다음응답 = await 다음응답대기;
+  const 보낸몸 = 다음응답.request().postDataJSON();
+  expect(Object.keys(보낸몸).sort()).toEqual(["chapter_id", "text"]);
+  expect(보낸몸.text === 챕터문장).toBe(true);
+  expect(다음응답.status()).toBe(200);
+  expect((await 다음응답.json()).outcome).toBe("result");
+  await expect(입력창).toHaveValue("", { timeout: 90_000 });
 
   // **⛔ 차단 갈래는 여기서 안 잰다 — 못 재는 것이지 안 중요해서가 아니다.**
   //

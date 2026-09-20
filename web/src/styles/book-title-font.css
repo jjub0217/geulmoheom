@@ -1,0 +1,23 @@
+/* Google Fonts의 고운바탕. 글꼴·OFL·출처는 public/fonts/gowun-batang/에 둔다. */
+@font-face {
+  font-family: "Gowun Batang";
+  src: url("/fonts/gowun-batang/GowunBatang-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gowun Batang";
+  src: url("/fonts/gowun-batang/GowunBatang-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* 책 이름을 읽고 고치는 두 상태에만 적용한다. 원문·지은이·버튼은 그대로다. */
+.book-cover-title,
+.book-title-input {
+  font-family: "Gowun Batang", "Batang", serif;
+  font-synthesis: none;
+}

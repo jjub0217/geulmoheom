@@ -1,0 +1,148 @@
+/* 함께 걷던 숲이 저녁빛으로 물들고, 동료가 배웅한다. */
+.game-shell--ending {
+  flex: none;
+  height: 100svh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #443b37;
+}
+
+/* 배경에만 저녁빛을 입힌다. 캐릭터·말풍선·버튼의 밝기는 유지한다. */
+.game-shell--ending::before {
+  display: block;
+  background: url("/adventure/forest-stage.png") center 48% / cover no-repeat;
+  filter: sepia(0.36) saturate(0.8) brightness(0.7);
+}
+
+.game-shell--ending::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 60% 0%, rgb(255 179 93 / 48%), transparent 75%),
+    linear-gradient(180deg, rgb(118 58 49 / 12%), rgb(38 33 50 / 36%));
+  pointer-events: none;
+  content: "";
+}
+
+.session-ending-stage {
+  display: grid;
+  place-items: center;
+  padding: 5.25rem 1.5rem 1.5rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.session-ending {
+  display: grid;
+  grid-template-columns: clamp(14rem, 28vw, 22rem) minmax(0, 1fr);
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  gap: 1.5rem;
+  width: min(100%, 58rem);
+  margin-block: auto;
+  animation: ending-arrive 240ms ease-out both;
+}
+
+.session-ending .guide-figure { display: contents; }
+
+.session-ending .guide-image {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 100%;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 12px rgb(79 48 23 / 20%));
+}
+
+.session-ending .guide-line {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 2px solid var(--color-brass);
+  border-radius: 1.25rem;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(79 48 23 / 14%), inset 0 0 0 4px rgb(255 255 255 / 30%);
+  color: var(--foreground);
+  font-size: var(--type-companion-desktop);
+  line-height: var(--leading-companion);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.session-ending .guide-line::before {
+  position: absolute;
+  top: 55%;
+  left: -0.5625rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-left: 2px solid var(--color-brass);
+  border-bottom: 2px solid var(--color-brass);
+  background: var(--surface);
+  transform: translateY(-50%) rotate(45deg);
+  content: "";
+}
+
+.session-ending__book {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  justify-self: start;
+}
+
+.session-ending:has(.session-ending__message) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  max-width: 40rem;
+}
+
+.session-ending__message {
+  border: 2px solid var(--color-brass);
+  border-radius: 1.25rem;
+  padding: 2rem;
+  background: var(--surface);
+  font-size: 1.5rem;
+  line-height: 1.8;
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.session-ending__message + .session-ending__book {
+  grid-column: 1;
+  justify-self: center;
+}
+
+@keyframes ending-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+  .session-ending-stage { padding: 4.75rem 1.25rem 1rem; }
+  .session-ending { display: flex; flex-direction: column; gap: 1.25rem; }
+  .session-ending .guide-figure { display: flex; flex-direction: column; gap: 1rem; width: 100%; }
+  .session-ending .guide-image { width: min(11rem, 26svh); }
+  .session-ending .guide-line { align-self: center; padding: 1rem; font-size: var(--type-companion-mobile); line-height: var(--leading-companion); text-align: center; }
+  .session-ending .guide-line::before { top: -0.5625rem; left: 50%; transform: translateX(-50%) rotate(135deg); }
+  .session-ending__book { align-self: center; }
+  .session-ending__message { padding: 1.25rem; font-size: 1.25rem; }
+}
+
+@media (min-width: 601px) and (max-height: 550px) {
+  .session-ending-stage { padding: 4rem 1.5rem 0.75rem; }
+  .session-ending { grid-template-columns: min(30svh, 12rem) minmax(0, 1fr); max-width: 40rem; gap: 0.75rem 1.25rem; }
+  .session-ending .guide-line { padding: 0.75rem 1.25rem; font-size: var(--type-companion-mobile); line-height: var(--leading-companion); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-ending { animation: none; }
+}

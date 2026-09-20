@@ -241,48 +241,47 @@ export function ChildrenPanel() {
   };
 
   return (
-    <section className="flex w-full flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <h2 className="text-2xl font-semibold">{목록.제목}</h2>
+    <section className="children-layout">
+      <div className="children-list-section">
+        <h2 className="account-section-title">{목록.제목}</h2>
 
         {목록실패 !== null && <p data-목록실패>{목록실패}</p>}
 
-        {children !== null && children.length === 0 && <p>{목록.비었을때}</p>}
+        {children !== null && children.length === 0 && <p className="children-empty">{목록.비었을때}</p>}
 
         {children !== null && children.length > 0 && (
-          <ul className="flex flex-col gap-3">
+          <ul className="children-list">
             {children.map((아이) => (
               <li
                 key={아이.child_id}
                 data-자녀
-                className="flex flex-col gap-3 rounded-2xl border-2 border-brass/40 p-5"
+                className="child-card"
               >
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <strong className="text-xl">{아이.nickname}</strong>
-                  <span className="opacity-80">
+                <div className="child-summary">
+                  <strong className="child-name">{아이.nickname}</strong>
+                  <span className="child-age">
                     {나이선택.find((n) => n.값 === 아이.age_band)?.글자}
                   </span>
                   {/* **개수가 아니라 「했다/아직」이다** — 계약에 개수가 없고,
                       부모가 보려는 것도 오늘 아이가 이걸 했는지다. */}
-                  <span data-오늘>
+                  <span data-오늘 className="child-status">
                     {아이.played_today ? 목록.오늘썼다 : 목록.오늘아직}
                   </span>
                   {/* **상한은 말하지 않으면 없는 것과 같다.** 학부모의 핵심 불안이 도파민이다. */}
-                  <span className="opacity-70">{하루상한(아이.daily_cap)}</span>
+                  <span className="child-limit">{하루상한(아이.daily_cap)}</span>
                 </div>
 
                 {/* **경고가 버튼 옆이다. 누른 뒤가 아니다** (`문구.md` 3.4) —
                     재발급이 `token_version` 을 올려 **아이가 쓰던 태블릿이 끊긴다.**
                     **되돌릴 수 없는 실수가 이제 둘이고 장치가 다르다**(3.9) — 이건 버튼 옆
                     한 줄이고 아래 지우기는 창이다. **끊기는 것이 기기냐 책이냐**로 갈렸다. */}
-                <div className="flex flex-col gap-2">
-                  <p className="opacity-80">{재발급.경고}</p>
+                <div className="child-access-actions">
+                  <p className="account-description">{재발급.경고}</p>
                   <button
                     type="button"
                     disabled={재발급중 === 아이.child_id}
                     onClick={() => void 코드다시받기(아이.child_id)}
-                    className="pressable self-start rounded-full border-2 border-brass/60 px-6 py-2
-                      disabled:opacity-40"
+                    className="pressable action-secondary self-start"
                   >
                     {재발급.버튼}
                   </button>
@@ -307,7 +306,7 @@ export function ChildrenPanel() {
                     set지웠다(null);
                     void 지우기전에확인(아이);
                   }}
-                  className="pressable self-start underline underline-offset-4 opacity-70"
+                  className="pressable action-quiet child-delete"
                 >
                   {지우기.버튼}
                 </button>
@@ -324,36 +323,35 @@ export function ChildrenPanel() {
       </div>
 
       <form
-        className="flex flex-col gap-4 rounded-2xl border-2 border-brass/40 p-5"
+        className="account-card child-create-form"
         onSubmit={(e) => {
           e.preventDefault();
           if (nickname.trim() !== "" && !보내는중) void 추가하기();
         }}
       >
-        <div className="flex flex-col gap-1">
-          <h2 className="text-2xl font-semibold">{만들기.제목}</h2>
+        <div className="child-create-heading">
+          <h2 className="account-section-title">{만들기.제목}</h2>
           {/* **넣기 전에 알린다.** 서버가 걸러내지만 거절당한 뒤에 아는 것보다 낫고,
               학부모의 불안은 「거절」이 아니라 **「어디에 남나」**다.
               **두 문장을 한 `<p>` 에 넣지 않는다** — 「실제 이름도 괜찮습니다」와
               「걸러집니다」가 붙으면 실명도 걸러지는 것으로 읽힌다 (`children-copy.ts` 주석). */}
-          <p className="opacity-80">{만들기.안내}</p>
-          <p className="opacity-80">{만들기.걸러지는것}</p>
+          <p className="account-description">{만들기.안내}</p>
+          <p className="account-description">{만들기.걸러지는것}</p>
         </div>
 
-        <label className="flex flex-col gap-1">
-          <span>{만들기.별명}</span>
+        <label className="account-field">
+          <span className="field-label">{만들기.별명}</span>
           <input
             type="text"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             required
-            className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-              dark:bg-glow-deep/40"
+            className="form-field"
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span>{만들기.나이}</span>
+        <label className="account-field">
+          <span className="field-label">{만들기.나이}</span>
           {/* **선택지가 셋뿐인 것은 계약이 닫아 둔 것이다** (`age_band ∈ {10,11,12}`).
               자유 입력으로 두면 타깃 밖 나이가 들어오고 서버가 422 로 되돌려준다. */}
           <select
@@ -361,8 +359,7 @@ export function ChildrenPanel() {
             onChange={(e) =>
               setAgeBand(Number(e.target.value) as CreateChildRequest["age_band"])
             }
-            className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-              dark:bg-glow-deep/40"
+            className="form-field"
           >
             {나이선택.map(({ 값, 글자 }) => (
               <option key={값} value={값}>
@@ -377,8 +374,7 @@ export function ChildrenPanel() {
         <button
           type="submit"
           disabled={nickname.trim() === "" || 보내는중}
-          className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
-            disabled:opacity-40"
+          className="pressable action-primary account-submit"
         >
           {만들기.버튼}
         </button>
@@ -410,10 +406,10 @@ export function ChildrenPanel() {
  */
 function AccessCodePanel({ 코드 }: { 코드: 발급된코드 }) {
   return (
-    <div data-접속코드 className="flex flex-col gap-2 rounded-2xl bg-brass/15 p-5">
+    <div data-접속코드 className="access-code-panel">
       <p className="font-semibold">{접속코드.제목}</p>
       {/* 숫자는 **띄어 읽을 수 있게** 자간을 준다 — 학부모가 아이에게 불러준다. */}
-      <p className="text-4xl tracking-[0.3em] tabular-nums">{코드.code}</p>
+      <p className="access-code-value">{코드.code}</p>
       {/* **본 그 순간에 말한다.** 나중에 다시 열어보려 하는 것이 실제 실패 모드다. */}
       <p>{접속코드.한번만}</p>
       {/* 아이 화면(3.2)이 막아주지만 **먼저 알면 아이가 그 벽을 안 만난다.** */}
@@ -491,30 +487,29 @@ function DeleteChildDialog({
       data-삭제확인
       // `Esc` 와 「그대로 두기」가 둘 다 여기로 온다. **닫히는 방향이 안전한 쪽**이다.
       onClose={닫기}
-      className="m-auto max-w-md rounded-2xl border-2 border-brass/40 bg-background
-        p-7 text-foreground backdrop:bg-scarf-deep/50"
+      className="account-dialog"
     >
       <div className="flex flex-col gap-5">
         {/* **별명을 제목에 넣는다** — 자녀가 여럿일 때 목록 위치로만 구분되면 잘못 누른다. */}
-        <h2 className="text-2xl font-semibold">{지우기.제목(아이.nickname)}</h2>
+        <h2 className="account-section-title">{지우기.제목(아이.nickname)}</h2>
 
         <div className="flex flex-col gap-2">
           {/* **무엇이 사라지는지 세어서 말한다** — 서버가 문장·그림·책·기록을 함께 지운다. */}
           <p>{지우기.사라진다}</p>
           <p className="font-semibold">{지우기.되돌릴수없다}</p>
-          <p className="opacity-80">{지우기.기기도}</p>
+          <p className="account-description">{지우기.기기도}</p>
         </div>
 
         {실패 !== null && <p data-삭제실패>{실패}</p>}
 
         {/* **머무는 쪽이 DOM 에서 먼저다.** `<dialog>` 가 첫 포커스 가능 요소에 포커스를 주므로
             **되돌릴 수 없는 쪽에 포커스가 앉지 않는다.** */}
-        <div className="flex justify-end gap-3">
+        <div className="account-dialog-actions">
           <form method="dialog">
             {/* `method="dialog"` 라 **서버를 부르지 않고 창만 닫는다.** */}
             <button
               type="submit"
-              className="pressable rounded-full px-6 py-3 underline underline-offset-4"
+              className="pressable action-secondary"
             >
               {지우기.그대로둔다}
             </button>
@@ -527,7 +522,7 @@ function DeleteChildDialog({
             data-지운다
             disabled={지우는중}
             onClick={() => void 지운다()}
-            className="pressable rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
+            className="pressable action-primary"
           >
             {지우기.지운다}
           </button>

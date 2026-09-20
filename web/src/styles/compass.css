@@ -1,0 +1,167 @@
+.compass-instrument {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+  overflow: visible;
+  filter: drop-shadow(0 3px 4px rgb(8 26 35 / 45%));
+}
+
+.compass-writing-glow {
+  transition: r 500ms ease, opacity 500ms ease;
+}
+
+.compass-needle,
+.compass-intro-light {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+.compass-etching-light { filter: drop-shadow(0 0 4px var(--color-glow)); }
+.compass-core-light { filter: drop-shadow(0 0 8px var(--color-glow)); }
+.compass-intro-light { opacity: 0; }
+
+/* 대사가 잠깐 멈춘 800ms 동안 두 번 부드럽게 밝아진다. 반복 재생하지 않는다. */
+.compass-instrument[data-compass-introducing="true"] .compass-intro-light {
+  animation: compass-introduction-glow 800ms ease-in-out both;
+}
+
+.compass-instrument[data-compass-introducing="true"] .compass-needle {
+  animation: compass-introduction-needle 800ms ease-in-out both;
+}
+
+@keyframes compass-introduction-glow {
+  0%, 50%, 100% { opacity: 0; transform: scale(0.96); }
+  25%, 75% { opacity: 0.95; transform: scale(1.04); }
+}
+
+@keyframes compass-introduction-needle {
+  0%, 100% { transform: rotate(0); }
+  30% { transform: rotate(8deg); }
+  65% { transform: rotate(-5deg); }
+}
+
+.compass-sparkle {
+  fill: #f5ffff;
+  filter: drop-shadow(0 0 5px var(--color-glow));
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: compass-starlight 3200ms ease-in-out infinite paused;
+}
+.compass-sparkle:nth-child(2) { animation-delay: -800ms; }
+.compass-sparkle:nth-child(3) { animation-delay: -1800ms; }
+.compass-sparkle:nth-child(4) { animation-delay: -2400ms; }
+.compass-instrument[data-compass-awake="true"] .compass-sparkle { animation-play-state: running; }
+
+/* 소개용 복제본은 문서 흐름 밖에서만 움직인다. 최종 나침반의 자리와 크기는 바뀌지 않는다. */
+.compass-arrival-source-light {
+  position: fixed;
+  z-index: 30;
+  left: var(--compass-source-x);
+  top: var(--compass-source-y);
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: #efffff;
+  box-shadow: 0 0 0.4rem 0.2rem var(--color-glow), 0 0 1.5rem 0.45rem rgb(51 225 255 / 55%);
+  pointer-events: none;
+  animation: compass-source-awakening 420ms ease-out both;
+}
+.compass-arrival {
+  position: fixed;
+  z-index: 31;
+  left: var(--compass-source-x);
+  top: var(--compass-source-y);
+  width: var(--compass-arrival-size);
+  height: var(--compass-arrival-size);
+  pointer-events: none;
+  transform-origin: center;
+  animation: compass-item-arrival 1s cubic-bezier(.2, .78, .25, 1) both;
+}
+.compass-arrival .compass-instrument {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 3px 5px rgb(18 32 36 / 45%));
+}
+.compass-arrival-sparkle {
+  position: absolute;
+  z-index: 1;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #f5ffff;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  box-shadow: 0 0 0.55rem var(--color-glow);
+  opacity: 0;
+  animation: compass-arrival-sparkle 260ms ease-out both;
+  animation-delay: 760ms;
+}
+.compass-arrival-sparkle--one { top: 6%; left: 75%; }
+.compass-arrival-sparkle--two { top: 53%; right: -4%; animation-delay: 810ms; }
+.compass-arrival-sparkle--three { bottom: 9%; left: 13%; animation-delay: 855ms; }
+.compass-arrival-sparkle--four { top: 25%; left: -3%; width: 0.38rem; height: 0.38rem; animation-delay: 900ms; }
+
+@keyframes compass-source-awakening {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.35); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+}
+@keyframes compass-item-arrival {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.42) rotate(-30deg); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(0.54) rotate(10deg); }
+  68% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--compass-arc-x)), calc(-50% + var(--compass-arc-y))) scale(1.03) rotate(225deg);
+  }
+  84% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--compass-travel-x)), calc(-50% + var(--compass-travel-y))) scale(1.08) rotate(282deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--compass-travel-x)), calc(-50% + var(--compass-travel-y))) scale(1) rotate(270deg);
+  }
+}
+@keyframes compass-arrival-sparkle {
+  0% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  45% { opacity: 1; transform: scale(1) rotate(45deg); }
+  100% { opacity: 0; transform: scale(0.65) rotate(90deg); }
+}
+
+@keyframes compass-starlight {
+  0%, 100% { opacity: 0.25; transform: scale(0.65); }
+  45%, 55% { opacity: 1; transform: scale(1.1); }
+}
+
+@media (max-width: 26rem) {
+  .compass-instrument {
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compass-writing-glow {
+    transition: none;
+  }
+
+  .compass-sparkle,
+  .compass-instrument[data-compass-introducing="true"] .compass-intro-light,
+  .compass-instrument[data-compass-introducing="true"] .compass-needle {
+    animation: none;
+  }
+  .compass-instrument[data-compass-introducing="true"] .compass-intro-light { opacity: 0.8; }
+  .compass-arrival-source-light { animation: compass-source-reduced 180ms ease-out both; }
+  .compass-arrival {
+    animation: compass-item-reduced 180ms ease-out both;
+  }
+  .compass-arrival-sparkle { display: none; }
+}
+
+@keyframes compass-source-reduced {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.75); }
+  to { opacity: 0.7; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes compass-item-reduced {
+  from { opacity: 0; transform: translate(calc(-50% + var(--compass-travel-x)), calc(-50% + var(--compass-travel-y))) scale(0.92); }
+  to { opacity: 1; transform: translate(calc(-50% + var(--compass-travel-x)), calc(-50% + var(--compass-travel-y))) scale(1); }
+}

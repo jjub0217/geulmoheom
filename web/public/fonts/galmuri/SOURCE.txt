@@ -1,0 +1,19 @@
+Galmuri11 — regular weight
+Author: Lee Minseo (quiple)
+Project: https://github.com/quiple/galmuri
+License: SIL Open Font License 1.1 (see LICENSE.txt)
+
+Unmodified upstream assets, pinned to commit:
+71e1cacf1437a11220307120e63e30bc275312d4
+
+Font:
+https://raw.githubusercontent.com/quiple/galmuri/71e1cacf1437a11220307120e63e30bc275312d4/dist/Galmuri11.woff2
+SHA-256: 8bad9322b3340bfb5cb26cb00f4752bf4c8e7d1b526bb07205f4af458eebed31
+
+License:
+https://raw.githubusercontent.com/quiple/galmuri/71e1cacf1437a11220307120e63e30bc275312d4/dist/LICENSE.txt
+SHA-256: 86a3ee9495f942f0243f18c103da9faca27adb88142613edb8bb852e56c892c1
+
+Bold weight (unmodified upstream asset):
+https://raw.githubusercontent.com/quiple/galmuri/71e1cacf1437a11220307120e63e30bc275312d4/dist/Galmuri11-Bold.woff2
+SHA-256: 0cfd6ce25b9f531fab677a604d96bc062cc139166880a086da3b4d72b1bb2492

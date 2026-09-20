@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { components } from "@/api/types.gen";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 
 import { ChildrenPanel } from "@/components/children";
+import { AccountEntry } from "@/components/account-entry";
 
 import { 날짜시각 } from "@/lib/format";
 
@@ -41,10 +42,8 @@ type ParentMe = components["schemas"]["ParentMe"];
  *    뒤는 **거부해도 그대로 쓸 수 있다.** 묶으면 거부할 수 없는 것을 거부할 수 있는 척하게 된다
  * ③ **고지를 링크 뒤에 숨기지 않는다.** 「어디로 가고 얼마나 남는가」는 화면에 문장으로 있다
  *
- * **`page-frame` 이 아니라 `reading-frame` 이다** (W3 에서 넘긴 ③, 2026-09-08).
- * 1280 을 다 쓰면 한 줄이 너무 길어 눈이 되돌아오고, **별명처럼 대여섯 글자를 넣는 칸이
- * 화면을 가로지른다** — **칸의 크기는 「얼마나 넣는가」를 말하는 신호**라, 넓은 칸은
- * 길게 쓰라는 뜻이 된다. 모험 화면은 반대라 `page-frame` 그대로다.
+ * **입력 열은 좁게 유지한다.** 계정 입력 뒤 고지와 동의를 차례로 읽고 제출한다.
+ * 자녀 관리에서는 목록과 추가 폼을 나눈다. 한 입력칸이 화면 전체를 가로지르지 않는다.
  */
 
 
@@ -198,131 +197,132 @@ export default function ParentSignup() {
     email.trim() !== "" && password !== "" && consent && !보내는중;
 
   return (
-    <main className="reading-frame flex flex-1 flex-col justify-center gap-8 py-12">
-      {screen.kind === "확인중" && <p className="opacity-70">{상태표시.확인중}</p>}
+    <ParentSignupFrame signedIn={screen.kind === "가입됨"}>
+      {screen.kind === "확인중" && <p className="parent-entry-status" role="status">{상태표시.확인중}</p>}
 
       {screen.kind === "가입전" && (
         <>
-        <form
-          className="flex flex-col gap-8"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (보낼수있다) void 보내기();
-          }}
-        >
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold">{폼.제목}</h1>
-            <p className="opacity-80">{폼.안내}</p>
-            {/* **⛔ 제목 바로 아래다. 폼 뒤가 아니다** (2026-09-15, W6 14번 PM 판정).
-                **돌아온 부모는 고지를 다시 읽을 이유가 없다** — 그런데 이 길이 **동의 폼
-                전체 뒤**라 360×640 에서 **1308px**, 태블릿 가로에서도 **1077px** 로
-                **첫 화면 밖**이었다. 어제 ⑥ 을 고치며 낸 길인데 **보이지 않으면 없는 것**이다.
-                **「가입하기」는 안 올린다** — **동의는 읽고 나서 누르는 것**이고,
-                버튼이 고지 앞에 오면 **읽기 전에 동의**하게 된다 (3.1·7.3).
-                **오류와 무관하게 늘 보인다**: 오류 때만 띄우면 그것 자체가
-                **이메일 존재 확인 창구**가 된다(`parents.py:93`). */}
-            <Link
-              href="/parents/login"
-              className="pressable self-start rounded-full py-2 underline underline-offset-4"
-            >
-              {폼.로그인으로}
-            </Link>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1">
-              <span>{폼.이메일}</span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-                className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-                  dark:bg-glow-deep/40"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span>{폼.비밀번호}</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-                className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-                  dark:bg-glow-deep/40"
-              />
-            </label>
-          </div>
-
-          <section className="flex flex-col gap-3 rounded-2xl border-2 border-brass/40 p-5">
-            <h2 className="font-semibold">{폼.고지제목}</h2>
-            {/* **링크 뒤에 숨기지 않는다.** 「약관 보기」만 두면 아무도 읽지 않는다. */}
-            <ul className="list-disc space-y-1 pl-5">
-              {고지.map((줄) => (
-                <li key={줄}>{줄}</li>
-              ))}
-            </ul>
-
-            {/* 필수 — 거부하면 서비스를 이용할 수 없다. 서버도 false 면 422 다. */}
-            <label className="mt-2 flex items-start gap-3">
-              <input
-                type="checkbox"
-                name="consent"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-1 size-5"
-              />
-              <span>
-                <strong>{폼.필수표시}</strong> {폼.필수동의}
-              </span>
-            </label>
-          </section>
-
-          <section className="flex flex-col gap-2 rounded-2xl border-2 border-brass/40 p-5">
-            {/* 위 상자가 「무슨 일이 일어나는지」이고 여기가 「당신이 정하는 것」이다.
-                **제목이 그 경계를 선언한다** — 「선택」이라는 사실을 라벨 앞의 `[선택]` 글자
-                하나에만 기대지 않게 된다. 빠르게 훑는 사람도 읽는 모드가 바뀐 것을 여기서 안다. */}
-            <h2 className="font-semibold">{폼.선택시작}</h2>
-            {/* **별개 항목이다.** 위와 한 덩어리로 만들지 않는다 (PRD 1.1b). */}
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                name="labeling_consent"
-                checked={labelingConsent}
-                onChange={(e) => setLabelingConsent(e.target.checked)}
-                className="mt-1 size-5"
-              />
-              {/* **「사람이 직접 읽는다」를 숨기지 않는다.** 그게 이 동의의 실체다 —
-                  나중에 알게 되면 **동의를 받은 것이 아니라 속인 것**이 된다
-                  (`페인_가이드라인정책.md` 「숨기지 않고 고지한다」). */}
-              <span>
-                <strong>{폼.선택표시}</strong> {폼.선택동의}
-              </span>
-            </label>
-            {/* 이 한 줄이 없으면 「체크 안 하면 기능이 줄어드나」 하고 그냥 누른다 —
-                그러면 동의를 **받은 것이 아니라 통과시킨 것**이 된다. */}
-<p className="pl-8 opacity-80">{폼.선택거부해도}</p>
-          </section>
-
-          {/* **자리가 버튼 곁이다** — 방금 누른 것에 대한 대답이라, 폼 위로 올리면
-              부모가 무엇 때문에 나온 말인지 찾아야 한다. 로그인 화면과 같은 규칙이다. */}
-          {제출오류 !== null && (
-            <p data-오류 role="status" className="text-xl/relaxed">
-              {제출오류}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={!보낼수있다}
-            className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
-              disabled:opacity-40"
+          <form
+            className="account-signup-form parent-entry-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (보낼수있다) void 보내기();
+            }}
           >
-            {폼.가입하기}
-          </button>
-        </form>
+            <div className="account-details">
+              <div className="account-heading">
+                <h1>{폼.제목}</h1>
+                <p className="account-description">{폼.안내}</p>
+                {/* **⛔ 제목 바로 아래다. 폼 뒤가 아니다** (2026-09-15, W6 14번 PM 판정).
+                    **돌아온 부모는 고지를 다시 읽을 이유가 없다** — 그런데 이 길이 **동의 폼
+                    전체 뒤**라 360×640 에서 **1308px**, 태블릿 가로에서도 **1077px** 로
+                    **첫 화면 밖**이었다. 어제 ⑥ 을 고치며 낸 길인데 **보이지 않으면 없는 것**이다.
+                    **「가입하기」는 안 올린다** — **동의는 읽고 나서 누르는 것**이고,
+                    버튼이 고지 앞에 오면 **읽기 전에 동의**하게 된다 (3.1·7.3).
+                    **오류와 무관하게 늘 보인다**: 오류 때만 띄우면 그것 자체가
+                    **이메일 존재 확인 창구**가 된다(`parents.py:93`). */}
+                <Link
+                  href="/parents/login"
+                  className="pressable action-quiet self-start parent-entry-switch"
+                >
+                  {폼.로그인으로}
+                </Link>
+              </div>
+
+              <div className="account-credentials">
+                <label className="account-field">
+                  <span className="field-label">{폼.이메일}</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    required
+                    className="form-field"
+                  />
+                </label>
+                <label className="account-field">
+                  <span className="field-label">{폼.비밀번호}</span>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                    required
+                    className="form-field"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="account-consents">
+              <section className="account-disclosure">
+                <h2 className="font-semibold">{폼.고지제목}</h2>
+                {/* **링크 뒤에 숨기지 않는다.** 「약관 보기」만 두면 아무도 읽지 않는다. */}
+                <ul className="account-disclosure-list">
+                  {고지.map((줄) => (
+                    <li key={줄}>{줄}</li>
+                  ))}
+                </ul>
+
+                {/* 필수 — 거부하면 서비스를 이용할 수 없다. 서버도 false 면 422 다. */}
+                <label className="account-checkbox account-checkbox-required">
+                  <input
+                    type="checkbox"
+                    name="consent"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    className="account-check"
+                  />
+                  <span>
+                    <strong>{폼.필수표시}</strong> {폼.필수동의}
+                  </span>
+                </label>
+              </section>
+
+              <section className="account-disclosure account-disclosure-optional">
+                {/* 위 상자가 「무슨 일이 일어나는지」이고 여기가 「당신이 정하는 것」이다.
+                    **제목이 그 경계를 선언한다** — 「선택」이라는 사실을 라벨 앞의 `[선택]` 글자
+                    하나에만 기대지 않게 된다. 빠르게 훑는 사람도 읽는 모드가 바뀐 것을 여기서 안다. */}
+                <h2 className="font-semibold">{폼.선택시작}</h2>
+                {/* **별개 항목이다.** 위와 한 덩어리로 만들지 않는다 (PRD 1.1b). */}
+                <label className="account-checkbox">
+                  <input
+                    type="checkbox"
+                    name="labeling_consent"
+                    checked={labelingConsent}
+                    onChange={(e) => setLabelingConsent(e.target.checked)}
+                    className="account-check"
+                  />
+                  {/* **「사람이 직접 읽는다」를 숨기지 않는다.** 그게 이 동의의 실체다 —
+                      나중에 알게 되면 **동의를 받은 것이 아니라 속인 것**이 된다
+                      (`페인_가이드라인정책.md` 「숨기지 않고 고지한다」). */}
+                  <span>
+                    <strong>{폼.선택표시}</strong> {폼.선택동의}
+                  </span>
+                </label>
+                {/* 이 한 줄이 없으면 「체크 안 하면 기능이 줄어드나」 하고 그냥 누른다 —
+                    그러면 동의를 **받은 것이 아니라 통과시킨 것**이 된다. */}
+                <p className="account-consent-note">{폼.선택거부해도}</p>
+              </section>
+
+              {/* **자리가 버튼 곁이다** — 방금 누른 것에 대한 대답이라, 폼 위로 올리면
+                  부모가 무엇 때문에 나온 말인지 찾아야 한다. 로그인 화면과 같은 규칙이다. */}
+              {제출오류 !== null && (
+                <p data-오류 role="status" className="account-feedback">
+                  {제출오류}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={!보낼수있다}
+                className="pressable action-primary account-submit"
+              >
+                {폼.가입하기}
+              </button>
+            </div>
+          </form>
 
         </>
       )}
@@ -332,8 +332,10 @@ export default function ParentSignup() {
         // 앞 세션이 「곧 열립니다」를 안 지어두고 비워 둔 자리다 — 지어뒀으면 이틀 뒤 거짓말이 됐다.
         // **라우트를 새로 만들지 않았다**: 새 화면으로 빼면 **거기로 가는 링크 글자**가 필요한데
         // `문구.md` 에 그 자리가 없다.
-        <div className="flex w-full flex-col items-start gap-2">
-          <h1 className="text-3xl font-semibold">{폼.가입됨}</h1>
+        <div className="account-dashboard">
+          <div className="account-heading account-dashboard-heading">
+            <h1>{폼.가입됨}</h1>
+          </div>
 
           {/* **⛔ 자녀 관리가 위다** (2026-09-15, W6 14번 PM 판정 — 「그 화면에 온 사람이
               해야 할 일은 첫 화면에 있어야 한다」). **부모가 여기 오는 이유는 접속 코드**이고,
@@ -344,14 +346,14 @@ export default function ParentSignup() {
             <ChildrenPanel />
           </div>
 
-          <div className="mt-8 w-full border-t-2 border-brass/30 pt-8">
+          <div className="account-dashboard-footer">
             {/* **기계가 준 값을 그대로 내지 않는다** (`문구.md` 6장). 한때 여기에
                 `2026-09-08T01:00:00Z` 가 그대로 나갔다 — **문장은 3.6 에 등록돼 있었는데
                 값의 형식이 어디에도 없었다.** 못 읽는 값이면 **줄을 통째로 안 그린다**:
                 「NaN년」을 내보내느니 없는 편이 낫다. **학부모는 자기가 무엇에 동의했는지
                 확인하러 온다** — 그래서 **없애지 않고 자리만 내린다.** */}
             {날짜시각(screen.consentAt) !== null && (
-              <p className="opacity-80">
+              <p className="account-description">
                 {폼.동의기록}{" "}
                 <time dateTime={screen.consentAt}>{날짜시각(screen.consentAt)}</time>
               </p>
@@ -363,7 +365,7 @@ export default function ParentSignup() {
             <button
               type="button"
               onClick={() => void 로그아웃()}
-              className="pressable mt-4 rounded-full border-2 border-brass/60 px-8 py-2"
+              className="pressable action-quiet"
             >
               {폼.로그아웃}
             </button>
@@ -371,10 +373,10 @@ export default function ParentSignup() {
         </div>
       )}
 
-      {screen.kind === "거절" && <p className="text-xl/relaxed">{screen.line}</p>}
+      {screen.kind === "거절" && <p className="account-feedback parent-entry-status">{screen.line}</p>}
 
       {screen.kind === "못닿음" && (
-        <div className="flex flex-col gap-6">
+        <div className="parent-entry-status flex flex-col gap-6">
           {/* **`문구.md` 3.5 다. 자리마다 다르다** — 무엇이 안 됐는지를 말한다.
               「인터넷 연결을 확인해 주세요」를 안 붙인다: **우리 쪽이 내려간 것일 수도 있는데
               원인을 모르면서 상대 탓으로 읽히는 안내를 하지 않는다.** */}
@@ -393,6 +395,16 @@ export default function ParentSignup() {
           )}
         </div>
       )}
-    </main>
+    </ParentSignupFrame>
+  );
+}
+
+/** 입장 화면만 새 표지를 사용하고, 로그인 뒤 자녀 관리의 레이아웃은 유지한다. */
+function ParentSignupFrame({ signedIn, children }: { signedIn: boolean; children: ReactNode }) {
+  if (signedIn) return <main className="account-page">{children}</main>;
+  return (
+    <AccountEntry kind="signup">
+      <div className="parent-entry parent-entry--signup">{children}</div>
+    </AccountEntry>
   );
 }

@@ -25,7 +25,7 @@ export function WrittenLine({
   highlights: readonly Highlight[];
 }) {
   return (
-    <p data-쓴문장 className="reading-frame text-2xl/relaxed">
+    <p data-쓴문장 className="written-line">
       {하이라이트조각(text, highlights).map((조각, i) =>
         조각.강조 ? (
           // `<mark>` 가 뜻으로 맞다 — **읽어 주는 기계에도 「여기가 짚인 자리」로 전해진다.**

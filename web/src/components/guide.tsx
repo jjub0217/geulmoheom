@@ -1,8 +1,30 @@
+"use client";
+
 import Image from "next/image";
+import type { ReactNode } from "react";
 
 import type { components } from "@/api/types.gen";
+import { useCompassIntroduction } from "@/components/compass-introduction";
 
 type Guide = components["schemas"]["Guide"];
+
+/** 문장 끝에서만 단락을 나눈다. 서버 원문과 타이핑의 글자 순서는 유지한다. */
+function GuideText({ text, visible = text, caret = false }: { text: string; visible?: string; caret?: boolean }) {
+  const ends = [...text.matchAll(/[.!?…][”’"']*\s+/g)].map((match) => match.index + match[0].length);
+  if (ends.at(-1) !== text.length) ends.push(text.length);
+  return ends.map((end, index) => {
+    const start = index === 0 ? 0 : ends[index - 1];
+    const sentence = text.slice(start, end);
+    const count = Math.max(0, Math.min(sentence.length, visible.length - start));
+    const active = visible.length >= start && (visible.length < end || index === ends.length - 1);
+    return (
+      <span className="guide-sentence" data-unspoken={sentence.slice(count)} key={start}>
+        {sentence.slice(0, count)}
+        {caret && active && <span className="guide-caret" aria-hidden="true" />}
+      </span>
+    );
+  });
+}
 
 /**
  * 가이드 캐릭터. **서버가 준 `guide` 객체를 그대로 쓴다.**
@@ -11,19 +33,22 @@ type Guide = components["schemas"]["Guide"];
  * (`docs/api/Stage0.md` 3절). 특히 `compass_bright`·`compass_dim` 은 **평가 결과**를 뜻하므로
  * 제출 전에는 어떤 이유로도 켜지 않는다 — 입력 중 화면은 `default` 를 넘긴다.
  */
-export function GuideFigure({ guide }: { guide: Guide }) {
+export function GuideFigure({ guide, stage = false, compass }: { guide: Guide; stage?: boolean; compass?: ReactNode }) {
+  const introduction = useCompassIntroduction();
+  const dialogue = introduction?.line === guide.line ? introduction : null;
+  const speaking = dialogue !== null && dialogue.phase !== "narrative" && dialogue.phase !== "complete";
+  const partial = dialogue !== null && dialogue.visible !== guide.line;
   return (
-    <figure className="flex items-center gap-3 sm:gap-5">
+    <figure className="guide-figure" data-guide-phase={dialogue?.phase}>
+      {stage && <span className="compass-source" data-compass-source aria-hidden="true" />}
       <Image
-        // 파일명이 곧 `expression` 값이다 (`docs/캐릭터/표정/` 에서 복사).
-        src={`/guide/${guide.expression}.png`}
+        // 무대용은 같은 표정의 투명 배경본이다. 서버가 고른 표정은 그대로 둔다.
+        src={`/guide/${guide.expression}${stage ? "-stage" : ""}.png`}
         alt=""
         width={256}
         height={256}
         // **원형으로 자르지 않는다.** 자르면 고글·크로스백·파란 스카프가 잘려 나가는데,
         // 아동 4명이 2판을 고른 이유가 정확히 그 셋이다 — 잘라내면 확인받은 것이 제품에 없는 셈이다.
-        // 배경이 옅은 회색 단색(알파 없음)이라 액자처럼 둥근 사각형 안에 그대로 둔다.
-        // 알파본은 W3 에서 뽑는다 (`compass_bright` 는 빛이 배경으로 번져 있어 재생성이 필요할 수 있다).
         // **작은 화면에서 줄인다** (2026-09-15 PM 판정 · 결과 ⑭ 옆). 화면의 우선순위는
         // **삽화 → 아이 문장 → 나가는 길 셋 → 가이드**이고 **가이드가 가장 뒤**다 —
         // 삽화는 보상 그 자체이고, **나가는 길은 안 보이면 없는 것**이다(③ 이 증명했다).
@@ -33,14 +58,36 @@ export function GuideFigure({ guide }: { guide: Guide }) {
         // **⚠ 다만 `default` 와 `compass_dim` 은 자세 차이뿐이라 이 크기에서 약하다.**
         // 대사가 늘 같이 서므로(되묻기는 질문 문장이 온다) **뜻이 사라지지는 않지만**,
         // **여기가 하한이다 — 더 줄이면 표정이 아니라 장식이 된다.** PM 에게 알렸다.
-        className="size-16 shrink-0 rounded-2xl border-2 border-brass/30 object-cover
-          sm:size-28 wide:size-44"
+        className="guide-image"
         priority
       />
-      {/* 말풍선이 아니라 그냥 대사다 — 서버 문자열을 그대로 읽는다. */}
-      {/* **작은 화면에서 본문 크기로 내린다** — `text-lg` 는 18px 라 **16px MUST 위**다
-          (`globals.css` 「글자」). 대사가 두 줄이면 그 두 줄이 통째로 이 블록의 높이다. */}
-      <figcaption className="text-lg/relaxed sm:text-xl/relaxed">{guide.line}</figcaption>
+      {/* 서버 문장은 그대로다. 소개 중에도 전체 높이를 미리 잡아 입력창이 밀리지 않는다.
+          스크린리더에는 한 글자씩 알리지 않고 처음부터 전체 문장 하나를 제공한다. */}
+      <figcaption className="guide-line">
+        {dialogue ? (
+          <span
+            data-guide-dialogue
+            className={`guide-dialogue${speaking ? " pressable" : ""}`}
+            role={speaking ? "button" : undefined}
+            tabIndex={speaking ? 0 : undefined}
+            aria-label={speaking ? guide.line : undefined}
+            onClick={speaking ? dialogue.advance : undefined}
+            onKeyDown={speaking ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                dialogue.advance();
+              }
+            } : undefined}
+          >
+            <span className="guide-dialogue-space" aria-hidden="true"><GuideText text={guide.line} visible="" /></span>
+            <span className="guide-dialogue-typed" data-guide-typed aria-hidden={partial ? true : undefined}>
+              <GuideText text={guide.line} visible={dialogue.visible} caret={dialogue.phase === "prefix" || dialogue.phase === "rest"} />
+            </span>
+            {partial && <span className="sr-only">{guide.line}</span>}
+          </span>
+        ) : stage ? <GuideText text={guide.line} /> : guide.line}
+      </figcaption>
+      {compass}
     </figure>
   );
 }

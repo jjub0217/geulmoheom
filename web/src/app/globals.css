@@ -1,4 +1,24 @@
 @import "tailwindcss";
+@import "../styles/adventure.css";
+@import "../styles/account.css";
+@import "../styles/account-entry.css";
+@import "../styles/child-entry.css";
+@import "../styles/parent-entry.css";
+@import "../styles/book.css";
+@import "../styles/compass.css";
+@import "../styles/game-stage.css";
+/* 결과 화면의 삽화·대사·다음 행동 배치를 함께 관리한다. */
+@import "../styles/result-stage.css";
+/* 저녁 숲에서 마무리하며, 배웅 말풍선은 문장 너비에 맞춘다. */
+@import "../styles/ending-stage.css";
+@import "../styles/chapter-stage.css";
+/* '내 책 펼치기'는 같은 형태를 쓰고, 색으로 강조 정도를 구분한다. */
+@import "../styles/book-link.css";
+/* 결과와 책의 배지 안내는 같은 버튼과 설명 창을 사용한다. */
+@import "../styles/tier-badge.css";
+@import "../styles/story-font.css";
+/* 책 이름을 표시하고 고칠 때는 고운바탕을 쓴다. */
+@import "../styles/book-title-font.css";
 
 /* ─────────────────────────────────────────────────────────────────────────
    기준 골격 — 화면이 아니라 모든 화면이 올라설 바닥이다.
@@ -78,12 +98,37 @@
 
 /* ── 의미 토큰 ──────────────────────────────────────────────────────────
    OS 설정에 따라 값이 바뀌어야 하므로 `:root` 에 두고 `@theme inline` 으로 잇는다.
-   값은 위 팔레트에서만 가져온다. 명암비 실측: 밝을 때 7.66:1, 어두울 때 6.99:1 —
-   둘 다 WCAG AA(4.5:1)를 넉넉히 넘는다. */
+   값은 위 팔레트의 명도·투명도 단계다. 종이 표면의 본문 명암비는 밝을 때 8.82:1,
+   어두울 때 11.18:1이며, 보조 글자도 각각 5.56:1·6.85:1로 4.5:1을 넘는다. */
 :root {
   color-scheme: light dark;
-  --background: var(--color-markings);
+  /* 글의 역할별 공통값. 긴 서사는 읽기 편하게, 짧은 동료 대사는 게임의 결을 유지한다. */
+  --font-reading: var(--font-sans);
+  --font-companion: "Galmuri11", var(--font-sans);
+  --type-reading-mobile: 1.0625rem;
+  --type-reading-desktop: 1.125rem;
+  --leading-scene: 1.72;
+  --leading-chapter: 1.7;
+  --leading-child-writing: 1.7;
+  --type-companion-mobile: 1.0625rem;
+  --type-companion-desktop: 1.25rem;
+  --leading-companion: 1.6;
+  /* 캐릭터 팔레트의 명도만 나눈다. 바탕·종이·입력칸이 서로 구분되는 단계다. */
+  --background: color-mix(in srgb, var(--color-markings) 65%, white);
   --foreground: var(--color-scarf-deep);
+  --surface: color-mix(in srgb, var(--color-markings) 18%, white);
+  --surface-raised: color-mix(in srgb, var(--color-markings) 8%, white);
+  --surface-muted: color-mix(in srgb, var(--color-scarf) 5%, var(--surface));
+  --border: color-mix(in srgb, var(--color-scarf-deep) 13%, transparent);
+  --border-strong: color-mix(in srgb, var(--color-scarf-deep) 30%, transparent);
+  --muted: color-mix(in srgb, var(--color-scarf-deep) 82%, var(--background));
+  --accent: var(--color-vest);
+  --button-bg: var(--color-scarf-deep);
+  --button-fg: var(--color-markings);
+  --button-hover: var(--color-glow-deep);
+  --surface-hover: color-mix(in srgb, var(--color-scarf) 10%, var(--surface));
+  --shadow-card: 0 2px 6px color-mix(in srgb, var(--color-vest) 3%, transparent),
+    0 18px 50px -24px color-mix(in srgb, var(--color-vest) 24%, transparent);
 }
 
 /* **아주 낮은 화면**(주소창이 있는 폰, 폰 가로). `640px` 높이면 45svh = 288px 라
@@ -98,14 +143,28 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: var(--color-glow-deep);
+    --background: color-mix(in srgb, var(--color-scarf-deep) 43%, black);
     --foreground: var(--color-markings);
+    --surface: color-mix(in srgb, var(--color-scarf-deep) 66%, black);
+    --surface-raised: color-mix(in srgb, var(--color-scarf-deep) 80%, black);
+    --surface-muted: color-mix(in srgb, var(--color-scarf-deep) 55%, black);
+    --border: color-mix(in srgb, var(--color-markings) 13%, transparent);
+    --border-strong: color-mix(in srgb, var(--color-markings) 32%, transparent);
+    --muted: color-mix(in srgb, var(--color-markings) 76%, var(--background));
+    --accent: color-mix(in srgb, var(--color-brass) 85%, var(--color-markings));
+    --button-bg: var(--color-markings);
+    --button-fg: var(--color-scarf-deep);
+    --button-hover: color-mix(in srgb, var(--color-markings) 85%, var(--color-brass));
+    --surface-hover: color-mix(in srgb, var(--color-scarf) 25%, var(--surface));
+    --shadow-card: 0 2px 6px color-mix(in srgb, var(--background) 20%, transparent),
+      0 18px 50px -24px color-mix(in srgb, var(--background) 80%, transparent);
   }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
 }
 
 body {
@@ -153,8 +212,122 @@ body {
    **`outline` 을 쓰고 `border` 를 안 쓴다** — 테두리는 자리를 차지해서
    **초점이 옮겨갈 때 화면이 밀린다.** */
 @utility pressable {
-  @apply transition-colors hover:bg-brass/10 focus-visible:outline-2
+  @apply focus-visible:outline-2
     focus-visible:outline-offset-2 focus-visible:outline-brass;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+
+  &:hover:not(:disabled) {
+    background-color: var(--control-hover, var(--surface-hover));
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@layer components {
+  .action-primary,
+  .action-secondary,
+  .action-quiet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    border: 1px solid transparent;
+    border-radius: 0.875rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .action-primary {
+    --control-hover: var(--button-hover);
+    background: var(--button-bg);
+    color: var(--button-fg);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--color-scarf-deep) 12%, transparent);
+  }
+
+  .action-secondary {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--foreground);
+  }
+
+  .action-quiet {
+    color: var(--muted);
+  }
+
+  .action-primary:disabled,
+  .action-secondary:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+  }
+
+  .field-label {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+
+  .form-field {
+    width: 100%;
+    min-width: 0;
+    min-height: 3.25rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface-raised);
+    color: var(--foreground);
+    font: inherit;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+
+  .form-field:focus-visible {
+    border-color: var(--color-scarf);
+    outline-color: var(--color-brass);
+  }
+
+  .form-field::placeholder {
+    color: var(--muted);
+  }
+
+  /* Safari의 기본 select는 지정한 높이를 무시한다. 기존 드롭다운 동작은 그대로다. */
+  select.form-field {
+    appearance: none;
+    padding-right: 2.75rem;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 1.2rem) 50%, calc(100% - 0.9rem) 50%;
+    background-size: 0.3rem 0.3rem;
+    background-repeat: no-repeat;
+  }
+
+  .app-dialog {
+    width: calc(100% - 2rem);
+    max-width: 28rem;
+    margin: auto;
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    padding: clamp(1.25rem, 4vw, 2rem);
+    background: var(--surface);
+    color: var(--foreground);
+    box-shadow: var(--shadow-card);
+  }
+
+  .app-dialog::backdrop {
+    background: color-mix(in srgb, var(--color-scarf-deep) 60%, transparent);
+    backdrop-filter: blur(4px);
+  }
 }
 
 /* 기준 폭 — 넓은 화면 1280 에서 멈춰 가운데로 모인다. 좁은 화면에서는 폭을 다 쓴다. */

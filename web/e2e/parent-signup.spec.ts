@@ -7,6 +7,24 @@ import type { components } from "../src/api/types.gen";
 import { 로그인 } from "../src/app/parents/login/copy";
 import { 아이입장으로보낼곳 } from "../src/lib/parent-kicked";
 
+test.use({ serviceWorkers: "block" });
+
+test.beforeEach(async ({ context, baseURL }) => {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/healthz")) {
+      return route.fulfill({ status: 200, json: { status: "ok" } });
+    }
+    // 각 검사가 선언한 모의 응답 이외에는 실제 가입·데이터 요청을 보내지 않는다.
+    if (url.pathname.startsWith("/api/")) {
+      return route.fulfill({ status: 404, json: { detail: "Unmocked parent signup request" } });
+    }
+    if (url.origin !== origin) return route.abort();
+    return route.continue();
+  });
+});
+
 /**
  * 보호자 가입·동의 화면 (E-4 프론트 몫).
  *
@@ -28,8 +46,18 @@ const 가입됨: SignupResponse = {
 
 /** 아직 안 들어온 상태. 이 화면의 정상 출발점이다. */
 async function 로그아웃상태(page: Page) {
+  let 가입했나 = false;
+  page.on("response", (response) => {
+    const path = new URL(response.url()).pathname;
+    if (path === "/api/v1/parents/signup" && response.status() === 201) 가입했나 = true;
+    if (path === "/api/v1/parents/logout" && response.status() === 204) 가입했나 = false;
+  });
   await page.route(ME, (route) =>
-    route.fulfill({
+    // 가입 성공 뒤 자녀 목록을 읽을 때도 같은 모의 세션을 유지한다.
+    route.fulfill(가입했나 ? {
+      status: 200,
+      json: { ...가입됨, email: "parent@example.com", children: [] },
+    } : {
       status: 401,
       json: { error: { code: "UNAUTHORIZED", message: "다시 한 번 들어와 주세요" } },
     }),
@@ -280,7 +308,7 @@ test("로그아웃이 못 닿으면 나간 척하지 않는다 — 무엇이 안
   // **「서버」가 화면에 없다.** 한때 여기에 「지금 서버에 닿지 못했습니다」가 박혀 있었다 —
   // `용어사전.md` 9장: **읽어도 모르면 고지가 아니라 알리바이다.**
   // 개발 단서(`data-dev-hints`)는 개발자용이라 세지 않는다.
-  const 학부모가읽는것 = await page.locator("main > div > p").first().innerText();
+  const 학부모가읽는것 = await page.getByText(못닿음.로그아웃, { exact: true }).innerText();
   expect(학부모가읽는것).not.toContain("서버");
 });
 

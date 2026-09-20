@@ -1,0 +1,706 @@
+/* 차분한 크래프트지 위에서 한 펼침씩 읽는다. 화면 도구는 인쇄에 남기지 않는다. */
+.book-shell,
+.book-library {
+  --foreground: var(--color-scarf-deep);
+  --muted: #59616a;
+  --surface: #fff9ef;
+  --surface-raised: #fffdf8;
+  --surface-muted: #f5ead8;
+  --border: #d5c6ac;
+  --border-strong: #9e855e;
+  --button-bg: var(--color-scarf-deep);
+  --button-fg: var(--color-markings);
+  --button-hover: var(--color-glow-deep);
+  --surface-hover: #f0e0c6;
+  color: #2b4a6f;
+  color-scheme: light;
+}
+
+.book-shell {
+  flex: 1;
+  width: 100%;
+  min-height: 100svh;
+  background:
+    linear-gradient(rgb(244 237 225 / 88%), rgb(244 237 225 / 88%)),
+    #c9a66f url("/adventure/kraft-paper.jpg") center top / 100% auto repeat-y;
+}
+
+.book-library {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1rem;
+  width: 100%;
+  max-width: 84rem;
+  margin-inline: auto;
+  padding: 1.5rem clamp(1rem, 3vw, 2rem) 1.5rem;
+}
+
+.book-heading {
+  width: min(100%, 48rem);
+  margin-inline: auto;
+}
+
+.book-cover {
+  display: grid;
+  justify-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.book-cover-title {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.045em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.book-cover-author {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.book-title {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.book-title-trigger {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.375em;
+  min-height: 2.75rem;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.book-title-label {
+  min-width: 0;
+  text-decoration: underline;
+  text-decoration-color: rgb(43 74 111 / 35%);
+  text-decoration-thickness: 2.5px;
+  text-underline-offset: 0.18em;
+}
+
+.book-title-trigger:hover .book-title-label {
+  text-decoration-color: currentColor;
+}
+.book-title-trigger:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 6px;
+  border-radius: 0.25rem;
+}
+
+.book-title-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  flex: none;
+  width: min(100%, 28rem);
+  text-align: center;
+}
+
+.book-title-editor {
+  padding: 1.25rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+
+.book-title-input {
+  min-width: 0;
+  text-align: center;
+  font-size: 1.125rem;
+}
+
+.book-title-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.book-title-notice {
+  color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.book-reader {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  scroll-margin-top: 1rem;
+}
+
+.book-pages {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  scroll-margin-top: 1rem;
+}
+
+.book-reader-page {
+  min-width: 0;
+}
+
+/* 그림이 달라도 화면의 한 면은 1:1이다. 원본 전체는 contain으로 보존한다. */
+@media screen {
+  .book-reader-page[data-current="false"] {
+    display: none;
+  }
+}
+
+.book-page {
+  --book-paper:
+    linear-gradient(rgb(242 222 189 / 76%), rgb(242 222 189 / 76%)),
+    #d8b580 url("/adventure/kraft-paper.jpg") center / cover;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+  margin-inline: auto;
+  /* 그림을 책 면의 가장자리까지 붙인다. 종이색 테두리 여백은 두지 않는다. */
+  padding: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  /* 얇은 종이 윤곽은 내용 뒤에서 그린다. */
+  background: transparent;
+  color: #2b4a6f;
+}
+
+.book-page::before,
+.book-page::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1px solid #cbb28a;
+  border-radius: inherit;
+  background: var(--book-paper);
+  /* book-kraft-desktop의 부드러운 그림자. 여러 종이가 겹치는 단차는 두지 않는다. */
+  box-shadow:
+    0 2px 1px rgb(78 58 30 / 7%),
+    0 18px 44px -24px rgb(78 58 30 / 24%);
+  pointer-events: none;
+}
+
+.book-page::before {
+  content: "";
+}
+
+.book-page-illustration {
+  position: relative;
+  display: block;
+  align-self: start;
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.book-page-artwork {
+  position: relative;
+  flex: none;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 0.75rem 0.75rem 0 0;
+  background: var(--surface-muted);
+}
+.book-page-artwork-status {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.book-page-artwork-retry {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 2rem);
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.book-page-writing {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  /* 가운데 접힘이 삽화 면까지 이어진다. 긴 글은 아래 본문 자체에서만 스크롤한다. */
+  overflow: visible;
+  padding: 1.75rem clamp(1.375rem, 4vw, 3.5rem);
+}
+
+.book-page-tier {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  width: 100%;
+  min-width: 0;
+}
+
+.book-page-text {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: min(100%, 26rem);
+  margin-inline: 0;
+  margin-block: auto 0;
+  min-width: 0;
+  font-size: clamp(1.25rem, 2vw, 1.625rem);
+  font-weight: 400;
+  line-height: 1.8;
+  letter-spacing: -0.025em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.book-page-text:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+.book-page-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  width: 100%;
+}
+
+.book-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(100%, 34rem);
+  margin-inline: auto;
+  padding-block: 0.25rem;
+}
+
+.book-page-turn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: transparent;
+  color: #2b4a6f;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.book-page-turn:hover:not(:disabled) {
+  background: rgb(43 74 111 / 7%);
+}
+.book-page-turn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.book-page-turn:disabled {
+  opacity: 0.35;
+}
+
+.book-page-number {
+  color: var(--muted);
+  font-size: 1.0625rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 쪽 번호가 밝거나 어두운 그림에서도 읽히도록 작은 반투명 바탕만 둔다. */
+.book-page-number--illustration {
+  position: absolute;
+  left: clamp(1.375rem, 4vw, 3.5rem);
+  bottom: 1.75rem;
+  min-width: 1.75rem;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  background: rgb(19 34 47 / 76%);
+  color: #fff9ef;
+  line-height: 1.5;
+  text-align: center;
+  pointer-events: none;
+}
+
+.book-library :is(.action-primary, .action-secondary) {
+  gap: 0.625rem;
+  min-height: 3rem;
+  border: 1px solid #bbae96;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  box-shadow: none;
+}
+
+.book-library button svg,
+.book-return-link svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.book-library .book-title-trigger svg {
+  width: 0.6em;
+  height: 0.6em;
+}
+.book-library .book-return-link,
+.book-library .book-print-button {
+  white-space: nowrap;
+}
+
+.book-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  width: min(100%, 34rem);
+  margin-inline: auto;
+  margin-top: 0.5rem;
+  border-top: 1px solid rgb(105 78 44 / 18%);
+  padding-top: 1rem;
+}
+
+.book-actions :is(.book-return-link, .book-print-button) {
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  border-color: rgb(158 133 94 / 45%);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgb(255 249 239 / 55%);
+  font-size: 0.9375rem;
+}
+
+.book-actions :is(.book-return-link, .book-print-button):hover {
+  background: var(--surface-hover);
+}
+.book-actions :is(.book-return-link, .book-print-button) svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.book-empty,
+.book-library-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: min(100%, 42rem);
+  margin-inline: auto;
+  padding: clamp(2rem, 6vw, 4rem) 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem 1rem 1rem 0.375rem;
+  background: var(--surface);
+  box-shadow:
+    0 3px 0 #f2e5ce,
+    0 5px 0 #b6a181,
+    0 7px 0 #f2e5ce;
+  text-align: center;
+}
+
+.book-empty {
+  margin-top: 1rem;
+}
+.book-library-status {
+  margin-block: auto;
+}
+.book-loading {
+  padding-block: 1rem;
+}
+.book-empty-line,
+.book-library-status {
+  font-size: 1.25rem;
+  line-height: 1.8;
+}
+
+@media screen and (min-width: 56rem) {
+  .book-page {
+    --book-leaf-height: clamp(30rem, calc(100svh - 16rem), 48rem);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+    width: min(100%, calc(2 * var(--book-leaf-height)));
+    aspect-ratio: 2;
+  }
+
+  /* book-kraft-desktop에서 쓰던 두 종이 면의 윤곽을 유지한다. */
+  .book-page:not(.book-page--text-only)::before {
+    right: 50%;
+    border-radius: 0.75rem 0.15rem 0.15rem 0.75rem;
+  }
+
+  .book-page:not(.book-page--text-only)::after {
+    left: 50%;
+    border-left: 0;
+    border-radius: 0.15rem 0.75rem 0.75rem 0.15rem;
+    content: "";
+  }
+
+  .book-page-illustration {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .book-page-artwork {
+    border-radius: 0.75rem 0 0 0.75rem;
+  }
+
+  .book-page-number--illustration {
+    left: clamp(1.375rem, 2.5vw, 2.5rem);
+    bottom: 2.5rem;
+  }
+
+  .book-page-writing {
+    position: relative;
+    /* 두 면은 같은 정사각 높이다. 긴 원문은 글 영역에서 끝까지 읽는다. */
+    min-height: 0;
+    padding-block: 3rem 2rem;
+    padding-inline: clamp(1.375rem, 2.5vw, 2.5rem);
+    background: transparent;
+  }
+
+  /* 종이 아래에 가려지지 않도록 삽화와 글 면 위에 하나의 부드러운 접힘을 겹친다. */
+  .book-page:not(.book-page--text-only) .book-page-writing::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset-block: 0;
+    left: 0;
+    width: clamp(3.5rem, 8vw, 6rem);
+    transform: translateX(-50%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(43 27 13 / 8%) 24%,
+      rgb(43 27 13 / 28%) 43%,
+      rgb(43 27 13 / 50%) 50%,
+      rgb(43 27 13 / 32%) 54%,
+      rgb(43 27 13 / 14%) 72%,
+      rgb(43 27 13 / 4%) 88%,
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  /* 그림이 없는 장면은 빈 액자나 가짜 그림 없이 원문에 한 펼침을 내준다. */
+  .book-page--text-only .book-page-writing {
+    grid-column: 1 / -1;
+    aspect-ratio: auto;
+    background: transparent;
+  }
+}
+
+@media (max-width: 35rem) {
+  .book-library {
+    gap: 1rem;
+    padding-block: 1rem 1.5rem;
+  }
+  .book-pagination {
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .book-pagination .book-page-turn {
+    gap: 0.375rem;
+    padding-inline: 0.625rem;
+    font-size: 0.9375rem;
+  }
+  .book-pagination .book-page-turn svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .book-empty-line,
+  .book-library-status {
+    font-size: 1.125rem;
+  }
+}
+
+@media (width < 56rem) {
+  .book-cover-author {
+    font-size: 1rem;
+  }
+  .book-pages {
+    max-width: 40rem;
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 25rem) {
+  .book-actions {
+    column-gap: 0.5rem;
+  }
+  .book-actions :is(.book-return-link, .book-print-button) {
+    gap: 0.375rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media print {
+  .book-page::before,
+  .book-page::after {
+    display: none;
+  }
+
+  .book-shell {
+    min-height: 0;
+    background: none;
+    color: #000;
+  }
+
+  .book-actions,
+  .book-return-link,
+  .book-print-button,
+  .book-title-editor,
+  .book-title-notice,
+  .book-title-trigger svg,
+  .book-pagination {
+    display: none;
+  }
+
+  .book-library {
+    display: block;
+    max-width: none;
+    padding: 0;
+    color: #000;
+  }
+  .book-heading {
+    display: block;
+    padding: 0;
+  }
+  .book-cover {
+    display: block;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+  .book-title-trigger {
+    min-height: 0;
+    color: inherit;
+  }
+  .book-title-trigger:focus-visible {
+    outline: none;
+  }
+  .book-title-label {
+    text-decoration: none;
+  }
+  .book-reader {
+    display: block;
+  }
+  .book-reader .book-pages {
+    display: block;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    box-shadow: none;
+  }
+  .book-reader-page {
+    display: block;
+    visibility: visible;
+    position: static;
+    grid-area: auto;
+  }
+
+  .book-reader-page:nth-child(n) .book-page,
+  .book-empty {
+    --book-artwork-height: 55vh;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    margin-block: 1.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #000;
+    box-shadow: none;
+  }
+
+  .book-page-illustration {
+    display: block;
+    padding: 0;
+    background: none;
+  }
+  .book-page-writing {
+    display: block;
+    min-height: 0;
+    aspect-ratio: auto;
+    overflow: visible;
+    padding: 0;
+    background: none;
+  }
+  .book-page-text {
+    flex: none;
+    margin-block: 0;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+  .book-page-tier {
+    margin-bottom: 1rem;
+  }
+  .book-page-footer {
+    margin-top: 1rem;
+  }
+  .book-page-artwork {
+    aspect-ratio: var(--book-artwork-ratio);
+    max-width: calc(var(--book-artwork-height) * var(--book-artwork-ratio));
+    border-radius: 0;
+    background: transparent;
+  }
+  .book-page-number--illustration {
+    display: block;
+    position: static;
+    width: min(100%, 26rem);
+    margin: 1rem auto 0;
+    padding: 0;
+    background: none;
+    text-align: left;
+  }
+  .book-cover-author,
+  .book-page-number {
+    color: inherit;
+  }
+}

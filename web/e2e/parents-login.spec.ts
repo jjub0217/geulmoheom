@@ -4,6 +4,24 @@ import { 못닿음, 학부모오류문구 } from "../src/app/parents/signup/copy
 import { 로그인 } from "../src/app/parents/login/copy";
 import { 아이입장으로보낼곳 } from "../src/lib/parent-kicked";
 
+test.use({ serviceWorkers: "block" });
+
+test.beforeEach(async ({ context, baseURL }) => {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/healthz")) {
+      return route.fulfill({ status: 200, json: { status: "ok" } });
+    }
+    // 각 검사가 선언한 모의 응답 이외에는 실제 로그인·데이터 요청을 보내지 않는다.
+    if (url.pathname.startsWith("/api/")) {
+      return route.fulfill({ status: 404, json: { detail: "Unmocked parent login request" } });
+    }
+    if (url.origin !== origin) return route.abort();
+    return route.continue();
+  });
+});
+
 /**
  * 학부모 로그인 화면 (`문구.md` **3.10** · `adr/0014` 결정 5).
  *
@@ -201,8 +219,14 @@ test("왜 로그아웃되는지 먼저 말하고, 전문 용어를 쓰지 않는
     expect(화면).not.toContain(안쓰는말);
   }
   // **아이 화면으로 가는 길을 여기 두지 않는다** — 아이는 접속 코드로 들어온다.
+  // 제품명 「글모험」은 허용하지만 안내·폼에 아이에게 하는 말이 섞이는 것은 계속 막는다.
+  const 브랜드외문구 = await page.locator("main").evaluate((main) => {
+    const content = main.cloneNode(true) as HTMLElement;
+    content.querySelectorAll(".entry-brand").forEach((brand) => brand.remove());
+    return content.textContent ?? "";
+  });
   for (const 안쓰는말 of ["탐험가", "나침반", "모험", "접속 코드"]) {
-    expect(화면).not.toContain(안쓰는말);
+    expect(브랜드외문구).not.toContain(안쓰는말);
   }
 
   // **나가는 길은 가입 하나뿐이다.**

@@ -1,0 +1,535 @@
+/* 모험 화면의 읽기·쓰기·결과. 순서와 동작은 그대로 두고 넓이와 표면을 나눈다. */
+@layer components {
+  .adventure-header,
+  .adventure-main,
+  .adventure-footer {
+    --container-frame: 70rem;
+  }
+
+  .adventure-main {
+    gap: 1.5rem;
+  }
+
+  .writing-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .chapter-door {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--surface-muted);
+  }
+
+  .chapter-door p {
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  .scene-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .scene-narrative {
+    max-width: 36em;
+    font-size: clamp(1.125rem, 2.1vw, 1.625rem);
+    font-weight: 500;
+    line-height: 1.8;
+    letter-spacing: -0.025em;
+  }
+
+  .guide-figure {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .guide-image {
+    width: 5rem;
+    height: 5rem;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    object-fit: contain;
+  }
+
+  .guide-line {
+    max-width: 36em;
+    font-size: 1.0625rem;
+    line-height: 1.75;
+    color: var(--muted);
+  }
+
+  /* 도우미의 말은 얼굴에 연결된 말풍선이다. 상황문과 화자를 구분한다. */
+  .scene-card .guide-line {
+    position: relative;
+    flex: 1;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--surface-raised);
+    color: var(--foreground);
+  }
+
+  .scene-card .guide-line::before {
+    position: absolute;
+    top: 50%;
+    left: -0.375rem;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-raised);
+    transform: translateY(-50%) rotate(45deg);
+    content: "";
+  }
+
+  .guide-dialogue {
+    display: grid;
+    border-radius: inherit;
+  }
+
+  /* 말풍선의 여백까지 눌러서 건너뛸 수 있게, 안쪽 대화 요소가 패딩을 가진다. */
+  .scene-card .guide-line:has(.guide-dialogue) {
+    padding: 0;
+  }
+
+  .scene-card .guide-dialogue {
+    padding: 0.875rem 1rem;
+  }
+
+  .guide-dialogue-space,
+  .guide-dialogue-typed {
+    grid-area: 1 / 1;
+  }
+
+  .guide-dialogue-space {
+    visibility: hidden;
+  }
+
+  .attempt-input {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .attempt-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .attempt-label label {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .writing-surface {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-strong);
+    border-radius: 1.125rem;
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-card);
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+  }
+
+  .writing-surface:focus-within {
+    border-color: var(--color-scarf);
+    outline-color: var(--color-brass);
+  }
+
+  .writing-field {
+    width: 100%;
+    resize: none;
+    padding: 1.125rem 1.25rem 0.75rem;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 1.125rem;
+    line-height: 1.8;
+    outline: none;
+  }
+
+  .writing-field::placeholder {
+    color: var(--muted);
+  }
+
+  .writing-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0.25rem 1rem 1rem;
+  }
+
+  .writing-actions .action-primary {
+    min-width: 7rem;
+  }
+
+  .artwork-frame {
+    position: relative;
+    flex-shrink: 0;
+    margin-inline: auto;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 1rem;
+    background: var(--surface-muted);
+    box-shadow: 0 0 0 1px var(--border), var(--shadow-card);
+  }
+
+  .result-spread {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .result-content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .written-line {
+    width: 100%;
+    max-width: 40rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--surface-raised);
+    font-size: 1.25rem;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+
+  .result-content .guide-figure {
+    width: 100%;
+  }
+
+  .result-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .tier-badge {
+    --tier-bg: #255e58;
+    --tier-ink: #fffaf0;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background-color: var(--tier-bg);
+    color: var(--tier-ink);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .tier-badge.tier-basic {
+    --tier-bg: #255e58;
+  }
+
+  .tier-badge.tier-rare {
+    --tier-bg: #294f87;
+  }
+
+  .tier-badge.tier-legendary {
+    --tier-bg: #714078;
+  }
+
+  .chapter-main {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 64rem;
+    height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    margin-inline: auto;
+    padding: 1.5rem var(--spacing-gutter);
+    gap: 1rem;
+  }
+
+  .chapter-reading {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    background: var(--surface);
+    scrollbar-color: var(--border-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  .chapter-narrative {
+    max-width: 38em;
+    font-size: 1.125rem;
+    line-height: 1.85;
+  }
+
+  .chapter-story {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-color: var(--border-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  /* 읽기 영역 안에서만 그림과 글을 나란히 둔다. 아래 쓰는 칸은 전폭으로 남는다.
+     그림의 실제 비율을 유지하며 읽기 영역 높이 안에 담아 서사가 가려지지 않게 한다. */
+  .chapter-reading:has(> .artwork-frame) {
+    display: grid;
+    grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr);
+    grid-template-rows: minmax(0, 1fr);
+    container-type: size;
+  }
+
+  .chapter-reading > .artwork-frame {
+    align-self: start;
+    width: min(100%, calc(100cqh * var(--artwork-ratio)));
+  }
+
+  .chapter-controls {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .chapter-controls .attempt-label {
+    height: 2.5rem;
+  }
+
+  .chapter-controls .writing-field {
+    padding-top: 0.75rem;
+    padding-bottom: 0.5rem;
+    line-height: 1.6;
+  }
+
+  .turn-choices,
+  .turn-choices ul {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .turn-choice {
+    width: 100%;
+    padding: 0.625rem 1.25rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.875rem;
+    background: var(--surface-raised);
+    color: var(--foreground);
+    text-align: left;
+    font-size: 1.125rem;
+    line-height: 1.8;
+  }
+
+  .turn-choice:disabled {
+    opacity: 0.45;
+  }
+
+  .choice-invitation {
+    color: var(--accent);
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .chapter-status {
+    margin: auto;
+    padding: 2rem;
+    color: var(--muted);
+  }
+
+  @media (min-width: 640px) {
+    .guide-image {
+      width: 6rem;
+      height: 6rem;
+    }
+
+    .result-content {
+      gap: 1.25rem;
+    }
+  }
+
+  /* 캐릭터보다 글을 먼저 읽게 한다. 좁은 화면에서도 기존의 64px 하한을 지킨다. */
+  @media (max-width: 639px) {
+    .writing-layout {
+      gap: 0.75rem;
+    }
+
+    .scene-card {
+      gap: 1rem;
+      padding: 1rem;
+    }
+
+    .guide-image {
+      width: 4rem;
+      height: 4rem;
+      border-radius: 0.75rem;
+    }
+
+    .guide-figure {
+      gap: 0.75rem;
+    }
+
+    .guide-line {
+      font-size: 1rem;
+      line-height: 1.65;
+    }
+
+    .scene-card .guide-figure {
+      gap: 0.5rem;
+    }
+
+    .scene-card .guide-line {
+      padding: 0.5rem 0.625rem;
+      border-radius: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .scene-card .guide-dialogue {
+      padding: 0.5rem 0.625rem;
+    }
+
+    .chapter-door {
+      gap: 0.375rem 0.5rem;
+      padding: 0.5rem 0.625rem;
+    }
+
+    .chapter-door .action-primary {
+      padding-inline: 0.875rem;
+    }
+
+    .writing-field {
+      padding: 0.75rem 1rem 0.5rem;
+    }
+
+    .writing-actions {
+      padding: 0 0.75rem 0.75rem;
+    }
+
+    .written-line {
+      padding: 0.625rem 0.875rem;
+      font-size: 1.125rem;
+      line-height: 1.6;
+    }
+
+    .result-actions .action-primary,
+    .result-actions .action-secondary {
+      padding-inline: 0.75rem;
+    }
+
+    .chapter-main {
+      gap: 0.625rem;
+      padding-block: 0.75rem;
+    }
+
+    .chapter-reading {
+      gap: 1rem;
+      padding: 1rem;
+    }
+
+    .turn-choice {
+      padding: 0.5rem 1rem;
+    }
+  }
+
+  /* 가로 결과 화면은 두 열이다. 작은 폰에서도 그림의 높이 상한을 바꾸지 않는다. */
+  @media (orientation: landscape) {
+    .result-spread {
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(1.5rem, 4vw, 3rem);
+      padding: clamp(1rem, 2.5vw, 2rem);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+    }
+
+    .result-content {
+      flex: 1;
+      max-width: 32rem;
+    }
+
+    .result-content .written-line {
+      border: 0;
+      border-radius: 0;
+      border-left: 2px solid var(--color-brass);
+      background: transparent;
+    }
+  }
+
+  @media (max-height: 700px) {
+    .chapter-main {
+      gap: 0.5rem;
+      padding-block: 0.5rem;
+    }
+
+    .chapter-controls .attempt-label {
+      height: 2.5rem;
+    }
+  }
+
+  @media (max-height: 500px) and (orientation: landscape) {
+    .result-spread {
+      gap: 1.25rem;
+      padding: 0.75rem;
+    }
+
+    .result-content {
+      gap: 0.5rem;
+    }
+
+    .result-content .guide-image {
+      width: 4rem;
+      height: 4rem;
+    }
+
+    .result-content .guide-line {
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+
+    .result-content .written-line {
+      padding: 0.5rem 0.75rem;
+      font-size: 1.125rem;
+      line-height: 1.6;
+    }
+  }
+}
+
+/* 세로 여백 유틸리티보다 우선한다. 낮은 가로 화면에서도 그림 높이는 그대로 둔다. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .adventure-main:has(.result-spread) {
+    padding-block: 0.5rem;
+  }
+}

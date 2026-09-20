@@ -9,9 +9,8 @@ import { 버튼, 못닿음 } from "../src/app/copy";
 // 상한도 문구와 같다 — **숫자를 여기 박으면 규약이 바뀌는 날 테스트가 제품을 붙잡는다.**
 import { 첫폴링, 폴링상한 } from "../src/lib/artwork";
 // 대기 대사도 박지 않는다 — `docs/문구.md` **1.5** 가 SSOT 다.
-import { 삽화대기대사 } from "../src/components/artwork-copy";
 // 진입 라벨은 `용어사전.md` 48행 **아이 화면** 열이다.
-import { 내책라벨 } from "../src/app/book/copy";
+import { 책펼치기라벨 as 내책라벨 } from "../src/components/book-link";
 // 배지 낱말도 박지 않는다 — `docs/문구.md` **1.8** · `용어사전.md` 36행이 SSOT 다.
 import { 티어이름 } from "../src/components/tier-badge";
 // 가림 안내도 같은 이유로 박지 않는다 — `docs/문구.md` **1.1** 이 SSOT 다.
@@ -20,6 +19,7 @@ import { 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
 // 튜토리얼 문구도 박지 않는다 — `docs/문구.md` **1.22** 가 SSOT 다.
 import { 튜토리얼문구 } from "../src/app/tutorial-copy";
+import { 다시쓰기안내 } from "../src/components/tier-badge-writing-intro";
 // 문도 박지 않는다 — `docs/문구.md` **1.25** 가 SSOT 다.
 import { 모험문 } from "../src/app/chapter-door-copy";
 
@@ -49,6 +49,32 @@ const CARD: CardResponse = {
 const CARDS_NEXT = "**/api/v1/cards/next";
 const ATTEMPTS = "**/api/v1/attempts";
 const EVENTS = "**/api/v1/events";
+
+test.use({ serviceWorkers: "block" });
+
+// 계정·글·그림 API와 외부 요청은 실제로 보내지 않는다. 개별 검사의 목이 우선한다.
+test.beforeEach(async ({ page, baseURL }) => {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  await page.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/healthz")) return route.fulfill({ status: 200, json: { status: "ok" } });
+    if (url.pathname === "/api/v1/child/me") return route.fulfill({ status: 200, json: {
+      child_id: "card-test-child", nickname: "등대지기", guide_name: null,
+      today: { cards_done: 1, cap: 5, locked: false, resets_at: "2026-09-21T00:00:00+09:00" },
+    } });
+    if (url.pathname === "/api/v1/chapters/current") return route.fulfill({ status: 404, json: {
+      error: { code: "NO_ACTIVE_CHAPTER", message: "검사용 응답" },
+    } });
+    if (url.pathname === "/api/v1/events") return route.fulfill({ status: 204 });
+    if (url.pathname.startsWith("/api/v1/artworks/") && !url.pathname.endsWith("/image")) {
+      return route.fulfill({ status: 200, json: { artwork_id: "w1", status: "pending", url: null } });
+    }
+    if (url.pathname.startsWith("/api/")) return route.fulfill({ status: 404, json: { error: {
+      code: "UNMOCKED_API", message: "검사용 응답",
+    } } });
+    return url.origin === origin ? route.continue() : route.abort();
+  });
+});
 
 /**
  * (a) 정상 응답.
@@ -123,7 +149,7 @@ test("카드가 오면 상황문을 그린다", async ({ page }) => {
 
   // 가이드는 서버가 준 표정·대사 그대로다. 입력 중에는 `default` 이고, 프론트가 바꾸지 않는다.
   await expect(page.getByText(CARD.guide.line)).toBeVisible();
-  await expect(page.locator('img[src="/guide/default.png"]')).toBeVisible();
+  await expect(page.locator('img[src="/guide/default-stage.png"]')).toBeVisible();
 
   // 자유 입력창 하나. **선택지 버튼이 없어야 한다** — 있으면 「직접 쓴다」가 무너진다.
   const 입력창 = page.getByLabel(CARD.prompt_label);
@@ -276,7 +302,7 @@ test("그림이 뜬다 — 서버가 준 주소 그대로, crossOrigin 없이", 
   // 굽는 동안 화면의 유일한 말은 **액자 안 대기 대사**다 (`문구.md` 1.5).
   const 대기대사 = page.locator("main [data-대기대사]");
   await expect(대기대사).toBeVisible();
-  expect([...삽화대기대사]).toContain((await 대기대사.innerText()).trim());
+  await expect(대기대사).toHaveText("네 이야기를 그림으로 펼치고 있어.");
 
   // **결과 대사가 여기 있으면 안 된다.** 있으면 아이가 그림보다 먼저 등급 반응을 읽는다 —
   // 2026-09-08 까지 실제로 그랬고, 1.5 가 생긴 이유가 그것이다.
@@ -502,7 +528,7 @@ test("되묻기가 오면 그 자리에 머문다 — 쓴 문장이 남는다", 
   await expect(
     page.getByText("그림자를 어떻게 할 건지 조금만 더 말해줄래?"),
   ).toBeVisible();
-  await expect(page.locator('img[src="/guide/compass_dim.png"]')).toBeVisible();
+  await expect(page.locator('img[src="/guide/compass_dim-stage.png"]')).toBeVisible();
 
   // **입력창이 그대로 있고 쓴 문장도 그대로다.** 다시 보낼 수 있어야 한다.
   await expect(입력창).toHaveValue("문을 연다");
@@ -547,22 +573,28 @@ test("오늘 카드를 다 쓰면 서버가 준 대사를 그대로 보여준다
       status: 409,
       contentType: "application/json",
       body: errorBody("DAILY_CAP_REACHED", "오늘 카드를 다 썼어요", {
-        guide: { expression: "session_end", line: "오늘 모험은 여기까지! 내일 또 보자" },
+        guide: { expression: "session_end", line: "오늘 모험은 여기까지! 네가 쓴 글과 그림이 책에 모여 있어. 내일 또 보자." },
       }),
     }),
   );
 
   await page.goto("/");
 
-  await expect(page.getByText("오늘 모험은 여기까지! 내일 또 보자")).toBeVisible();
-  await expect(page.locator('img[src="/guide/session_end.png"]')).toBeVisible();
+  await expect(page.getByText("오늘 모험은 여기까지! 네가 쓴 글과 그림이 책에 모여 있어. 내일 또 보자.")).toBeVisible();
+  await expect(page.locator('img[src="/guide/session_end-stage.png"]')).toBeVisible();
+  await expect(page.locator(".game-shell--ending")).toBeVisible();
+  // 쓰기가 끝나도, 앞서 저장한 책을 읽는 길은 남아 있다.
+  const 내책 = page.getByRole("link", { name: 내책라벨, exact: true });
+  await expect(내책).toBeVisible();
+  await expect(내책).toHaveAttribute("href", "/book");
+  await expect(page.locator("textarea")).toHaveCount(0);
   await 가로스크롤없음(page);
 });
 
 test("여섯 번째를 보내도 가이드가 말한다 — 두 목소리가 나란히 서지 않는다", async ({
   page,
 }) => {
-  const 가이드대사 = "오늘 모험은 여기까지! 내일 또 보자";
+  const 가이드대사 = "오늘 모험은 여기까지! 네가 쓴 글과 그림이 책에 모여 있어. 내일 또 보자.";
   const 앱문구 = "오늘 카드를 다 썼어요";
 
   await page.route(CARDS_NEXT, (route) =>
@@ -588,13 +620,13 @@ test("여섯 번째를 보내도 가이드가 말한다 — 두 목소리가 나
   await expect(page.getByText(가이드대사)).toBeVisible();
   expect(await page.locator("main").innerText()).not.toContain(앱문구);
   // **표정도 서버가 준 것 그대로다.** 대사만 꺼내 쓰면 `session_end` 얼굴이 영영 안 나온다.
-  await expect(page.locator('img[src="/guide/session_end.png"]')).toBeVisible();
+  await expect(page.locator('img[src="/guide/session_end-stage.png"]')).toBeVisible();
 });
 
 test("종료 인사에 모르는 표정이 오면 캐릭터를 세우지 않는다 — 말은 그대로 전한다", async ({
   page,
 }) => {
-  const 가이드대사 = "오늘 모험은 여기까지! 내일 또 보자";
+  const 가이드대사 = "오늘 모험은 여기까지! 네가 쓴 글과 그림이 책에 모여 있어. 내일 또 보자.";
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({
       status: 409,
@@ -613,6 +645,10 @@ test("종료 인사에 모르는 표정이 오면 캐릭터를 세우지 않는�
   await expect(page.getByText(가이드대사)).toBeVisible();
   // 깨진 그림을 세우느니 안 세운다.
   await expect(page.locator("main img")).toHaveCount(0);
+  const 내책 = page.getByRole("link", { name: 내책라벨, exact: true });
+  await expect(내책).toBeVisible();
+  await expect(내책).toHaveAttribute("href", "/book");
+  await 가로스크롤없음(page);
 });
 
 test("서버가 거절하면 빈 화면이 아니라 서버 문구가 뜬다", async ({ page }) => {
@@ -827,32 +863,10 @@ test("보내기가 못 닿으면 쓴 문장을 지킨다 — 화면을 넘기지
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
 });
 
-/**
- * **계약이 적은 실측값을 여기 다시 적는다** (`docs/api/Stage0.md` 5절 — 20/20 장 `784×1353`).
- *
- * **`lib/artwork-frame.ts` 의 상수를 읽어오지 않는다.** 읽어오면 그 상수를 4:3 으로 바꿔도
- * 검사가 같이 따라가서 **초록으로 지나간다** — 2026-09-08 에 실제로 그랬다.
- * **검사가 자기가 재려는 것을 자기한테서 가져오면 아무것도 안 재는 것이다.**
- */
-/**
- * **⛔ 2026-09-15 에 바뀌었다** (`Stage0.md` 5절 개정 · `adr/0015`). 종전에는 **계약 상수
- * 0.58** 을 기대했는데, **갓 구운 그림은 `1024×1024`(1:1)이고 조합 파일 폴백만 0.58** 이다.
- * **한 상수로는 못 맞춘다** — 운영 실측에서 **정사각형 그림이 세로 상자에 갇혀 빈 띠**가 생겼다.
- *
- * **이제 규칙은 「온 그림의 실제 비율이 이긴다」**이고, 픽스처가 **1×1** 이라 여기서는 **1** 이다.
- * **비정사각이 오면 어떻게 되는지는 아래 전용 검사**가 본다 — 정사각 픽스처만으로는
- * **상수를 1 로 바꿔 박아도 통과**해서 아무것도 안 잰다.
- */
+/** 정사각형 픽스처의 원본 비율. 구현 상수를 가져오지 않고 실제 화면을 잰다. */
 const 픽스처비율 = 1;
 
-/**
- * 액자 비율 (2026-09-08 · W4).
- *
- * **한때 `aspect-4/3` 가로 상자에 `object-cover` 였다** — 오는 그림이 세로 0.58 이라
- * **세로로 43%만 보이고 위아래 각 28% 가 잘려 나갔다.** 결과 연출과 내 책 **둘 다** 그랬다.
- * **레이아웃이 튀는 문제가 아니라 아이 그림의 절반 넘게가 이미 안 보이고 있었다.**
- */
-test("액자가 그림 비율이다 — 아이 그림을 자르지 않는다", async ({ page }) => {
+test("결과는 정사각형 원본을 같은 비율의 액자에 온전히 보여준다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) =>
     route.fulfill({ status: 200, json: CARD }),
   );
@@ -882,16 +896,15 @@ test("액자가 그림 비율이다 — 아이 그림을 자르지 않는다", a
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
 
-  // **상자가 그림 비율이어야 한다.** 계약이 준 값이고(`Stage0.md` 5절) 코드에는
-  // `lib/artwork-frame.ts` 한 자리에만 있다.
+  // 이 픽스처는 정사각형이다. 비정사각 원본은 별도 검사에서 원본 비율과 대조한다.
   const 자리 = await 액자.boundingBox();
   expect(자리).not.toBeNull();
   expect(자리!.width / 자리!.height).toBeCloseTo(픽스처비율, 2);
 
-  // **`cover` 면 안 된다.** 상자가 그림 비율이라 지금은 결과가 같지만,
-  // **계약이 비율을 강제하지 않으므로** 다른 비율이 오는 날 `cover` 는 말없이 자른다.
+  // 원본을 잘라 틀에 맞추지 않는다.
   const 그림 = 액자.locator("img");
   await expect(그림).toHaveCSS("object-fit", "contain");
+  await expect(그림).toHaveAttribute("src", ARTWORK_URL);
 });
 
 test("그림이 화면을 다 먹지 않는다 — 아래 것들이 접히면 보상이 아니다", async ({ page }) => {
@@ -1105,7 +1118,7 @@ test("결과 화면에서 다음 장면을 연다 — 앱을 껐다 켜지 않�
 });
 
 test("다 썼어도 버튼을 숨기지 않는다 — 끝은 가이드가 말한다", async ({ page }) => {
-  const 종료대사 = "오늘 모험은 여기까지! 내일 또 보자";
+  const 종료대사 = "오늘 모험은 여기까지! 네가 쓴 글과 그림이 책에 모여 있어. 내일 또 보자.";
   // **호출 횟수로 가르지 않는다** — 위 주석 참조. StrictMode 가 마운트 효과를 두 번 돌린다.
   let 다썼다 = false;
   await page.route(CARDS_NEXT, (route) =>
@@ -1137,7 +1150,7 @@ test("다 썼어도 버튼을 숨기지 않는다 — 끝은 가이드가 말한
   await page.locator("[data-다음장면]").click();
 
   await expect(page.getByText(종료대사)).toBeVisible();
-  await expect(page.locator('img[src="/guide/session_end.png"]')).toBeVisible();
+  await expect(page.locator('img[src="/guide/session_end-stage.png"]')).toBeVisible();
   // **오류 화면으로 때우지 않는다.** 상한은 고장이 아니라 가드레일이다.
   await expect(page.getByRole("button", { name: 버튼.다시열기 })).toHaveCount(0);
 });
@@ -1220,6 +1233,7 @@ for (const [폭, 높이, 어디] of [
   // 위 셋만 볼 때는 초록이었는데 **주소창이 있는 폰 크기에서는 「내 책」이 95px 밖**이었다 —
   // **③ 이 그 크기들에서는 안 닫혀 있었다.**
   [360, 640, "작은 안드로이드 — 주소창까지 있으면 이 정도다"],
+  [844, 390, "폰 가로 — 그림을 줄이지 않고 나가는 길을 남긴다"],
 ] as const) {
   test(`보상까지가 첫 화면 안에 있다 — ${폭}×${높이} (${어디})`, async ({ page }) => {
     await page.setViewportSize({ width: 폭, height: 높이 });
@@ -1446,28 +1460,20 @@ async function 보낸것을받으며결과까지(page: Page, 되묻기 = { 할�
   return 보낸것;
 }
 
-/** **2×1 가로 그림.** 정사각 픽스처만으로는 「실제 비율을 따른다」를 못 잰다. */
-const PNG_2X1 = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGM4UWEDRAALgwL5Z6uxbgAAAABJRU5ErkJggg==",
-  "base64",
-);
-
 /**
- * **⛔ 2026-09-15 운영 실측에서 나왔다** (`Stage0.md` 5절 개정 · `adr/0015` · W6 25번).
- *
- * **유료 한 판을 돌려 받은 그림이 `1024×1024` 정사각형**이었는데 **액자는 0.58 세로 상자**라
- * **그림이 폭에 갇혀 위아래로 빈 띠**가 생겼다. **자르지는 않지만 보상이 눈에 띄게 작아진다** —
- * 「그림이 보상 그 자체」를 하루 종일 지켜 놓고 **액자가 그것을 깎고 있었다.**
- *
- * **⛔ 1:1 로 상수만 갈면 안 된다** — **조합 파일 폴백(0.58)은 버그가 아니라 설계된 경로**라
- * (`adr/0015`) **그때마다 틀린 액자에 앉는다. 결함이 반대로 뒤집힐 뿐**이다.
- * **그래서 규칙은 「온 그림의 실제 비율이 이긴다」**이고, **이 검사가 그 규칙을 잰다.**
+ * 대기는 1:1 자리로 보여주고 그림이 오면 실제 원본 비율로 바꾼다.
+ * 최대 변의 크기는 유지하면서 짧은 변을 줄여, 빈 띠 없이 원본 전체를 보여준다.
  */
-test("액자가 온 그림의 비율을 따른다 — 상수를 박지 않는다", async ({ page }) => {
+for (const [원본폭, 원본높이, 방향] of [[240, 120, "가로"], [120, 240, "세로"], [200, 200, "정사각형"]] as const) {
+test(`결과 액자는 최대 크기 안에서 ${방향} 원본 비율과 가장자리까지 보존한다`, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  let 그림보여주기!: () => void;
+  const 그림응답대기 = new Promise<void>((resolve) => { 그림보여주기 = resolve; });
   await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
   await page.route(ATTEMPTS, (route) => route.fulfill({ status: 200, json: 결과() }));
-  await page.route(`**/api/v1/artworks/${ARTWORK}`, (route) =>
-    route.fulfill({
+  await page.route(`**/api/v1/artworks/${ARTWORK}`, async (route) => {
+    await 그림응답대기;
+    return route.fulfill({
       status: 200,
       json: {
         artwork_id: ARTWORK,
@@ -1476,12 +1482,15 @@ test("액자가 온 그림의 비율을 따른다 — 상수를 박지 않는다
         tier: "rare",
         fallback: false,
       } satisfies components["schemas"]["Artwork"],
-    }),
-  );
-  // **가로로 긴 그림을 준다.** 계약 상수(0.58)도 빈자리 값(1:1)도 아닌 모양이라,
-  // **둘 중 어느 것을 박아도 이 검사는 빨개진다.**
+    });
+  });
+  // 원본의 네 모서리를 구별할 수 있는 지어낸 그림이다. 실제 삽화는 읽거나 바꾸지 않는다.
   await page.route(`**/api/v1/artworks/${ARTWORK}/image`, (route) =>
-    route.fulfill({ status: 200, contentType: "image/png", body: PNG_2X1 }),
+    route.fulfill({
+      status: 200,
+      contentType: "image/svg+xml",
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="${원본폭}" height="${원본높이}"><rect width="100%" height="100%" fill="#d6e4ed"/><rect width="20" height="20" fill="#c24136"/><rect x="${원본폭 - 20}" width="20" height="20" fill="#356b3e"/><rect y="${원본높이 - 20}" width="20" height="20" fill="#305a96"/><rect x="${원본폭 - 20}" y="${원본높이 - 20}" width="20" height="20" fill="#8d489c"/></svg>`,
+    }),
   );
 
   await page.goto("/");
@@ -1490,16 +1499,83 @@ test("액자가 온 그림의 비율을 따른다 — 상수를 박지 않는다
 
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
-  // **그림이 뜬 뒤에 잰다** — 오기 전에는 빈자리(1:1)가 맞다.
-  await expect(page.locator(`main img[src="${ARTWORK_URL}"]`)).toBeVisible();
+  await expect(액자.locator("[data-대기대사]")).toBeVisible();
+  await expect(액자.locator(".story-opening__page")).toHaveCSS("animation-name", "none");
+  const 받기전 = (await 액자.boundingBox())!;
+  expect(받기전.width / 받기전.height).toBeCloseTo(1, 2);
 
-  await expect
-    .poll(async () => {
-      const 자리 = (await 액자.boundingBox())!;
-      return Math.round((자리.width / 자리.height) * 100) / 100;
-    })
-    .toBeCloseTo(2, 1);
+  그림보여주기();
+  const 그림 = page.locator(`main img[src="${ARTWORK_URL}"]`);
+  await expect(그림).toBeVisible();
+  await expect(그림).toHaveCSS("object-fit", "contain");
+  await expect(그림).toHaveCSS("transform", "none");
+  await expect(그림).toHaveAttribute("src", ARTWORK_URL);
+  await expect(그림).not.toHaveAttribute("crossorigin", /.*/);
+  await expect.poll(() => 그림.evaluate((element) => {
+    const image = element as HTMLImageElement;
+    return { width: image.naturalWidth, height: image.naturalHeight };
+  })).toEqual({ width: 원본폭, height: 원본높이 });
+  await expect.poll(async () => {
+    const bounds = (await 액자.boundingBox())!;
+    return bounds.width / bounds.height;
+  }).toBeCloseTo(원본폭 / 원본높이, 2);
+
+  const 그림자리 = (await 그림.boundingBox())!;
+  const 액자자리 = (await 액자.boundingBox())!;
+  expect(그림자리.x).toBeGreaterThanOrEqual(액자자리.x - 1);
+  expect(그림자리.y).toBeGreaterThanOrEqual(액자자리.y - 1);
+  expect(그림자리.x + 그림자리.width).toBeLessThanOrEqual(액자자리.x + 액자자리.width + 1);
+  expect(그림자리.y + 그림자리.height).toBeLessThanOrEqual(액자자리.y + 액자자리.height + 1);
+
+  // CSS 선언뿐 아니라 실제 화면의 원본 네 모서리 색을 읽는다. 둥근 액자가
+  // 정사각 원본을 자르는 경우도 잡으며, 그림 안쪽 여백은 실제 computed padding을 따른다.
+  const 모서리좌표 = await 그림.evaluate((element) => {
+    const image = element as HTMLImageElement;
+    const frame = image.parentElement!.getBoundingClientRect();
+    const bounds = image.getBoundingClientRect();
+    const css = getComputedStyle(image);
+    const left = parseFloat(css.paddingLeft);
+    const top = parseFloat(css.paddingTop);
+    const width = bounds.width - left - parseFloat(css.paddingRight);
+    const height = bounds.height - top - parseFloat(css.paddingBottom);
+    const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+    const x = bounds.x - frame.x + left + (width - image.naturalWidth * scale) / 2;
+    const y = bounds.y - frame.y + top + (height - image.naturalHeight * scale) / 2;
+    return {
+      frameWidth: frame.width,
+      frameHeight: frame.height,
+      points: [
+        [x + scale, y + scale],
+        [x + (image.naturalWidth - 1) * scale, y + scale],
+        [x + scale, y + (image.naturalHeight - 1) * scale],
+        [x + (image.naturalWidth - 1) * scale, y + (image.naturalHeight - 1) * scale],
+      ],
+    };
+  });
+  const 화면그림 = await 액자.screenshot({ animations: "disabled" });
+  const 모서리색 = await page.evaluate(async ({ png, geometry }) => {
+    const screenshot = new Image();
+    screenshot.src = `data:image/png;base64,${png}`;
+    await screenshot.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = screenshot.naturalWidth;
+    canvas.height = screenshot.naturalHeight;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(screenshot, 0, 0);
+    return geometry.points.map(([x, y]) => Array.from(context.getImageData(
+      Math.floor(x * canvas.width / geometry.frameWidth),
+      Math.floor(y * canvas.height / geometry.frameHeight), 1, 1,
+    ).data).slice(0, 3));
+  }, { png: 화면그림.toString("base64"), geometry: 모서리좌표 });
+  expect(모서리색).toEqual([[194, 65, 54], [53, 107, 62], [48, 90, 150], [141, 72, 156]]);
+
+  const 받은뒤 = (await 액자.boundingBox())!;
+  expect(Math.abs(Math.max(받은뒤.width, 받은뒤.height) - Math.max(받기전.width, 받기전.height))).toBeLessThanOrEqual(1);
+  if (원본폭 !== 원본높이) {
+    expect(Math.min(받은뒤.width, 받은뒤.height)).toBeLessThan(Math.min(받기전.width, 받기전.height));
+  }
 });
+}
 
 test("그림이 오기 전 빈 자리는 1:1 이다 — 평시 경로의 모양이다", async ({ page }) => {
   await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
@@ -1525,7 +1601,7 @@ test("그림이 오기 전 빈 자리는 1:1 이다 — 평시 경로의 모양�
   const 액자 = page.locator("main [data-삽화자리]");
   await expect(액자).toBeVisible();
   const 자리 = (await 액자.boundingBox())!;
-  // **레이아웃이 안 튀는 것이 목적이다** — 그림이 오면 그때 실제 비율로 바뀐다.
+  // 실제 비율을 알기 전에는 정사각형 자리로 기다린다.
   expect(자리.width / 자리.height).toBeCloseTo(1, 2);
 });
 
@@ -1540,7 +1616,7 @@ test("그림이 오기 전 빈 자리는 1:1 이다 — 평시 경로의 모양�
  * **⛔ 가이드가 말을 거는 자리가 아니다** — **평가가 도는 중**이라 무슨 말이든
  * **판정을 예고하는 것처럼 읽힌다.** 1.5(삽화 대기)는 **등급이 정해진 뒤**라 안전하다.
  */
-test("문장을 보내는 동안 나침반이 읽는다고 말한다 — 등급을 미리 흘리지 않는다", async ({
+test("문장을 보내는 동안 이야기를 읽는다고 말한다 — 등급을 미리 흘리지 않는다", async ({
   page,
 }) => {
   await page.route(CARDS_NEXT, (route) => route.fulfill({ status: 200, json: CARD }));
@@ -1571,7 +1647,7 @@ test("문장을 보내는 동안 나침반이 읽는다고 말한다 — 등급�
   await page.getByLabel(CARD.prompt_label).fill("등대 계단을 한 칸씩 올라간다");
   await page.getByRole("button", { name: 버튼.보내기 }).click();
 
-  await expect(page.locator("[data-읽는중]")).toHaveText(상태표시.읽는중);
+  await expect(page.locator("[data-읽는중]")).toHaveText("네 이야기를 읽고 있어.");
   // **쓴 문장이 그대로 있다** — 보내는 중에 사라지면 아이는 날아간 줄 안다.
   await expect(page.getByLabel(CARD.prompt_label)).toHaveValue("등대 계단을 한 칸씩 올라간다");
 
@@ -1670,7 +1746,7 @@ async function 결과버튼줄까지(
 test("T2 권유가 「다시 써보기」를 키우지 않는다", async ({ page }) => {
   await 결과버튼줄까지(page, "t2");
 
-  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(튜토리얼문구.다시쓰기권유);
+  await expect(page.locator("[data-튜토리얼안내]")).toHaveText(다시쓰기안내);
 
   // **두 버튼의 글자 크기가 같다.** 「다시 써보기」만 커지면 그게 재촉이다.
   const 크기 = (칸: string) =>
@@ -1702,7 +1778,7 @@ test("⛔ 전설이면 T2 권유를 안 띄운다 — 오를 티어가 없다", 
   expect(
     await page.locator("main").innerText(),
     "전설인데 권유가 붙었다 — 「전설인데도 부족하다」로 읽힌다",
-  ).not.toContain(튜토리얼문구.다시쓰기권유);
+  ).not.toContain(다시쓰기안내);
 });
 
 /**
@@ -1766,8 +1842,8 @@ test("하던 이야기가 있으면 그리로 보낸다 — 「이어서」를 �
   );
   await page.goto("/");
 
-  await expect(page.locator("[data-모험문]")).toContainText(모험문.가던데까지);
-  await expect(page.getByRole("link", { name: 모험문.하던이야기로 })).toBeVisible();
+  await expect(page.locator("[data-모험문]")).toContainText("하던 모험을 계속해 볼까?");
+  await expect(page.getByRole("link", { name: "하던 모험으로", exact: true })).toBeVisible();
 
   // **⛔ 1.20 이 「이어서 더 하기」를 금지했다.** 낱말이 겹치면 둘이 같은 것으로 읽힌다.
   expect(await page.locator("main").innerText()).not.toContain("이어서");
@@ -1778,14 +1854,19 @@ test("하던 이야기가 있으면 그리로 보낸다 — 「이어서」를 �
  * T1~T3 는 **첫 5~7분**이고 **A-6 이 「잠금·관문 없음」**으로 세운 자리다.
  * **다른 길을 같이 내면 아이가 무엇부터 할지 고르게 되고 그 5~7분이 관문이 된다.**
  */
-test("튜토리얼 중에는 문이 없다 — 5~7분에 갈림길을 안 만든다", async ({ page }) => {
-  await page.route(CARDS_NEXT, (route) =>
-    route.fulfill({ status: 200, json: 튜토리얼카드({ card_id: "t1" }) }),
-  );
-  await page.goto("/");
-  await expect(page.getByText(튜토리얼문구.여는말)).toBeVisible();
-  await expect(page.locator("[data-모험문]")).toHaveCount(0);
-});
+for (const cardId of ["t1", "t2", "t3"] as const) {
+  test(`튜토리얼 중에는 문이 없다 — ${cardId} 작성 중 갈림길을 안 만든다`, async ({ page }) => {
+    await page.route(CARDS_NEXT, (route) =>
+      route.fulfill({ status: 200, json: 튜토리얼카드({ card_id: cardId }) }),
+    );
+    await page.goto("/");
+    await expect(page.locator(".scene-card")).toBeVisible();
+    if (cardId === "t1") await expect(page.getByText(튜토리얼문구.여는말)).toBeVisible();
+    await expect(page.locator("[data-모험문]")).toHaveCount(0);
+    await expect(page.getByLabel(CARD.prompt_label)).toBeVisible();
+    await expect(page.locator("[data-모험문버튼]")).toHaveCount(0);
+  });
+}
 
 test("T3 를 끝내면 닫는말이 가리키는 그 버튼이 있다", async ({ page }) => {
   await 결과버튼줄까지(page, "t3");
@@ -1821,6 +1902,8 @@ for (const [폭, 높이, 어디] of [
     );
     await page.goto("/");
     await expect(page.locator("[data-모험문]")).toBeVisible();
+    // 문은 소개 시작부터 보인다. 입력창 위치는 글쓰기 차례가 된 뒤에 잰다.
+    await expect(page.locator("#attempt")).toBeVisible();
 
     // **아이가 안 한 것을 검사도 안 한다.**
     expect(await page.evaluate(() => window.scrollY)).toBe(0);

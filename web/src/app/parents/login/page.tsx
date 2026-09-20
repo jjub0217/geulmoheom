@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 
 import type { components } from "@/api/types.gen";
+import { AccountEntry } from "@/components/account-entry";
 import { ApiError, NetworkError, apiPost } from "@/lib/api";
 
 import { 아이가들어와서왔나 } from "@/lib/parent-kicked";
@@ -29,7 +30,7 @@ type LoginResponse = components["schemas"]["LoginResponse"];
  * **여기는 아이 화면이 아니다** — `용어사전.md` 「아이 화면」 열의 말을 쓰지 않는다.
  * 그리고 **아이 화면으로 가는 길도 두지 않는다**: 아이는 접속 코드로 들어온다.
  *
- * **`reading-frame` 이다** (가입 화면과 같은 이유) — 1280 을 다 쓰면 한 줄이 너무 길고,
+ * **입력 열의 폭을 제한한다** (가입 화면과 같은 이유) — 1280 을 다 쓰면 한 줄이 너무 길고,
  * **이메일 칸이 화면을 가로지르면 「길게 쓰라」는 신호**가 된다.
  *
  * **`apiPost` 를 쓴다. `fetch` 를 직접 부르지 않는다** — 그 함수가
@@ -102,28 +103,29 @@ export default function ParentLogin() {
   };
 
   return (
-    <main className="reading-frame flex flex-1 flex-col justify-center gap-8 py-12">
+    <AccountEntry kind="login">
+      <div className="parent-entry parent-entry--login">
       <form
-        className="flex flex-col gap-6"
+        className="account-auth-form parent-entry-form"
         onSubmit={(e) => {
           e.preventDefault();
           if (보낼수있다) void 들어가기();
         }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="account-heading">
           {/* **「다시 로그인해 주세요」가 아니다** — 만료돼서 온 사람과 **처음 오는 사람이
               같은 화면에 온다.** 「다시」는 후자에게 거짓이다 (`문구.md` 3.10). */}
-          <h1 className="text-3xl font-semibold">{로그인.제목}</h1>
+          <h1>{로그인.제목}</h1>
           {/* **왜 로그아웃되는지를 먼저 말한다.** 「세션이 만료되었습니다」는 전문 용어라 안 쓴다.
               **아이가 들어와서 풀렸으면 그 사실을 말한다** (`문구.md` 3.11) — 기본 문장은
               **시간을 원인으로 말하는데 그때는 원인이 시간이 아니라서 거짓이 된다.** */}
-          <p data-안내 className="opacity-80">
+          <p data-안내 className="account-description">
             {아이가들어왔다 ? 로그인.아이가들어왔다 : 로그인.안내}
           </p>
         </div>
 
-        <label className="flex flex-col gap-1">
-          <span>{로그인.이메일}</span>
+        <label className="account-field">
+          <span className="field-label">{로그인.이메일}</span>
           <input
             type="email"
             name="email"
@@ -131,13 +133,12 @@ export default function ParentLogin() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-              dark:bg-glow-deep/40"
+            className="form-field"
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span>{로그인.비밀번호}</span>
+        <label className="account-field">
+          <span className="field-label">{로그인.비밀번호}</span>
           <input
             type="password"
             name="password"
@@ -147,15 +148,14 @@ export default function ParentLogin() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="rounded-xl border-2 border-brass/50 bg-markings/70 p-3
-              dark:bg-glow-deep/40"
+            className="form-field"
           />
         </label>
 
         {/* **자리가 입력칸 곁이다** — 무엇에 대한 말인지 부모가 찾지 않아도 되게.
             아이 화면 오류를 둔 자리와 같은 규칙이다. */}
         {오류 !== null && (
-          <p data-오류 role="status" className="text-xl/relaxed">
+          <p data-오류 role="status" className="account-feedback">
             {오류}
           </p>
         )}
@@ -163,8 +163,7 @@ export default function ParentLogin() {
         <button
           type="submit"
           disabled={!보낼수있다}
-          className="pressable self-end rounded-full bg-scarf px-10 py-3 text-markings
-            disabled:opacity-40"
+          className="pressable action-primary account-submit"
         >
           {로그인.버튼}
         </button>
@@ -173,10 +172,11 @@ export default function ParentLogin() {
       {/* **나가는 길은 가입 하나뿐이다.** 아이 화면으로 가는 길을 여기 두지 않는다. */}
       <Link
         href="/parents/signup"
-        className="pressable self-center rounded-full px-6 py-3 underline underline-offset-4"
+        className="pressable action-quiet account-alternate parent-entry-switch"
       >
         {로그인.가입으로}
       </Link>
-    </main>
+      </div>
+    </AccountEntry>
   );
 }

@@ -3,7 +3,11 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { CompassGlow } from "@/components/compass-glow";
+import { useCompassIntroduction } from "@/components/compass-introduction";
 import { PII_MASK, maskPii, 가림안내, type PiiKind } from "@/lib/pii";
+
+// 전송 중 버튼은 동료 대사와 구분한다. docs/문구.md 2.5.
+export const 보내는중라벨 = "보내는 중…";
 
 /**
  * 자유 입력창.
@@ -56,6 +60,7 @@ export function AttemptInput({
   보내기라벨,
   안내글,
   disabled = false,
+  showCompass = true,
 }: {
   label: string;
   value: string;
@@ -76,7 +81,10 @@ export function AttemptInput({
    */
   안내글?: string;
   disabled?: boolean;
+  /** 게임 무대에서는 입력창이 열리기 전에 상위 대화창이 나침반을 소개한다. */
+  showCompass?: boolean;
 }) {
+  const introduction = useCompassIntroduction();
   const 입력창 = useRef<HTMLTextAreaElement>(null);
   /**
    * **한글 조합 중에는 값을 갈아치우지 않는다.** 조합 중인 글자를 바꿔치기하면
@@ -113,7 +121,7 @@ export function AttemptInput({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="attempt-input" data-writing-started={value.length > 0}>
       {/* **테두리가 이 덩어리를 감싼다.** 전에는 테두리가 `textarea` 에만 있어
           「보내기」가 **다른 물건**으로 보였다. 초점 표시도 여기로 올라온다 —
           `focus-within` 이라 **키보드로 들어와도 어느 자리인지 보인다.** */}
@@ -136,22 +144,22 @@ export function AttemptInput({
 
           **잃는 것 — 「차오른다 → 누른다」 짝.** 「보내기」 옆에 둬서 정체를 읽히게 했던 것인데,
           **이제 대사가 그 일을 말로 한다.** 자리로 설명하던 것을 문장이 대신하므로 짝을 놓아준다. */}
-      <div className="flex items-center gap-4">
-        <label htmlFor="attempt" className="text-xl">
+      <div className="attempt-label">
+        <label htmlFor="attempt">
           {label}
         </label>
         {/* 길이는 **가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
-        <CompassGlow length={value.length} />
+        {showCompass && <CompassGlow length={value.length} introducing={introduction?.phase === "compass"} />}
       </div>
       <div
-        className="flex flex-col rounded-3xl border-2 border-brass/50 bg-markings/70
-          outline-2 outline-offset-2 outline-transparent focus-within:border-glow
-          focus-within:outline-glow dark:bg-glow-deep/40"
+        className="writing-surface"
       >
         <textarea
         id="attempt"
         ref={입력창}
         value={value}
+        // 쓰기 시작하면 소개를 끝낸다. 이후 나침반의 빛은 아이 입력에만 반응한다.
+        onInput={introduction?.phase !== "complete" ? introduction?.finish : undefined}
         onCompositionStart={() => {
           조합중.current = true;
         }}
@@ -186,19 +194,17 @@ export function AttemptInput({
           // 안에 또 테두리를 그리면 **상자 안의 상자**가 되어 덩어리가 다시 갈라진다.
           // `placeholder` 를 **흐리게** 둔다 — 아이가 쓴 글자와 같은 색이면
           // **자기가 쓴 줄 알고 지우려 든다.**
-          className="w-full resize-none bg-transparent px-5 pb-3 pt-4 text-xl/relaxed
-            text-foreground outline-none placeholder:text-brass/60"
+          className="writing-field"
         />
 
         {/* 「보내기」는 **상자 안에 남는다** — 쓰던 자리와 보내는 자리를 떼어놓지 않는다.
             **아이가 하는 것**이라 아이 테두리 안이 맞다. */}
-        <div className="flex items-center justify-end px-5 pb-4">
+        <div className="writing-actions">
           <button
             type="button"
             disabled={!보낼수있나}
             onClick={onSend}
-            className="pressable rounded-full bg-scarf px-10 py-3 text-xl text-markings
-              disabled:opacity-40"
+            className="pressable action-primary"
           >
             {보내기라벨}
           </button>
@@ -208,7 +214,7 @@ export function AttemptInput({
         // 가린 이유를 말해주는 **유일한 자리**다. 전송을 막지 않으므로, 이 한 줄이 없으면
         // 아이는 자기 글자가 왜 바뀌었는지 알 방법이 없다.
         // 가이드 캐릭터 표정은 쓰지 않는다 — 제출 전 표정은 `default` 고정이다 (`Stage0.md` 3절).
-        <p role="status" className="text-lg text-brass">
+        <p role="status" className="text-base text-accent">
           {안내}
         </p>
       )}

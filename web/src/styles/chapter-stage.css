@@ -1,0 +1,219 @@
+/* 본편도 튜토리얼과 같은 「장면 → 동료 → 글쓰기」 무대를 사용한다.
+   첫 배지 안내나 긴 대사가 있으면 문서가 늘어나며, 동료를 입력 상자 뒤로 밀지 않는다. */
+.chapter-shell {
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+.chapter-stage { min-height: 100dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
+.chapter-world .activity-marker--chapter { display: flex; align-items: center; gap: 0.55rem; align-self: center; }
+.chapter-world .activity-marker--chapter h1, .chapter-world .activity-marker--chapter p { margin: 0; font: inherit; }
+.chapter-world .activity-marker--chapter p { font-family: var(--font-sans); font-size: 0.82rem; }
+.chapter-toolbar .book-link {
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--color-brass);
+  background: var(--surface);
+  box-shadow: 0 3px 14px rgb(18 32 36 / 20%);
+}
+
+/* 긴 본편 글은 이야기 안에서 스크롤한다. 시작선·폭·종이는 공통 game-story를 따른다. */
+.chapter-stage .chapter-reading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 1.25rem;
+  width: min(100%, 75rem);
+  height: clamp(8rem, 28svh, 20rem);
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.chapter-stage .chapter-reading:not(:has(.chapter-visual > .artwork-frame)) {
+  display: block;
+  height: auto;
+  max-height: clamp(8rem, 28svh, 20rem);
+}
+.chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+.chapter-stage .chapter-story {
+  align-self: start;
+  width: 100%;
+  max-height: clamp(8rem, 28svh, 20rem);
+  min-height: 0;
+  overflow-y: auto;
+  outline-offset: -4px;
+}
+.chapter-stage .chapter-narrative {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: var(--type-reading-desktop);
+  line-height: var(--leading-chapter);
+  white-space: pre-wrap;
+}
+.chapter-story:empty { display: none; }
+.chapter-story:focus-visible { outline: 2px solid var(--color-brass); }
+.chapter-stage .chapter-reading:has(.chapter-story:empty) { grid-template-columns: minmax(0, 1fr); }
+.chapter-visual {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  container-type: size;
+}
+.chapter-visual .artwork-frame {
+  width: min(100%, calc(100cqh * var(--artwork-ratio)));
+  max-width: 100%;
+  margin: 0;
+  border-radius: 0.875rem;
+  box-shadow: 0 8px 28px rgb(18 32 36 / 24%);
+}
+
+/* 캐릭터·말풍선·나침반 크기는 game-stage.css의 공통 클래스를 따른다. */
+
+.chapter-world .chapter-companion-bubble { min-width: 0; }
+.chapter-companion-line {
+  max-height: min(9rem, 20svh);
+  overflow-y: auto;
+  outline-offset: 2px;
+  white-space: pre-wrap;
+}
+.chapter-companion-line:focus-visible { outline: 2px solid var(--color-brass); }
+.chapter-companion-line p { margin: 0; font-size: inherit; line-height: inherit; opacity: 1; }
+.chapter-companion-line [data-읽는중] { font-family: var(--font-sans); }
+.chapter-console { animation: none; }
+.chapter-writing-guide {
+  width: min(100%, 46rem);
+  margin: 0 0 0.75rem;
+  color: var(--foreground);
+  font-family: var(--font-reading);
+  font-size: var(--type-reading-desktop);
+  line-height: var(--leading-chapter);
+}
+.chapter-controls > .attempt-input { min-width: 0; }
+.chapter-console .attempt-label { height: auto; }
+.chapter-send-notice { font-size: 1rem; line-height: 1.5; }
+.chapter-ending-narrative {
+  max-width: 46rem;
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 1rem;
+  background: var(--surface);
+  font-family: var(--font-reading);
+  font-size: var(--type-reading-desktop);
+  line-height: var(--leading-chapter);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chapter-console .tier-badge-writing-intro { margin-bottom: 0.75rem; }
+.chapter-artwork-notice {
+  margin: 0.5rem 0 0;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.chapter-stage--status { justify-content: center; align-items: center; }
+.chapter-stage .chapter-status {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 1.125rem;
+}
+
+.chapter-stage--done { display: grid; grid-template-rows: minmax(0, 1fr); overflow-y: auto; }
+.chapter-ending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  width: min(100%, 52rem);
+  margin: auto;
+}
+.chapter-ending .guide-figure { gap: 1.5rem; }
+.chapter-ending .guide-image { width: clamp(9rem, 25vw, 18rem); }
+.chapter-ending .guide-line {
+  padding: 1.5rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 1.125rem;
+  background: var(--surface);
+  font-size: clamp(1.125rem, 2.2vw, 1.5rem);
+}
+.chapter-ending-line {
+  max-width: 40rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 1.125rem;
+  background: var(--surface);
+  font-size: 1.25rem;
+  line-height: 1.7;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .chapter-stage { padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); }
+  .chapter-toolbar .book-link { min-height: 2.75rem; padding: 0.375rem 0.75rem; font-size: 1rem; }
+  .chapter-stage .chapter-reading { gap: 0.5rem; }
+  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); }
+  .chapter-stage .chapter-reading:has(.chapter-story:empty) { grid-template-columns: minmax(0, 1fr); }
+  .chapter-stage .chapter-narrative,
+  .chapter-ending-narrative,
+  .chapter-writing-guide { font-size: var(--type-reading-mobile); }
+  .chapter-writing-guide { margin-bottom: 0.5rem; }
+  .chapter-companion-line { max-height: 4.5rem; }
+  .chapter-console .writing-field { min-height: 3rem; height: 3rem; }
+  .chapter-console .tier-badge-writing-intro { position: relative; gap: 0.25rem; max-height: none; overflow: visible; margin-bottom: 0.5rem; padding: 0.5rem 0.625rem 0.125rem; font-size: 0.875rem; line-height: 1.5; }
+  .chapter-console .tier-badge-writing-heading { gap: 0.25rem 0.5rem; }
+  .chapter-console .tier-badge-writing-heading h2 { font-size: 0.875rem; }
+  .chapter-console .tier-badge-writing-preview .tier-badge { min-height: 1.75rem; padding: 0.125rem 0.25rem; font-size: 0.875rem; }
+  .chapter-console .tier-badge-writing-actions { position: relative; }
+  .chapter-console .tier-badge-writing-examples {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    bottom: calc(100% + 0.25rem);
+    left: 0;
+    max-height: min(10rem, 35svh);
+    padding: 0.75rem;
+    overflow-y: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.625rem;
+    background: #fff8ec;
+    box-shadow: 0 6px 20px rgb(18 32 36 / 20%);
+  }
+  .chapter-console .tier-badge-writing-examples:focus-visible { outline: 2px solid var(--color-brass); outline-offset: 2px; }
+  .chapter-ending .guide-figure { flex-direction: column; gap: 1rem; }
+  .chapter-ending .guide-image { width: min(12rem, 28svh); }
+  .chapter-ending .guide-line { padding: 1rem; text-align: center; }
+}
+
+@media (max-height: 550px) {
+  /* 자판·가로 화면에서도 현재 이야기와 동료를 다시 읽을 수 있게 문서 스크롤을 허용한다. */
+  .chapter-shell { height: auto; min-height: 100dvh; }
+  .chapter-world { flex: none; min-height: 15rem; }
+  .chapter-world .chapter-companion { margin-inline: 0; }
+  .chapter-stage:has(.game-response:focus-within, .game-console [data-writing-started="true"]) .chapter-world {
+    min-height: 15rem;
+    height: auto;
+    flex: none;
+    overflow: visible;
+    padding: 3.5625rem 0.75rem 0.25rem;
+  }
+  .chapter-stage:has(.game-response:focus-within, .game-console [data-writing-started="true"]) .chapter-world > * { visibility: visible; }
+}
+
+@media (max-height: 550px) and (min-width: 701px) {
+  .chapter-stage .chapter-reading { flex: 1; width: auto; }
+}

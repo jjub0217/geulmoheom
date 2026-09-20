@@ -1,10 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { components, paths } from "../src/api/types.gen";
-// 문구는 박지 않는다 — `docs/문구.md` 1.13·1.16·2.4·2.5 가 SSOT 다.
-import { 보내기라벨, 빈책, 책이름 } from "../src/app/book/copy";
+// 문구는 박지 않는다 — `docs/문구.md` 1.13·1.16·1.17·2.4·2.5 가 SSOT 다.
+import { 빈책, 책이름 } from "../src/app/book/copy";
 import { 버튼, 못닿음 } from "../src/app/copy";
 import { 상태표시 } from "../src/app/status-copy";
+import { 모험복귀라벨, 책인쇄라벨 } from "../src/components/book-actions";
 import { 티어이름 } from "../src/components/tier-badge";
 // 가림 안내는 **1.1 하나뿐**이다 — 카드 화면과 책 이름이 같은 문장을 쓴다 (1.16).
 import { 가림안내 } from "../src/lib/pii";
@@ -16,7 +17,28 @@ import { 가림안내 } from "../src/lib/pii";
 type Book = paths["/api/v1/book"]["get"]["responses"][200]["content"]["application/json"];
 
 const BOOK = "**/api/v1/book";
-const 그림 = "http://localhost:3000/api/v1/artworks/w1/image";
+const 그림 = "/api/v1/artworks/w1/image";
+
+test.use({ serviceWorkers: "block" });
+
+test.beforeEach(async ({ page, baseURL }) => {
+  const testOrigin = new URL(baseURL!).origin;
+  await page.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    // 실제 그림·계정 API를 부르지 않는다. 개별 /book 모의는 각 검사에서 덮어쓴다.
+    if (url.pathname === "/api/v1/artworks/w1/image") {
+      return route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="#b8c8b0"/></svg>',
+      });
+    }
+    if (url.pathname.startsWith("/api/")) {
+      return route.fulfill({ status: 404, json: { detail: "Unmocked test API" } });
+    }
+    return url.origin === testOrigin ? route.continue() : route.abort();
+  });
+});
 
 const 페이지 = (
   over: Partial<components["schemas"]["BookPage"]> = {},
@@ -58,7 +80,7 @@ async function 가로스크롤없음(page: Page) {
 }
 
 test("쓴 문장과 그림이 책 페이지로 다시 열린다", async ({ page }) => {
-  const 책내용 = 책([페이지(), 페이지({ page_no: 2, tier: "basic", text: "낡은 문을 밀었다" })]);
+  const 책내용 = 책([페이지({ page_no: 3 }), 페이지({ page_no: 8, tier: "basic", text: "낡은 문을 밀었다" })]);
   await page.route(BOOK, (route) =>
     route.fulfill({ status: 200, json: 책내용 }),
   );
@@ -100,12 +122,15 @@ test("쓴 문장과 그림이 책 페이지로 다시 열린다", async ({ page 
     티어이름.basic,
   ]);
 
-  // **번호는 서버가 준 `page_no`** 다 — 목록의 몇 번째가 아니다.
-  await expect(page.locator("main [data-쪽번호]")).toHaveText(["1", "2"]);
+  // 화면 번호는 그림 면과 글 면 순서로 이어지고, 서버 장면 번호는 별도로 보존한다.
+  await expect(page.locator("main [data-쪽번호]")).toHaveText(["1", "2", "3", "4"]);
+  await expect(page.locator("[data-책쪽]").nth(0)).toHaveAttribute("data-scene-number", "3");
+  await expect(page.locator("[data-책쪽]").nth(1)).toHaveAttribute("data-scene-number", "8");
 
-  // 그림은 서버가 준 주소 그대로. **`crossOrigin` 을 붙이지 않는다.**
-  const 삽화 = page.locator(`main img[src="${그림}"]`).first();
+  // 같은 출처의 그림에는 판형 개정 버전만 붙인다. **`crossOrigin` 을 붙이지 않는다.**
+  const 삽화 = page.locator("main .book-page-artwork img").first();
   await expect(삽화).toBeVisible();
+  await expect(삽화).toHaveAttribute("src", `${그림}?book-layout=square-20260919`);
   await expect(삽화).not.toHaveAttribute("crossorigin", /.*/);
 
   // **날짜를 안 그린다** (`문구.md` 1.14). 아이는 그림으로 찾고,
@@ -117,16 +142,39 @@ test("쓴 문장과 그림이 책 페이지로 다시 열린다", async ({ page 
   await 가로스크롤없음(page);
 });
 
-test("굽는 중이라 그림이 없어도 페이지는 선다 — 자리를 비운다", async ({ page }) => {
-  // `artwork_url` 은 `ready` 인 것만 온다. **폴링이 끝나기 전에 책을 열 수 있다.**
+test("굽는 중인 그림도 같은 책 면에서 완성된다", async ({ page }) => {
+  // `artwork_url` 은 ready 인 것만 온다. 참조가 있으면 그 id를 확인해 같은 면을 유지한다.
+  let 확인횟수 = 0;
   await page.route(BOOK, (route) =>
-    route.fulfill({ status: 200, json: 책([페이지({ artwork_url: null })]) }),
+    route.fulfill({
+      status: 200,
+      json: 책([페이지({
+        artwork_url: null,
+        artwork: { artwork_id: "w1", status: "pending", url: null },
+      })]),
+    }),
   );
+  await page.route("**/api/v1/artworks/w1", (route) => {
+    확인횟수 += 1;
+    return route.fulfill({
+      status: 200,
+      json: 확인횟수 === 1
+        ? { artwork_id: "w1", status: "pending", url: null, tier: "legendary", fallback: false }
+        : { artwork_id: "w1", status: "ready", url: 그림, tier: "legendary", fallback: false },
+    });
+  });
   await page.goto("/book");
 
   await expect(page.locator("main [data-책문장]")).toHaveCount(1);
-  // 깨진 그림을 세우면 **아이는 자기 그림이 사라진 줄 안다.**
+  await expect(page.getByText("그림을 준비하고 있어.")).toBeVisible();
+  // 굽는 동안에도 삽화 면이 남아 두 면으로 읽힌다.
   await expect(page.locator("main img")).toHaveCount(0);
+  await expect(page.locator("main [data-쪽번호]")).toHaveText(["1", "2"]);
+  await expect(page.locator("[data-book-location]")).toHaveText("1–2쪽");
+
+  // 첫 요청은 3초 뒤, 다음 확인은 2초 뒤다. 준비되면 같은 면에 실제 그림을 넣는다.
+  await expect(page.locator("main .book-page-artwork img")).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText("그림을 준비하고 있어.")).toHaveCount(0);
 });
 
 test("빈 책은 없다고 말하지 않는다 — 앞으로 생길 것을 말한다", async ({ page }) => {
@@ -142,13 +190,20 @@ test("빈 책은 없다고 말하지 않는다 — 앞으로 생길 것을 말�
 
   await expect(page.getByText(빈책.줄1)).toBeVisible();
   await expect(page.getByText(빈책.줄2)).toBeVisible();
-  // **여기가 「내 책」이 뭔지 알려주는 유일한 자리다.** 나가는 곳은 모험 화면 하나뿐이다.
-  await page.getByRole("link", { name: 빈책.버튼 }).click();
-  await expect(page).toHaveURL(/\/$/);
-
   // **못 한 것을 세지 않는다** — 「아직」·「없」으로 시작하면 아이가 자기가 못 한 것으로 읽는다.
   const 화면 = await page.locator("main").innerText();
   for (const 금지어 of ["아직", "없어", "0"]) expect(화면).not.toContain(금지어);
+
+  // 빈 책 안내 아래에 귀환 버튼 하나를 둔다. 인쇄할 내용이 없으면 인쇄 버튼은 없다.
+  const 돌아가기 = page.getByRole("link", { name: 모험복귀라벨, exact: true });
+  await expect(돌아가기).toHaveCount(1);
+  await expect(page.locator(".book-actions [data-쓰러가기]")).toHaveCount(1);
+  await expect(page.locator("[data-보내기]")).toHaveCount(0);
+  const 안내위치 = (await page.locator(".book-empty").boundingBox())!;
+  const 귀환위치 = (await 돌아가기.boundingBox())!;
+  expect(귀환위치.y).toBeGreaterThanOrEqual(안내위치.y + 안내위치.height);
+  await 돌아가기.click();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("책을 못 불러오면 빈 화면이 아니라 이유가 뜬다", async ({ page }) => {
@@ -171,41 +226,39 @@ test("여는 동안 무엇을 하고 있는지 말한다 — 「확인하는 중
   await page.goto("/book");
 
   await expect(page.getByText(상태표시.책펼치는중)).toBeVisible();
+  // 로딩은 한 줄로만 알린다. 책장을 흉내 낸 큰 종이 박스는 표시하지 않는다.
+  await expect(page.getByRole("status")).toHaveCSS("box-shadow", "none");
+  await expect(page.getByRole("status")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   expect(상태표시.책펼치는중).not.toBe(상태표시.확인중);
 });
 
-/**
- * **계약이 적은 실측값을 여기 다시 적는다** (`docs/api/Stage0.md` 5절 — 20/20 장 `784×1353`).
- *
- * **`lib/artwork-frame.ts` 의 상수를 읽어오지 않는다.** 읽어오면 그 상수를 4:3 으로 바꿔도
- * 검사가 같이 따라가서 **초록으로 지나간다** — 2026-09-08 에 실제로 그랬다.
- * **검사가 자기가 재려는 것을 자기한테서 가져오면 아무것도 안 재는 것이다.**
- */
-/**
- * **⛔ 2026-09-15 에 바뀌었다** (`Stage0.md` 5절 개정 · `adr/0015`). 종전에는 **계약 상수
- * 0.58** 을 기대했는데, **갓 구운 그림은 `1024×1024`(1:1)이고 조합 파일 폴백만 0.58** 이다.
- * **한 상수로는 못 맞춘다** — 운영 실측에서 **정사각형 그림이 세로 상자에 갇혀 빈 띠**가 생겼다.
- *
- * **이제 규칙은 「온 그림의 실제 비율이 이긴다」**이고, 픽스처가 **1×1** 이라 여기서는 **1** 이다.
- * **비정사각이 오면 어떻게 되는지는 아래 전용 검사**가 본다 — 정사각 픽스처만으로는
- * **상수를 1 로 바꿔 박아도 통과**해서 아무것도 안 잰다.
- */
-const 픽스처비율 = 1;
-
-test("책 액자도 그림 비율이다 — 한 번 잘리면 잘린 채로 쌓인다", async ({ page }) => {
+test("책 화면은 정사각 판형을 유지하고 세로 삽화도 자르지 않는다", async ({ page }) => {
+  // 원본 비율과 판형이 다른 경우를 재야 정사각 면과 삽화 보존을 함께 확인할 수 있다.
+  await page.route("**/api/v1/artworks/w1/image*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="784" height="1353"><rect width="784" height="1353" fill="#b8c8b0"/></svg>',
+    }),
+  );
   await page.route(BOOK, (route) =>
     route.fulfill({ status: 200, json: 책([페이지({})]) }),
   );
   await page.goto("/book");
 
-  const 삽화 = page.locator(`main img[src="${그림}"]`).first();
+  const 삽화 = page.locator("main .book-page-artwork img").first();
   await expect(삽화).toBeVisible();
+  await expect(삽화).toHaveAttribute("src", `${그림}?book-layout=square-20260919`);
+  await expect.poll(() => 삽화.evaluate((image: HTMLImageElement) => ({
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  }))).toEqual({ width: 784, height: 1353 });
 
-  // **결과 화면과 같은 액자다** (`lib/artwork-frame.ts`). 한때 여기도 `aspect-4/3` 에
-  // `object-cover` 라 **위아래 각 28% 가 잘렸다** — 책은 아이 창작물을 두는 자리다.
+  // 2026-09-19 승인: 화면의 한쪽 면은 1:1, 원본은 contain으로 온전히 보존한다.
   const 액자 = (await 삽화.locator("..").boundingBox())!;
-  expect(액자.width / 액자.height).toBeCloseTo(픽스처비율, 2);
+  expect(액자.width / 액자.height).toBeCloseTo(1, 2);
   await expect(삽화).toHaveCSS("object-fit", "contain");
+  await expect(삽화).not.toHaveAttribute("crossorigin", /.*/);
 });
 
 // ── 책 이름 바꾸기 (A0-4 후속 · `문구.md` 1.16) ───────────────────────────
@@ -219,8 +272,116 @@ async function 이름고치기를연다(page: Page, 책내용 = 책([페이지()
   await page.goto("/book");
   await page.locator("[data-책이름바꾸기]").click();
   await expect(책이름칸(page)).toBeVisible();
+  await expect(책이름칸(page)).toBeFocused();
   return 책내용;
 }
+
+test("책 이름 자체가 연필 아이콘과 함께 편집 버튼이며 키보드로도 열린다", async ({ page }) => {
+  const 책내용 = 책([페이지()]);
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책내용 }));
+  await page.goto("/book");
+
+  const 표지이름 = page.locator("main h1");
+  const 이름버튼 = 표지이름.getByRole("button", { name: `${책내용.title}: ${책이름.바꾸기}`, exact: true });
+  await expect(표지이름).toHaveText(책내용.title);
+  await expect(이름버튼).toHaveAttribute("data-책이름바꾸기", "true");
+  await expect(이름버튼).toHaveText(책내용.title);
+  await expect(이름버튼.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await expect(page.locator("[data-책이름바꾸기]")).toHaveCount(1);
+  await expect(이름버튼).toHaveAttribute("aria-expanded", "false");
+
+  await 이름버튼.focus();
+  await page.keyboard.press("Enter");
+  await expect(책이름칸(page)).toBeFocused();
+  await expect(책이름칸(page)).toHaveValue(책내용.title);
+  await expect(이름버튼).toHaveAttribute("aria-expanded", "true");
+});
+
+test("책 이름 편집을 취소하거나 Escape를 누르면 원래 이름과 편집 버튼으로 돌아온다", async ({ page }) => {
+  const 책내용 = await 이름고치기를연다(page);
+  let 보낸횟수 = 0;
+  await page.route(BOOK, (route) => {
+    if (route.request().method() === "PATCH") 보낸횟수 += 1;
+    return route.fallback();
+  });
+  const 이름버튼 = page.locator("[data-책이름바꾸기]");
+  const 취소 = page.getByRole("button", { name: "취소", exact: true });
+
+  await 책이름칸(page).fill("쓰다가 그만둔 이름");
+  await 취소.click();
+  await expect(책이름칸(page)).toHaveCount(0);
+  await expect(page.locator("main h1")).toHaveText(책내용.title);
+  await expect(이름버튼).toBeFocused();
+  await expect(이름버튼).toHaveAttribute("aria-expanded", "false");
+  await 이름버튼.press("Enter");
+  await expect(책이름칸(page)).toHaveValue(책내용.title);
+
+  // 빈 이름이어도 취소할 수 있고, 그 안내를 닫힌 표지에 남기지 않는다.
+  await 책이름칸(page).fill("");
+  await expect(취소).toBeEnabled();
+  await 책이름칸(page).press("Escape");
+  await expect(책이름칸(page)).toHaveCount(0);
+  await expect(page.locator("[data-책이름비었다], [data-책이름알림]")).toHaveCount(0);
+  await expect(이름버튼).toBeFocused();
+  await 이름버튼.press("Enter");
+  await expect(책이름칸(page)).toHaveValue(책내용.title);
+  expect(보낸횟수).toBe(0);
+});
+
+test("한글 조합 중 Escape는 책 이름 편집을 취소하지 않는다", async ({ page }) => {
+  await 이름고치기를연다(page);
+  const 입력칸 = 책이름칸(page);
+  await 입력칸.fill("새로운 이름");
+  await 입력칸.dispatchEvent("compositionstart");
+  await 입력칸.press("Escape");
+  await expect(입력칸).toBeVisible();
+  await expect(입력칸).toHaveValue("새로운 이름");
+  await 입력칸.dispatchEvent("compositionend");
+  await 입력칸.dispatchEvent("keydown", { key: "Escape", isComposing: true });
+  await expect(입력칸).toBeVisible();
+  await 입력칸.press("Escape");
+  await expect(입력칸).toHaveCount(0);
+  await expect(page.locator("[data-책이름바꾸기]")).toBeFocused();
+});
+
+test("책 이름을 보내는 동안은 고치거나 취소하지 않고 서버 응답을 기다린다", async ({ page }) => {
+  const 책내용 = await 이름고치기를연다(page);
+  let 보낸횟수 = 0;
+  let 응답한다!: () => void;
+  const 응답대기 = new Promise<void>((resolve) => { 응답한다 = resolve; });
+  await page.route(BOOK, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    보낸횟수 += 1;
+    expect(route.request().postDataJSON()).toEqual({ title: "새로 지은 이름" });
+    await 응답대기;
+    return route.fulfill({ status: 200, json: { title: "서버가 저장한 이름" } });
+  });
+  const 입력칸 = 책이름칸(page);
+  const 취소 = page.locator("[data-책이름취소]");
+  await 입력칸.fill("새로 지은 이름");
+  await 보내기(page).click();
+  await expect.poll(() => 보낸횟수).toBe(1);
+  await expect(입력칸).toHaveAttribute("readonly", "");
+  await expect(보내기(page)).toBeDisabled();
+  await expect(취소).toBeDisabled();
+  await expect(page.locator(".book-title-editor")).toHaveAttribute("aria-busy", "true");
+  await 입력칸.focus();
+  await 입력칸.press("End");
+  await 입력칸.press("Backspace");
+  await 입력칸.press("Escape");
+  await 입력칸.press("Enter");
+  await expect(입력칸).toHaveValue("새로 지은 이름");
+  await expect(page.locator("main h1")).toHaveText(책내용.title);
+  expect(보낸횟수).toBe(1);
+
+  응답한다();
+  await expect(page.locator("main h1")).toHaveText("서버가 저장한 이름");
+  await expect(입력칸).toHaveCount(0);
+  await expect(page.locator("[data-책이름바꾸기]")).toBeFocused();
+  await page.locator("[data-책이름바꾸기]").press("Enter");
+  await expect(책이름칸(page)).toBeEditable();
+  await expect(취소).toBeEnabled();
+});
 
 test("책 이름을 바꾸면 표지가 그 자리에서 바뀐다 — 다시 열지 않는다", async ({ page }) => {
   const 책내용 = await 이름고치기를연다(page);
@@ -235,13 +396,18 @@ test("책 이름을 바꾸면 표지가 그 자리에서 바뀐다 — 다시 �
   });
 
   await 책이름칸(page).fill("달빛 호수의 밤");
-  await 보내기(page).click();
+  await 책이름칸(page).press("Enter");
 
   expect(보낸것).toEqual({ title: "달빛 호수의 밤" });
   // **표지가 바뀐다.** 문자열을 박지 않는다 — 서버가 준 값과 대조한다.
   await expect(page.locator("main h1")).toHaveText("달빛 호수의 밤");
   // **바꾼 뒤 한 줄이 반드시 있다** (1.16). 없으면 성공과 실패가 화면에서 안 갈린다.
   await expect(page.locator("[data-책이름알림]")).toBeVisible();
+  // 폼이 사라진 뒤에도 키보드 포커스는 책 이름 도구에 남는다.
+  await expect(page.locator("[data-책이름바꾸기]")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(책이름칸(page)).toBeFocused();
+  await expect(책이름칸(page)).toHaveValue("달빛 호수의 밤");
 });
 
 test("서버가 돌려준 이름을 그린다 — 내가 보낸 값이 아니다", async ({ page }) => {
@@ -375,25 +541,31 @@ test("책이 쌓였을 때도 모험으로 가는 문이 있다", async ({ page 
 
   // **빈 책에만 있었다** (`문구.md` 1.17, 2026-09-12 실기기) — 한 장이라도 쌓이는 순간
   // 그 문이 사라지고 **페이지 목록만 남았다.** 아이는 책을 보고 나서 나갈 길이 없었다.
-  await expect(page.locator("[data-쓰러가기]")).toBeVisible();
-  await page.locator("[data-쓰러가기]").click();
+  const 돌아가기 = page.locator("[data-쓰러가기]");
+  await expect(돌아가기).toHaveCount(1);
+  await expect(돌아가기).toBeVisible();
+  await 돌아가기.click();
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("두 자리의 문은 같은 낱말을 쓴다 — 빈 책이든 쌓였든 모험으로 가는 것은 하나다", async ({
+test("빈 책이든 쌓였든 같은 낱말을 쓴 귀환 버튼 하나만 있다", async ({
   page,
 }) => {
-  // **1.13 재사용이다** (1.17 이 그렇게 정했다). 같은 화면·같은 동작이라 새 낱말을 안 만든다.
-  // **`빈책.버튼` 을 두 자리가 같이 쓴다** — 갈라지면 아이가 화면마다 다른 말을 배운다.
+  // 1.13·1.17의 공통 귀환 라벨이다. 일일 종료 뒤에도 바로 쓰기를 약속하지 않는다.
   await page.route(BOOK, (route) =>
     route.fulfill({ status: 200, json: 책([페이지()]) }),
   );
   await page.goto("/book");
-  await expect(page.locator("[data-쓰러가기]")).toHaveText(빈책.버튼);
+  const 돌아가기 = page.locator("[data-쓰러가기]");
+  await expect(돌아가기).toHaveCount(1);
+  await expect(돌아가기).toHaveText(모험복귀라벨);
+  await expect(돌아가기).toHaveAttribute("href", "/");
 
   await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책([]) }));
   await page.goto("/book");
-  await expect(page.getByRole("link", { name: 빈책.버튼 })).toBeVisible();
+  await expect(돌아가기).toHaveCount(1);
+  await expect(돌아가기).toHaveText(모험복귀라벨);
+  await expect(돌아가기).toHaveAttribute("href", "/");
 });
 
 /**
@@ -428,6 +600,7 @@ test("챕터 한 판과 카드 한 장이 같은 책에 나란히 쌓인다", as
 
   // **둘 다 아이 원문 그대로** — 요약도 교정도 없다 (비전 2장).
   await expect(page.getByText(카드문장)).toBeVisible();
+  await page.locator("[data-book-next]").click();
   await expect(page.getByText(챕터문장)).toBeVisible();
 
   // **쪽 수가 둘이다.** 챕터 장이 빠지거나 두 번 들어가면 여기서 걸린다.
@@ -452,7 +625,7 @@ test("챕터 한 판과 카드 한 장이 같은 책에 나란히 쌓인다", as
  * **그래서 못 재는 것을 안 재는 척하지 않는다**: 아래 단언은 **버튼이 인쇄를 부르는지**와
  * **숨기기로 한 것에 `print:hidden` 이 붙었는지**까지다.
  */
-test("「부모님께 보내기」가 인쇄를 부르고, 종이에는 아이 것만 남는다", async ({ page }) => {
+test("「책 인쇄하기」는 한 번만 표시하고, 인쇄한 종이에는 아이 것만 남는다", async ({ page }) => {
   const 문장 = "낡은 밧줄의 매듭을 하나씩 만져 보며 어느 쪽이 새것인지 살폈다";
   await page.route(BOOK, (route) =>
     route.fulfill({
@@ -465,21 +638,35 @@ test("「부모님께 보내기」가 인쇄를 부르고, 종이에는 아이 �
 
   // **`window.print()` 를 가로챈다** — 진짜로 부르면 대화상자가 떠서 검사가 멈춘다.
   const 불렀나 = await page.evaluate(() => {
-    (window as unknown as { __printed?: boolean }).__printed = false;
+    (window as unknown as { __printed?: number }).__printed = 0;
     window.print = () => {
-      (window as unknown as { __printed?: boolean }).__printed = true;
+      (window as unknown as { __printed?: number }).__printed! += 1;
     };
     return true;
   });
   expect(불렀나).toBe(true);
 
-  // **낱말은 `용어사전.md` 55행이다** — 「PDF」·「내보내기」는 **어른 낱말**이라 안 쓴다.
-  await page.getByRole("button", { name: 보내기라벨 }).click();
+  // 책과 쪽 넘기기 아래에 귀환·인쇄 도구를 한 번씩 둔다. 표지는 이름과 지은이만 남긴다.
+  const 인쇄버튼 = page.getByRole("button", { name: 책인쇄라벨, exact: true });
+  await expect(인쇄버튼).toHaveCount(1);
+  await expect(page.locator("[data-보내기]")).toHaveCount(1);
+  await expect(page.locator("[data-쓰러가기]")).toHaveCount(1);
+  await expect(page.locator(".book-heading [data-보내기], .book-heading [data-쓰러가기]")).toHaveCount(0);
+  await expect(page.locator(".book-actions [data-보내기], .book-actions [data-쓰러가기]")).toHaveCount(2);
+  const 배치 = await page.evaluate(() => {
+    const 펼침 = document.querySelector("[data-책쪽]")!.getBoundingClientRect();
+    const 쪽넘김 = document.querySelector(".book-pagination")!.getBoundingClientRect();
+    const 보조버튼 = document.querySelector(".book-actions")!.getBoundingClientRect();
+    return { 책아래: 펼침.bottom, 쪽넘김위: 쪽넘김.top, 쪽넘김아래: 쪽넘김.bottom, 보조버튼위: 보조버튼.top };
+  });
+  expect(배치.쪽넘김위).toBeGreaterThanOrEqual(배치.책아래);
+  expect(배치.보조버튼위).toBeGreaterThanOrEqual(배치.쪽넘김아래);
+  await 인쇄버튼.click();
   expect(
     await page.evaluate(
-      () => (window as unknown as { __printed?: boolean }).__printed,
+      () => (window as unknown as { __printed?: number }).__printed,
     ),
-  ).toBe(true);
+  ).toBe(1);
 
   // **종이에 남을 것** — 아이 문장은 `print:hidden` 이 아니다.
   const 숨나 = (로케이터: ReturnType<typeof page.locator>) =>
@@ -492,10 +679,24 @@ test("「부모님께 보내기」가 인쇄를 부르고, 종이에는 아이 �
   expect(await 숨나(page.locator("[data-책문장]").first())).toBe(false);
 
   // **⛔ 안 남을 것 — 버튼과 나가는 문.** 안 숨기면 **종이에 버튼이 찍힌다.**
-  expect(await 숨나(page.locator("[data-보내기]"))).toBe(true);
-  expect(await 숨나(page.locator("[data-쓰러가기]"))).toBe(true);
+  for (const 버튼 of await page.locator("[data-보내기], [data-쓰러가기]").all()) {
+    expect(await 숨나(버튼)).toBe(true);
+  }
 
   // **한 쪽이 두 장으로 갈리지 않게 표식이 붙어 있다** — 그림과 그 아래 문장이
   // 다른 종이에 있으면 그건 책이 아니다.
   await expect(page.locator("[data-책쪽]")).toHaveCount(1);
+
+  // 제목 자체가 버튼이어도 인쇄에는 이름만 남고 연필·밑줄·포커스 테두리는 남지 않는다.
+  const 이름버튼 = page.locator("[data-책이름바꾸기]");
+  const 인쇄이름 = await page.locator("main h1").textContent();
+  await 이름버튼.focus();
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".book-actions")).toBeHidden();
+  await expect(page.locator("[data-쪽번호]:visible")).toHaveText(["1", "2"]);
+  await expect(page.locator("main h1")).toBeVisible();
+  await expect(page.locator("main h1")).toHaveText(인쇄이름!);
+  await expect(이름버튼.locator("svg")).toBeHidden();
+  await expect(이름버튼).toHaveCSS("outline-style", "none");
+  await expect(이름버튼.locator(".book-title-label")).toHaveCSS("text-decoration-line", "none");
 });

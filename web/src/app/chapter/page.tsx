@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import type { components } from "@/api/types.gen";
 import { ArtworkFrame } from "@/components/artwork";
 import { AttemptInput } from "@/components/attempt-input";
+import { BookLink } from "@/components/book-link";
+import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession } from "@/components/book-journey";
+import { ChapterCompanion, chapterErrorGuide } from "@/components/chapter-companion";
+import { 챕터구조안내, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
 import { GuideFigure } from "@/components/guide";
-import { TurnChoices } from "@/components/turn-choices";
+import { TierBadgeWritingIntroduction } from "@/components/tier-badge-writing-intro";
 import { 턴문구 } from "@/components/turn-copy";
-import { ApiError, NetworkError, apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiGet, apiPost, 인증이풀렸다, 역할이다르다 } from "@/lib/api";
+import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { useArtwork } from "@/lib/artwork";
 import { 액자에둘것 } from "@/lib/chapter-artwork";
 import type { PiiKind } from "@/lib/pii";
@@ -20,7 +26,16 @@ type ChapterView = components["schemas"]["ChapterView"];
 type TurnResult = components["schemas"]["TurnResult"];
 type ArtworkRef = components["schemas"]["ArtworkRef"];
 type Guide = components["schemas"]["Guide"];
-type Choice = components["schemas"]["Choice"];
+
+function chapterClosure(error: unknown): { guide: Guide | null; line: string | null } | null {
+  if (!(error instanceof ApiError)) return null;
+  if ((error.status === 429 && error.code === "TURN_LIMIT")
+    || (error.status === 409 && error.code === "CHAPTER_DONE_TODAY")) {
+    const guide = chapterErrorGuide(error.detail);
+    return { guide, line: guide ? null : error.서버문구 };
+  }
+  return null;
+}
 
 /**
  * 챕터 화면 — 서사·시련·완결 (백로그 A-3 후속 · W7 **8번**).
@@ -48,123 +63,196 @@ type Choice = components["schemas"]["Choice"];
  */
 type Screen =
   | { kind: "loading" }
-  /** 쓰는 중 · 고르는 중. **되묻기·차단도 여기다** — 갈래를 따로 만들지 않는다. */
+  /** 쓰는 중. **되묻기·차단도 여기다** — 갈래를 따로 만들지 않는다. */
   | { kind: "turn"; view: 턴상태 }
   | { kind: "sending"; view: 턴상태 }
   /** 챕터가 끝났다. **가이드가 1.20 을 말한다** — 프론트가 문장을 안 짓는다. */
-  | { kind: "done"; guide: Guide | null }
-  | { kind: "unreachable" };
+  | { kind: "done"; guide: Guide | null; line?: string | null; narrative?: string | null }
+  | { kind: "unreachable"; line?: string };
 
 type 턴상태 = {
   chapterId: string;
   narrative: string | null;
-  choices: Choice[];
   /** 되묻기·차단이 오면 서버가 준 가이드. **대사를 프론트가 짓지 않는다.** */
   guide: Guide | null;
   /** **액자에 지금 걸려 있는 것.** 새 그림이 올 때만 바뀐다 (`lib/chapter-artwork.ts`). */
   artwork: ArtworkRef | null;
+  /** 이번 응답이 새 그림을 만들기 시작했을 때만 안내를 붙인다. */
+  새삽화id: string | null;
 };
 
 export default function ChapterPage() {
-  const [screen, setScreen] = useState<Screen>({ kind: "loading" });
-  const [text, setText] = useState("");
-  const [보내기못닿음, set보내기못닿음] = useState(false);
+  const router = useRouter();
+  const loadOnce = useAdventureRequest();
+  const isCurrent = useAdventureSession();
+  const [screen, setScreen] = useAdventureState<Screen>("/chapter", "screen", { kind: "loading" });
+  const [restored] = useState(screen.kind !== "loading");
+  const [text, setText] = useAdventureState("/chapter", "text", "");
+  const [sendError, setSendError] = useAdventureState<string | null>("/chapter", "sendError", null);
+  const [첫안내, set첫안내] = useAdventureState("/chapter", "first", true);
+  const [소개끝, set소개끝] = useAdventureState("/chapter", "introductionEnded", false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const submitting = useRef(false);
   const 시작했다 = useRef(false);
+  const 이야기칸 = useRef<HTMLDivElement>(null);
+  const 마무리칸 = useRef<HTMLDivElement>(null);
+  const 쓰는곳 = useRef<HTMLDivElement>(null);
+  const 동료말칸 = useRef<HTMLDivElement>(null);
+  const 새이야기로 = useRef(false);
+  const 새동료말로 = useRef(false);
+
+  useLayoutEffect(() => {
+    if (screen.kind === "done") {
+      마무리칸.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (screen.kind !== "turn" || !새이야기로.current) return;
+    새이야기로.current = false;
+    if (동료말칸.current) 동료말칸.current.scrollTop = 0;
+    const story = 새동료말로.current ? 동료말칸.current : screen.view.narrative ? 이야기칸.current : 동료말칸.current;
+    if (!story) return;
+    // 직전 서사를 끝까지 읽었더라도 새 응답은 첫 문장부터 읽는다.
+    story.scrollTop = 0;
+    story.focus({ preventScroll: true });
+  }, [screen]);
 
   useEffect(() => {
+    if (restored && loadAttempt === 0) return;
     if (시작했다.current) return;
     시작했다.current = true;
 
-    const 열린것으로 = (v: ChapterView) =>
+    const 열린것으로 = (v: ChapterView) => {
+      if (!isCurrent()) return;
       setScreen({
         kind: "turn",
         view: {
           chapterId: v.chapter_id,
           narrative: v.narrative,
-          choices: v.choices,
-          guide: null,
+          guide: v.guide ?? null,
           // **첫 화면에는 직전이 없다.** 1턴이 핵심 씬이라 보통 여기서 온다.
           artwork: 액자에둘것(null, v.artwork),
+          새삽화id: null,
         },
       });
+    };
 
-    // **이어하기가 먼저다.** 새로 열기부터 부르면 **돌아온 아이의 챕터를 덮는다.**
-    apiGet<ChapterView>("/chapters/current")
+    // GET → 필요한 경우 POST까지 하나의 작업이다. 재진입해도 옛 도입 응답이 새 턴을 덮지 않는다.
+    loadOnce("chapter-entry", async () => {
+      try {
+        return await apiGet<ChapterView>("/chapters/current");
+      } catch (error) {
+        if (isCurrent() && error instanceof ApiError && error.status === 404 && error.code === "NO_ACTIVE_CHAPTER") {
+          return apiPost<ChapterView>("/chapters", {});
+        }
+        throw error;
+      }
+    })
       .then(열린것으로)
-      .catch(async (e) => {
-        if (e instanceof ApiError && e.status === 404) {
-          try {
-            열린것으로(await apiPost<ChapterView>("/chapters", {}));
-          } catch {
-            setScreen({ kind: "unreachable" });
-          }
+      .catch((error: unknown) => {
+        if (!isCurrent()) return;
+        if (인증이풀렸다(error) || 역할이다르다(error)) {
+          router.replace(역할이다르다(error) ? "/child/auth" : 끊겨서보낼곳);
           return;
         }
-        setScreen({ kind: "unreachable" });
+        const closure = chapterClosure(error);
+        setScreen(closure ? { kind: "done", ...closure } : {
+          kind: "unreachable", line: error instanceof ApiError ? error.서버문구 : undefined,
+        });
       });
-  }, []);
+
+  }, [loadAttempt, restored, router, setScreen, loadOnce, isCurrent]);
 
   /**
    * 턴 하나를 보낸다.
    *
-   * **⛔ `choice_id` 와 `text` 중 정확히 하나다** — 둘 다 또는 둘 다 없으면 **422** 다.
-   * **부르는 자리를 하나로 두고 인자로 가른다** — 두 함수로 두면 **한쪽만 고치는 날이 온다.**
+   * 사용자 승인(2026-09-19): 선택지 없이 직접 쓴 글만 보낸다.
+   * 문장은 입력창에서 가린 그대로이고, 판정은 서버가 한다.
    */
-  const 턴을보낸다 = async (몸: { choice_id: string } | { text: string }) => {
-    if (screen.kind !== "turn") return;
+  const 턴을보낸다 = async () => {
+    if (screen.kind !== "turn" || text.trim() === "" || submitting.current) return;
+    submitting.current = true;
     const view = screen.view;
-    set보내기못닿음(false);
+    setSendError(null);
     setScreen({ kind: "sending", view });
 
     try {
-      const r = await apiPost<TurnResult>("/turns", { chapter_id: view.chapterId, ...몸 });
+      const r = await apiPost<TurnResult>("/turns", { chapter_id: view.chapterId, text });
+      if (!isCurrent()) return;
 
       if (r.chapter_done) {
-        setScreen({ kind: "done", guide: r.guide ?? null });
+        setText("");
+        setScreen({ kind: "done", guide: r.guide ?? null, narrative: r.narrative });
         return;
       }
 
       // **진행했을 때만 입력창을 비운다.** 되묻기는 고쳐 쓰라는 말이고,
       // **차단은 아이 글을 지우지 않는 것이 규칙**이다 (`Stage0.md` 148행).
-      if (r.outcome === "result") setText("");
+      if (r.outcome === "result") {
+        setText("");
+        set첫안내(false);
+      }
 
+      새이야기로.current = true;
+      새동료말로.current = r.outcome !== "result";
       setScreen({
         kind: "turn",
         view: {
           chapterId: view.chapterId,
-          narrative: r.narrative ?? null,
-          // **되묻기·차단은 선택지를 안 갈아치운다** — 그 턴은 안 갔다.
-          choices: r.choices?.length ? r.choices : view.choices,
+          narrative: r.outcome === "result" ? r.narrative ?? null : view.narrative,
           guide: r.guide ?? null,
           // **⛔ 여덟 턴은 `artwork` 가 없다. 비우지 않는다.**
           artwork: 액자에둘것(view.artwork, r.artwork),
+          새삽화id: r.artwork?.artwork_id ?? null,
         },
       });
     } catch (e) {
+      if (!isCurrent()) return;
+      if (인증이풀렸다(e) || 역할이다르다(e)) {
+        router.replace(역할이다르다(e) ? "/child/auth" : 끊겨서보낼곳);
+        return;
+      }
+      const closure = chapterClosure(e);
+      if (closure) {
+        setScreen({ kind: "done", ...closure });
+        return;
+      }
       // **화면을 안 버린다.** 쓴 것을 그대로 두고 한 줄로만 알린다 —
       // 화면을 갈아치우면 **다시 보낼 칸이 사라진다.**
-      void (e instanceof NetworkError);
-      set보내기못닿음(true);
+      setSendError(e instanceof ApiError && e.서버문구 ? e.서버문구 : 못닿음.보내기);
       setScreen({ kind: "turn", view });
+    } finally {
+      submitting.current = false;
     }
   };
 
   if (screen.kind === "loading") {
     // **새 문구를 안 짓는다** — 챕터를 여는 것도 **장면을 펼치는 일**이다.
-    return <p role="status">{상태표시.장면부르는중}</p>;
+    return <ChapterStage status><p role="status" className="chapter-status">{상태표시.장면부르는중}</p></ChapterStage>;
   }
 
   if (screen.kind === "unreachable") {
-    return <p role="status">{못닿음.장면}</p>;
+    return <ChapterStage status>
+      <p role="status" className="chapter-status">{screen.line || 못닿음.장면}</p>
+      <button type="button" className="pressable action-primary" onClick={() => {
+        시작했다.current = false;
+        setScreen({ kind: "loading" });
+        setLoadAttempt((n) => n + 1);
+      }}>{버튼.다시열기}</button>
+    </ChapterStage>;
   }
 
   if (screen.kind === "done") {
     // **완결 문장은 서버가 준다** (`문구.md` 1.20 · `guide.line`).
     // **⛔ 「이어서 더 하기」를 안 만든다 — 없는 것이 결정이다** (D-1 · 페르소나 7.1).
     return (
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8">
-        {screen.guide && <GuideFigure guide={screen.guide} />}
-      </main>
+      <BookOrigin path="/chapter"><ChapterStage done>
+        <div ref={마무리칸} className="chapter-ending" tabIndex={-1}>
+          {screen.narrative && <p className="chapter-ending-narrative">{screen.narrative}</p>}
+          {screen.guide && <GuideFigure guide={screen.guide} stage />}
+          {!screen.guide && screen.line && <p className="chapter-ending-line">{screen.line}</p>}
+          <BookLink prominent />
+        </div>
+      </ChapterStage></BookOrigin>
     );
   }
 
@@ -172,63 +260,85 @@ export default function ChapterPage() {
   const 보내는중 = screen.kind === "sending";
 
   return (
-    /* **⛔ 화면을 두 칸으로 나눈다 — 읽는 곳과 하는 곳** (W6 14번 판정 · W7 8번 ④).
-       **「그 화면에 온 사람이 해야 할 일은 첫 화면에 있어야 한다.」**
-       챕터 화면에서 아이가 해야 할 일은 **고르거나 쓰는 것**이고, 그게 밖에 있으면
-       **아이에게는 없는 것**이다.
-
-       **왜 필요한가 — 서사 길이를 우리가 못 정한다.** GM 이 **150~300자**를 쓴다(PRD 4.1).
-       그냥 쌓으면 **긴 서사에서 쓰는 칸이 밀려난다** — 실측으로 **1024×768 에서 421px 밖**이었다
-       (2026-09-16). **짧은 서사로 자리를 맞췄으면 긴 것이 오는 날 처음 알았을 것이다.**
-
-       **⭐ 읽는 것은 스크롤해도 된다.** 글을 읽다 내리는 것은 아이가 아는 동작이다 —
-       **모르는 것은 「아래에 버튼이 있다」**이고, 그건 W6 에서 아이 셋이 다 못 찾았다.
-       그래서 **서사는 접어 두고 하는 자리를 고정한다.**
-
-       **`100svh` 다** (`100vh` 가 아니다). 모바일 주소창이 들락거리면 `vh` 가 거짓이 된다 —
-       W6 에서 액자를 `45svh` 로 둔 것과 같은 이유다. */
-    <main className="mx-auto flex h-[100svh] w-full max-w-2xl flex-col gap-4 px-5 py-4">
-      {/* ── 읽는 곳. **여기만 넘친다** ─────────────────────────────── */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        {/* **액자가 맨 위다** — 09-14 에 세운 우선순위(삽화 → 아이 문장 → 나가는 길 → 가이드).
-            **없는 동안은 아예 안 그린다** — 빈 상자를 두면 「뭔가 오는데 안 왔다」로 읽힌다. */}
-        {view.artwork && <ChapterArtwork 참조={view.artwork} />}
-
-        {view.narrative && <p className="text-xl/relaxed">{view.narrative}</p>}
-
-        {/* 되묻기·차단이 오면 **서버가 준 가이드 그대로**다. 표정도 대사도 프론트가 안 고른다.
-            **차단과 자해가 같은 모양으로 온다** — 여기서 갈라 그리지 않는 것이 그 결정이다. */}
-        {view.guide && <GuideFigure guide={view.guide} />}
+    /* 튜토리얼과 같은 장면 → 동료 → 글쓰기 순서다.
+       긴 서사는 읽기 영역에서 넘기고, 첫 배지 안내가 열리면 문서도 자연스럽게 늘어난다.
+       고정 높이에 모두 압축해 동료나 입력을 가리지 않는다. */
+    <BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중}>
+      {/* 장면과 동료는 튜토리얼과 같은 숲 위에 남는다. */}
+      <div className="game-stage__world chapter-world">
+        <header data-활동이름 className="activity-marker activity-marker--chapter">
+          <h1>이어지는 모험</h1><p>모험 진행 중</p>
+        </header>
+        <div className="chapter-reading">
+          {/* 삽화가 있는 장면만 액자를 보인다. 빈 상자를 만들지 않는다. */}
+          {view.artwork && (
+            <div className="chapter-visual">
+              <ChapterArtwork 참조={view.artwork} 새그림={view.새삽화id === view.artwork.artwork_id} />
+            </div>
+          )}
+          <div ref={이야기칸} className="game-story chapter-story" tabIndex={-1}>
+            {view.narrative && <p className="scene-narrative chapter-narrative">{view.narrative}</p>}
+          </div>
+        </div>
+        <ChapterCompanion
+          guide={view.guide}
+          length={text.length}
+          sending={보내는중}
+          first={첫안내}
+          introductionEnded={소개끝}
+          messageRef={동료말칸}
+        />
       </div>
 
-      {/* ── 하는 곳. **밀려나지 않는다** ───────────────────────────── */}
-      <div className="flex shrink-0 flex-col gap-3">
-      <TurnChoices
-        choices={view.choices}
-        disabled={보내는중}
-        onChoose={(id) => void 턴을보낸다({ choice_id: id })}
-      />
+      {/* 글쓰기 영역은 동료와 분리하고, 튜토리얼의 공통 콘솔을 재사용한다. */}
+      <div ref={쓰는곳} className="game-console chapter-console">
+        <p data-chapter-structure-guide className="chapter-writing-guide">{챕터구조안내}</p>
+        <TierBadgeWritingIntroduction onConfirm={() => 쓰는곳.current?.querySelector("textarea")?.focus()} />
+        <div className="game-response">
+          <div className="game-response__content chapter-controls" aria-busy={보내는중}>
+            <AttemptInput
+              label={챕터쓰기라벨}
+              안내글={턴문구.입력안내}
+              value={text}
+              onChange={(value) => {
+                setText(value);
+                if (value.length > 0) set소개끝(true);
+              }}
+              onMasked={(kinds: PiiKind[]) => void kinds}
+              onSend={() => void 턴을보낸다()}
+              보낼수있나={text.trim().length > 0 && !보내는중}
+              // **2.5 넷째가 이 자리를 위해 쓰인 문장이다** (W6 26번).
+              보내기라벨={보내는중 ? 챕터보내는중라벨 : 챕터보내기라벨}
+              disabled={보내는중}
+              showCompass={false}
+            />
 
-      <AttemptInput
-        label=""
-        안내글={턴문구.입력안내}
-        value={text}
-        onChange={setText}
-        onMasked={(kinds: PiiKind[]) => void kinds}
-        onSend={() => void 턴을보낸다({ text })}
-        보낼수있나={text.trim().length > 0 && !보내는중}
-        // **2.5 넷째가 이 자리를 위해 쓰인 문장이다** (W6 26번).
-        보내기라벨={보내는중 ? 상태표시.읽는중 : 버튼.보내기}
-        disabled={보내는중}
-      />
-
-      {보내기못닿음 && (
-        <p role="status" className="text-lg text-brass">
-          {못닿음.보내기}
-        </p>
-      )}
+            {sendError && (
+              <p role="status" data-보내기못닿음 className="chapter-send-notice">
+                {sendError}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
-    </main>
+    </ChapterStage></BookOrigin>
+  );
+}
+
+/** 서사·응답·완결이 같은 숲에 머문다. 새 모험을 권하는 출구는 만들지 않는다. */
+function ChapterStage({ children, done = false, status = false, bookDisabled = false }: {
+  children: ReactNode;
+  done?: boolean;
+  status?: boolean;
+  bookDisabled?: boolean;
+}) {
+  return (
+    <div className={`game-shell chapter-shell${done ? " game-shell--ending" : ""}`}>
+      <main className={`game-stage chapter-stage${done ? " chapter-stage--done" : ""}${status ? " chapter-stage--status" : ""}`}>
+        {!done && !status && <header className="game-stage-header chapter-toolbar"><BookLink disabled={bookDisabled} /></header>}
+        {children}
+      </main>
+    </div>
   );
 }
 
@@ -243,7 +353,15 @@ export default function ChapterPage() {
  * 「Cannot access refs during render」로 **일곱 줄을 한 번에** 뱉는다(2026-09-16 실측).
  * `web/CLAUDE.md` 의 한글 식별자 항목과 같은 자리다 — **규칙의 예외가 아니라 도구의 제약**이다.
  */
-function ChapterArtwork({ 참조 }: { 참조: ArtworkRef }) {
+function ChapterArtwork({ 참조, 새그림 }: { 참조: ArtworkRef; 새그림: boolean }) {
   const 상태 = useArtwork(참조);
-  return <ArtworkFrame 상태={상태} />;
+  return <>
+    <ArtworkFrame
+      상태={상태}
+      waitingContent={새그림 ? <p>중요한 순간이야! 네 글로 그림을 만들고 있어.</p> : undefined}
+    />
+    {새그림 && 상태.kind === "떴다" && 상태.fallback === false && (
+      <p data-chapter-artwork-ready role="status" className="chapter-artwork-notice">새로운 그림이 완성됐어!</p>
+    )}
+  </>;
 }

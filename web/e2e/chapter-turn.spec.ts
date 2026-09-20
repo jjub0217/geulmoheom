@@ -2,12 +2,12 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { paths } from "../src/api/types.gen";
 // 문구를 문자열로 박지 않는다 — `docs/문구.md` 1.18 이 SSOT 다.
-import { 턴문구 } from "../src/components/turn-copy";
-import { 버튼, 못닿음 } from "../src/app/copy";
+import { 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
+import { 못닿음 } from "../src/app/copy";
 
 /**
  * 챕터 턴 화면(A-3 · W7 **7번**)의 완료 조건 둘을 본다 —
- * **선택지를 고르고도, 직접 써서도 턴이 넘어간다.**
+ * **아이가 직접 쓴 글로 턴이 넘어간다.**
  *
  * **문장은 전부 지어낸 것이다.** 실제 아이 문장을 테스트에 넣지 않는다.
  *
@@ -27,10 +27,28 @@ type TurnResult =
 const CURRENT = "**/api/v1/chapters/current";
 const TURNS = "**/api/v1/turns";
 
+test.use({ serviceWorkers: "block" });
+
+// 모든 API와 외부 요청을 막는다. 각 검사의 구체적인 목이 이 기본 경로보다 먼저 적용된다.
+test.beforeEach(async ({ page, baseURL }) => {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  await page.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/healthz")) return route.fulfill({ status: 200, json: { status: "ok" } });
+    if (url.pathname.startsWith("/api/v1/artworks/")) {
+      return route.fulfill({ status: 200, json: { status: "pending", url: null } });
+    }
+    if (url.pathname.startsWith("/api/")) {
+      return route.fulfill({ status: 404, json: { detail: "Unmocked chapter request" } });
+    }
+    if (url.origin !== origin) return route.abort();
+    return route.continue();
+  });
+});
+
 /**
- * **경로가 섞인 선택지다** — 「① 싸운다 ② 말을 건다 ③ 살펴본다 ④ 달랜다」로 두지 않는다.
- * **경로를 나열하면 쓰기가 고르기로 바뀐다**(챕터 뼈대). 목이 일부러 그렇게 준다.
- * **개수도 넷이 아니다** — 넷으로 박으면 4칸 그리드가 몰래 들어와도 안 걸린다.
+ * 구 응답의 선택지가 남아 있어도 화면은 직접 쓰기만 제공한다.
+ * 실제 API가 빈 배열을 돌려주는 경우보다 강한 조건으로 표시 회귀를 막는다.
  */
 const 장면: ChapterView = {
   chapter_id: "11111111-2222-3333-4444-555555555555",
@@ -68,29 +86,55 @@ async function 장면을띄운다(page: Page) {
   await expect(page.getByText(장면.narrative)).toBeVisible();
 }
 
-test("선택지를 골라서 턴이 넘어간다", async ({ page }) => {
+test("서버가 선택지를 보내도 직접 쓰는 칸만 제공한다", async ({ page }) => {
   await 장면을띄운다(page);
-
-  let 보낸것: unknown = null;
-  await page.route(TURNS, (route) => {
-    보낸것 = route.request().postDataJSON();
-    return route.fulfill({ status: 200, json: 다음턴 });
-  });
-
-  await page.getByRole("button", { name: 장면.choices[1].label }).click();
-
-  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
-
-  // **⛔ `choice_id` 와 `text` 중 정확히 하나다** — 둘 다 보내면 422 다.
-  // **라벨이 아니라 `id` 를 보낸다.**
-  expect(보낸것).toEqual({
-    chapter_id: 장면.chapter_id,
-    choice_id: 장면.choices[1].id,
-  });
+  for (const choice of 장면.choices) {
+    await expect(page.getByRole("button", { name: choice.label })).toHaveCount(0);
+  }
+  await expect(page.locator(".turn-choices, .choice-invitation")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toBeVisible();
+  await expect(page.getByRole("button", { name: 챕터보내기라벨 })).toBeDisabled();
+  await expect(page.locator("[data-배지쓰기안내]")).toBeVisible();
 });
+
+test("처음부터 동료와 나침반 하나가 쓰기 곁에 있고 글을 쓰면 소개가 끝난다", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await 장면을띄운다(page);
+  const 동료 = page.locator("[data-chapter-companion]");
+  const 나침반 = 동료.locator(".compass-instrument");
+  await expect(동료).toHaveAttribute("data-expression", "default");
+  await expect(동료.getByText(챕터동료소개)).toBeVisible();
+  await expect(page.locator(".compass-instrument")).toHaveCount(1);
+  await expect(나침반).toHaveAttribute("data-compass-introducing", "true");
+  expect(await 나침반.locator(".compass-intro-light").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+  await page.getByRole("textbox").fill("조심스럽게 문을 두드린다.");
+  await expect(나침반).toHaveAttribute("data-compass-introducing", "false");
+  await expect(나침반).toHaveAttribute("data-compass-awake", "true");
+  expect(await 나침반.locator("[data-compass-glow]").evaluate((el) => Number((el as SVGElement).style.opacity))).toBeGreaterThan(0);
+  await expect(동료).toHaveAttribute("data-expression", "default");
+  await page.getByRole("textbox").fill("");
+  await expect(나침반).toHaveAttribute("data-compass-introducing", "false");
+});
+
+test("시작할 때 서버가 준 동료 대사를 그대로 한 번만 보여준다", async ({ page }) => {
+  const line = "작은 창문 너머로 바람이 들어와. 어떻게 할까?";
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: {
+    ...장면, guide: { expression: "default", line },
+  } }));
+  await page.goto("/chapter");
+  await expect(page.locator(".chapter-companion-line").getByText(line)).toBeVisible();
+  await expect(page.getByText(line)).toHaveCount(1);
+  await expect(page.getByText(챕터동료소개)).toHaveCount(0);
+});
+
+async function 글을보낸다(page: Page, 문장 = "밧줄 매듭을 손끝으로 천천히 풀어 본다.") {
+  await page.getByRole("textbox", { name: 챕터쓰기라벨 }).fill(문장);
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+}
 
 test("직접 써서 턴이 넘어간다", async ({ page }) => {
   await 장면을띄운다(page);
+  await expect(page.locator("[data-배지쓰기안내]")).toBeVisible();
 
   let 보낸것: unknown = null;
   await page.route(TURNS, (route) => {
@@ -100,47 +144,21 @@ test("직접 써서 턴이 넘어간다", async ({ page }) => {
 
   const 문장 = "밧줄 매듭을 하나씩 만져 보며 어느 쪽이 새것인지 살핀다";
   await page.getByRole("textbox").fill(문장);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
   await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(page.locator(".chapter-companion-line").getByText(챕터다음안내)).toBeVisible();
 
   expect(보낸것).toEqual({ chapter_id: 장면.chapter_id, text: 문장 });
+  // 안내 확인은 쓰기의 관문이 아니다. 확인하지 않아도 직접 쓴 글을 보낼 수 있다.
+  await expect(page.locator("[data-배지쓰기안내]")).toBeVisible();
 });
 
-/**
- * **1.18 의 급소를 화면에서 잰다.** 문구 파일이 맞아도 **자리가 틀리면 안 고쳐진다** —
- * W6 12번에서 겪은 그대로다(문구를 내렸는데 거절이 폼을 치워 안 보였다).
- */
-test("선택지와 직접 쓰기가 같은 무게다 — 자리·크기로 잰다", async ({ page }) => {
+test("배지 안내를 확인하면 직접 쓰는 칸으로 초점이 이어진다", async ({ page }) => {
   await 장면을띄운다(page);
-
-  // **「아니면」 줄은 선택지 아래다.** 위에 오면 가리킬 것이 아직 없다.
-  const 유도 = page.getByText(턴문구.직접쓰기유도);
-  await expect(유도).toBeVisible();
-
-  const 마지막선택지 = page.getByRole("button", {
-    name: 장면.choices[장면.choices.length - 1].label,
-  });
-  const 선택지상자 = await 마지막선택지.boundingBox();
-  const 유도상자 = await 유도.boundingBox();
-  expect(선택지상자!.y).toBeLessThan(유도상자!.y);
-
-  // **선택지를 흐리게·작게 두지 않는다.** 글자 크기가 입력창과 같아야 한다.
-  const 글자크기 = (칸: string) =>
-    page.evaluate(
-      (s) => getComputedStyle(document.querySelector(s)!).fontSize,
-      칸,
-    );
-  expect(await 글자크기("main li button")).toBe(await 글자크기("main textarea"));
-
-  // **4칸 고정 그리드가 아니다.** 선택지가 셋인데 칸이 넷이면 빈 칸이 생긴다.
-  await expect(page.locator("main li")).toHaveCount(장면.choices.length);
-
-  // 아이 화면 금지어 (`용어사전.md` 8장).
-  const 화면 = await page.locator("main").innerText();
-  for (const 금지어 of ["점수", "채점", "연습", "학습", "보스", "앨범", "등급"]) {
-    expect(화면).not.toContain(금지어);
-  }
+  await page.locator("[data-배지쓰기확인]").click();
+  await expect(page.locator("[data-배지쓰기안내]")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toBeFocused();
 });
 
 /** 차단. **200 이고 정상 응답이다** — `outcome` 으로 가른다(2026-09-16 계약 정정). */
@@ -171,11 +189,13 @@ test("차단은 오류가 아니다 — 아이 글을 지우지 않고 가이드
 
   const 문장 = "부두에 있는 아저씨한테 무섭게 소리를 지른다";
   await page.getByRole("textbox").fill(문장);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
   // **① 서버가 준 가이드 그대로.** 표정도 대사도 프론트가 안 고른다.
   await expect(page.getByText(차단.guide!.line)).toBeVisible();
-  await expect(page.locator(`img[src="/guide/${차단.guide!.expression}.png"]`)).toBeVisible();
+  await expect(page.getByText(차단.guide!.line)).toHaveCount(1);
+  await expect(page.locator(".chapter-companion-line")).toBeFocused();
+  await expect(page.locator(`img[src="/guide/${차단.guide!.expression}-stage.png"]`)).toBeVisible();
 
   // **② 아이 글이 그대로 남아 있다 — 이 줄이 148행이다.**
   await expect(page.getByRole("textbox")).toHaveValue(문장);
@@ -183,8 +203,8 @@ test("차단은 오류가 아니다 — 아이 글을 지우지 않고 가이드
   // **③ 오류 화면이 아니다.** 못 닿음 문구가 뜨면 아이는 서버가 고장 난 줄 안다.
   await expect(page.getByText(못닿음.보내기)).toHaveCount(0);
 
-  // **④ 선택지가 그대로다** — 차단은 턴을 안 먹는다.
-  await expect(page.locator("main li")).toHaveCount(장면.choices.length);
+  // **④ 차단 뒤에도 선택지가 다시 나타나지 않는다.**
+  await expect(page.locator(".turn-choices")).toHaveCount(0);
 });
 
 test("되묻기도 아이 글을 지우지 않는다 — 고쳐 쓰라는 말이다", async ({ page }) => {
@@ -200,7 +220,7 @@ test("되묻기도 아이 글을 지우지 않는다 — 고쳐 쓰라는 말이
 
   const 문장 = "밧줄을 본다";
   await page.getByRole("textbox").fill(문장);
-  await page.getByRole("button", { name: 버튼.보내기 }).click();
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
   await expect(page.getByText(되묻기.guide!.line)).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveValue(문장);
@@ -223,7 +243,7 @@ test("새 그림이 안 와도 액자가 안 비워진다", async ({ page }) => 
 
   // 다음 턴에는 **새 그림이 없다** (`artwork: null`).
   await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
-  await page.getByRole("button", { name: 장면.choices[0].label }).click();
+  await 글을보낸다(page);
   await expect(page.getByText(다음턴.narrative!)).toBeVisible();
 
   // **직전 그림이 그대로 걸려 있다.**
@@ -239,7 +259,7 @@ test("완결하면 가이드가 말하고 「이어서 더 하기」가 없다",
   };
   await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 완결 }));
 
-  await page.getByRole("button", { name: 장면.choices[0].label }).click();
+  await 글을보낸다(page);
 
   await expect(page.getByText(완결.guide!.line)).toBeVisible();
 
@@ -250,24 +270,101 @@ test("완결하면 가이드가 말하고 「이어서 더 하기」가 없다",
   }
   // 쓰는 칸도 없다 — 끝났는데 칸이 남으면 **끝난 것으로 안 읽힌다.**
   await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.locator('.chapter-ending a[href="/book"]')).toBeVisible();
+  await expect(page.locator(".chapter-ending")).toBeFocused();
+});
+
+test("완결 대사가 없어도 책을 펼칠 수 있다", async ({ page }) => {
+  await 장면을띄운다(page);
+  await page.route(TURNS, (route) => route.fulfill({
+    status: 200,
+    json: { ...다음턴, chapter_done: true, guide: null },
+  }));
+  await 글을보낸다(page);
+  await expect(page.locator('.chapter-ending a[href="/book"]')).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+});
+
+for (const [status, code, guide유무] of [
+  [429, "TURN_LIMIT", true],
+  [409, "CHAPTER_DONE_TODAY", true],
+  [409, "CHAPTER_DONE_TODAY", false],
+] as const) {
+  test(`${code} 종료는 쓰기를 닫고 서버 안내와 책을 보여준다 — guide ${guide유무}`, async ({ page }) => {
+    await 장면을띄운다(page);
+    const message = "오늘의 이야기는 여기까지야.";
+    const line = "오늘 함께 쓴 이야기를 책에서 펼쳐 봐.";
+    await page.route(TURNS, (route) => route.fulfill({ status, json: { error: {
+      code, message, detail: guide유무 ? { guide: { expression: "session_end", line } } : {},
+    } } }));
+    await 글을보낸다(page);
+    await expect(page.getByText(guide유무 ? line : message)).toBeVisible();
+    await expect(page.getByRole("textbox")).toHaveCount(0);
+    await expect(page.locator('.chapter-ending a[href="/book"]')).toBeVisible();
+    await expect(page.locator(".chapter-ending")).toBeFocused();
+  });
+}
+
+test("처음 열 때 이미 끝난 챕터도 서버 안내와 책으로 연결한다", async ({ page }) => {
+  await page.route(CURRENT, (route) => route.fulfill({ status: 404, json: { error: { code: "NO_ACTIVE_CHAPTER", message: "" } } }));
+  const line = "오늘 쓴 이야기를 책에서 만나자.";
+  await page.route("**/api/v1/chapters", (route) => route.fulfill({ status: 409, json: { error: {
+    code: "CHAPTER_DONE_TODAY", message: line, detail: { guide: { expression: "session_end", line } },
+  } } }));
+  await page.goto("/chapter");
+  await expect(page.getByText(line)).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.locator('.chapter-ending a[href="/book"]')).toBeVisible();
+});
+
+test("보내는 중에도 쓴 글을 유지하고 읽는 중임을 알린다", async ({ page }) => {
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: {
+    ...장면, guide: { expression: "compass_bright", line: "이전 결과 안내야." },
+  } }));
+  await page.goto("/chapter");
+  await expect(page.locator("[data-chapter-companion]")).toHaveAttribute("data-expression", "compass_bright");
+  let 응답한다!: () => void;
+  const 응답대기 = new Promise<void>((resolve) => { 응답한다 = resolve; });
+  await page.route(TURNS, async (route) => {
+    await 응답대기;
+    await route.fulfill({ status: 200, json: 다음턴 });
+  });
+  const 문장 = "낡은 매듭을 손끝으로 천천히 풀어 본다.";
+  await page.getByRole("textbox").fill(문장);
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+  await expect(page.locator("[data-읽는중]")).toBeVisible();
+  await expect(page.locator("[data-chapter-companion]")).toHaveAttribute("data-expression", "default");
+  await expect(page.getByText("이전 결과 안내야.")).toHaveCount(0);
+  await expect(page.locator(".chapter-controls")).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByRole("textbox")).toHaveValue(문장);
+  await expect(page.getByRole("textbox")).toHaveAttribute("readonly", "");
+  await expect(page.locator(".writing-actions button")).toBeDisabled();
+  응답한다();
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(page.locator("[data-읽는중]")).toHaveCount(0);
+});
+
+test("긴 이야기를 읽은 다음 응답은 첫 문장에 초점을 돌린다", async ({ page }) => {
+  await page.route(CURRENT, (route) => route.fulfill({
+    status: 200,
+    json: { ...장면, narrative: 긴서사.repeat(8), artwork: null },
+  }));
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+  await page.goto("/chapter");
+  const 이야기 = page.locator(".chapter-story");
+  await expect(이야기).toBeVisible();
+  await 이야기.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  expect(await 이야기.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await 글을보낸다(page);
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(이야기).toBeFocused();
+  expect(await 이야기.evaluate((element) => element.scrollTop)).toBe(0);
 });
 
 /**
- * **⛔ 첫 화면 규칙** (W6 14번 판정 · `주차계획/W7.md` 8번 ④).
- *
- * **「그 화면에 온 사람이 해야 할 일은 첫 화면에 있어야 한다.」**
- * 챕터 화면에서 아이가 해야 할 일은 **고르거나 쓰는 것**이다. 그 둘이 밖에 있으면
- * **아이에게는 없는 것**이다.
- *
- * **⚠ 왜 `toBeVisible()` 로 안 때우나** — `click()` 과 `toBeVisible()` 이 **자동으로
- * 스크롤한다.** 그래서 「있다」는 초록인데 **아이는 스크롤을 안 한다.**
- * W6 에서 `toBeVisible()` **134곳이 「내 책이 화면 밖」을 하나도 못 잡았고**,
- * **아이 셋이 다 못 열고서야** 나왔다. **여기서는 좌표를 재고 `scrollY === 0` 을 같이 본다.**
- *
- * **⛔ 서사를 길게 준다 — 이것이 이 검사의 요점이다.**
- * 목·가짜는 **160자쯤**을 주는데 **실제 GM 은 150~300자**다(PRD 4.1 · 백엔드 확인).
- * **짧은 서사로 자리를 맞추면 긴 서사가 오는 날 입력창이 접힌다** — 그날은
- * **아이가 쓸 칸을 못 찾는 날**이고, 우리는 그때 처음 안다.
+ * 2026-09-19 사용자 요청: 튜토리얼과 같은 장면 → 동료 → 입력 배치.
+ * 첫 배지 안내가 있으면 문서 스크롤로 모두 읽고, 확인 뒤에는 입력·보내기가 보인다.
+ * 긴 서사와 말풍선의 내부 스크롤은 유지하되 동료나 입력을 겹쳐 압축하지 않는다.
  */
 const 긴서사 = "".padEnd(0) +
   "시계탑 꼭대기로 오르는 나선 계단은 한 칸씩 높이가 달라서 발끝으로 더듬어야 했다. " +
@@ -275,14 +372,89 @@ const 긴서사 = "".padEnd(0) +
   "위쪽 어딘가에서 쇠가 쇠를 긁는 소리가 일정한 간격으로 내려오는데, 그 사이사이에 " +
   "숨을 고르는 것 같은 낮은 소리가 섞인다. 난간을 짚자 손바닥에 서늘한 물기가 묻어났다.";
 
+async function 무대와입력이겹치지않는다(page: Page) {
+  await expect(page.locator(".chapter-world [data-chapter-companion]")).toHaveCount(1);
+  await expect(page.locator(".chapter-console [data-chapter-companion]")).toHaveCount(0);
+  const [읽는곳, 동료, 쓰는곳] = await Promise.all([
+    page.locator(".chapter-reading").boundingBox(),
+    page.locator("[data-chapter-companion]").boundingBox(),
+    page.locator(".chapter-console").boundingBox(),
+  ]);
+  expect(읽는곳!.y + 읽는곳!.height, "장면과 동료가 겹친다").toBeLessThanOrEqual(동료!.y + 1);
+  expect(동료!.y + 동료!.height, "동료가 입력 상자에 가려진다").toBeLessThanOrEqual(쓰는곳!.y + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width);
+}
+
+async function 안내와입력은문서스크롤로읽는다(page: Page) {
+  for (const selector of [
+    ".tier-badge-writing-intro > p",
+    ".tier-badge-writing-actions summary",
+    "[data-배지쓰기확인]",
+    "main textarea",
+    ".writing-actions button",
+  ]) {
+    const element = page.locator(selector);
+    // 문서 아래를 읽는 동작을 명확히 한다. 최소 스크롤은 0.03px가 경계 밖에 남을 수 있다.
+    await element.evaluate((node) => node.scrollIntoView({ block: "center", inline: "nearest" }));
+    await expect(element).toBeInViewport({ ratio: 1 });
+  }
+}
+
+async function 안내확인뒤입력이보인다(page: Page) {
+  await page.locator("[data-배지쓰기확인]").click();
+  await expect(page.locator("[data-배지쓰기안내]")).toHaveCount(0);
+  await expect(page.getByRole("textbox")).toBeFocused();
+  await expect(page.getByRole("textbox")).toBeInViewport({ ratio: 1 });
+  const 보내기 = page.getByRole("button", { name: 챕터보내기라벨 });
+  await 보내기.scrollIntoViewIfNeeded();
+  await expect(보내기).toBeInViewport({ ratio: 1 });
+}
+
+// 그림이 준비된 턴을 본다. 입력칸만 화면 안에 있어도 그림이 서사를 전부 가리면
+// 아이는 무엇을 보고 골라야 하는지 모른다. 실제 이미지 로드와 조상 영역의 잘림까지 잰다.
+for (const [폭, 높이] of [[1280, 800], [360, 640]] as const) {
+  for (const 색상 of ["light", "dark"] as const) {
+    test(`그림과 이야기를 읽고 배지 안내 확인 뒤 보낼 수 있다 — ${폭}×${높이} · ${색상}`, async ({ page }) => {
+      await page.setViewportSize({ width: 폭, height: 높이 });
+      await page.emulateMedia({ colorScheme: 색상 });
+      await page.route(CURRENT, (route) => route.fulfill({
+        status: 200,
+        json: {
+          ...장면,
+          narrative: 긴서사,
+          artwork: { artwork_id: "layout-art", status: "ready", url: "/layout-art.png" },
+        },
+      }));
+      await page.route("**/layout-art.png", (route) => route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+          "base64",
+        ),
+      }));
+      await page.goto("/chapter");
+
+      const 그림 = page.locator('main img[src="/layout-art.png"]');
+      await expect.poll(() => 그림.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1);
+      await expect(그림).toBeInViewport({ ratio: 1 });
+      await expect(page.getByText(긴서사)).toBeInViewport();
+      await 무대와입력이겹치지않는다(page);
+      await 안내와입력은문서스크롤로읽는다(page);
+      await 안내확인뒤입력이보인다(page);
+    });
+  }
+}
+
 for (const [폭, 높이, 어디] of [
   [1024, 768, "iPad 가로 — 아이 셋이 이렇게 들었다"],
   [1280, 800, "검사 기본 뷰포트"],
   [390, 844, "폰 세로"],
-  // **가장 좁은 것 하나.** 그게 통과하면 위는 따라온다 — W6 에서 이 크기만 빨갰다.
+  // 작은 화면에서도 장면·동료를 겹치지 않고 안내와 쓰는 칸까지 읽는다.
   [360, 640, "작은 안드로이드 — 주소창까지 있으면 이 정도다"],
+  [320, 568, "작은 화면에서도 입력과 보내기를 숨기지 않는다"],
 ] as const) {
-  test(`쓸 자리가 첫 화면 안에 있다 — 긴 서사에서도 · ${폭}×${높이} (${어디})`, async ({
+  test(`긴 서사와 배지 안내를 읽고 입력으로 이어진다 — ${폭}×${높이} (${어디})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 폭, height: 높이 });
@@ -291,20 +463,69 @@ for (const [폭, 높이, 어디] of [
     );
     await page.goto("/chapter");
     await expect(page.getByText(긴서사)).toBeVisible();
+    await 무대와입력이겹치지않는다(page);
+    await 안내와입력은문서스크롤로읽는다(page);
+    await 안내확인뒤입력이보인다(page);
+  });
+}
 
-    // **아이가 안 한 것을 검사도 안 한다.** 이 줄이 없으면 위의 `toBeVisible` 이
-    // 이미 스크롤시켜 둔 화면을 재게 된다.
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+test("작은 화면에서 서버 선택지를 무시하고 이야기와 쓸 자리를 유지한다", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.route(CURRENT, (route) => route.fulfill({
+    status: 200,
+    json: {
+      ...장면,
+      narrative: 긴서사,
+      artwork: null,
+      choices: Array.from({ length: 6 }, (_, index) => ({
+        id: `long-${index}`,
+        label: `배에 묶인 밧줄을 살펴보고 난간에 남은 흔적을 천천히 따라가 본다 ${index + 1}`,
+      })),
+    },
+  }));
+  await page.goto("/chapter");
+  await expect(page.getByText(긴서사)).toBeInViewport();
+  await expect(page.locator(".turn-choices")).toHaveCount(0);
+  await 무대와입력이겹치지않는다(page);
+  await 안내와입력은문서스크롤로읽는다(page);
+  await 안내확인뒤입력이보인다(page);
+});
 
-    for (const [이름, 자리] of [
-      ["첫 선택지", await page.locator("main li button").first().boundingBox()],
-      ["쓰는 칸", await page.locator("main textarea").boundingBox()],
-      ["보내기", await page.getByRole("button", { name: 버튼.보내기 }).boundingBox()],
-    ] as const) {
-      expect(
-        Math.round(자리!.y + 자리!.height),
-        `${이름}이 첫 화면 밖이다 (${폭}×${높이})`,
-      ).toBeLessThanOrEqual(높이);
-    }
+for (const [width, height] of [[360, 640], [320, 568]] as const) {
+  test(`긴 동료 안내도 끝까지 읽을 수 있고 쓰는 칸을 가리지 않는다 — ${width}×${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    const line = "문 안쪽에서 작은 바퀴가 굴러가는 소리가 들려. 주변을 천천히 살펴봐. ".repeat(12);
+    await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: {
+      ...장면, narrative: 긴서사.repeat(4), artwork: null, guide: { expression: "default", line },
+    } }));
+    const 다음안내 = "창문이 열리니 먼 곳의 종소리가 더 또렷하게 들려와. ".repeat(12);
+    await page.route(TURNS, (route) => route.fulfill({ status: 200, json: {
+      ...다음턴, guide: { expression: "default", line: 다음안내 },
+    } }));
+    await page.goto("/chapter");
+    const 말풍선 = page.locator(".chapter-companion-line");
+    await expect(말풍선).toHaveText(line.trim());
+    await 무대와입력이겹치지않는다(page);
+    await 안내와입력은문서스크롤로읽는다(page);
+    const 예시버튼 = page.locator("[data-배지쓰기예시] summary");
+    await expect(예시버튼).toBeInViewport({ ratio: 1 });
+    await 예시버튼.click();
+    await expect(page.locator("[data-배지쓰기확인]")).toBeInViewport({ ratio: 1 });
+    await expect(예시버튼).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: 챕터보내기라벨 })).toBeInViewport({ ratio: 1 });
+    await 예시버튼.focus();
+    await page.keyboard.press("Tab");
+    await expect(page.locator(".tier-badge-writing-examples")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.locator("[data-배지쓰기확인]")).toBeFocused();
+    await 예시버튼.click();
+    await 안내확인뒤입력이보인다(page);
+    await 말풍선.focus();
+    await page.keyboard.press("End");
+    await expect.poll(() => 말풍선.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    await 무대와입력이겹치지않는다(page);
+    await 글을보낸다(page);
+    await expect(말풍선).toHaveText(다음안내.trim());
+    expect(await 말풍선.evaluate((el) => el.scrollTop)).toBe(0);
   });
 }

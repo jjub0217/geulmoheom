@@ -8,6 +8,11 @@ import { 티어이름 } from "./tier-badge";
  */
 describe("티어 배지", () => {
   it("셋 다 있다 — 하나가 비면 그 등급에서 배지가 사라진다", () => {
+    expect(티어이름).toEqual({
+      basic: "탐험가",
+      rare: "영웅",
+      legendary: "전설",
+    });
     expect(Object.keys(티어이름).sort()).toEqual([
       "basic",
       "legendary",
@@ -17,10 +22,12 @@ describe("티어 배지", () => {
   });
 
   it("「티어」가 낱말에 안 붙는다 — 그건 내부 용어 열이다", () => {
-    // 「희귀」는 되고 **「희귀 티어」는 안 된다.** 사전의 열을 넘지 않는다는 규칙이 여기서 갈린다.
+    // 「탐험가」는 되고 **「탐험가 티어」는 안 된다.** 사전의 열을 넘지 않는다는 규칙이 여기서 갈린다.
     for (const 이름 of Object.values(티어이름)) {
       expect(이름).not.toContain("티어");
       expect(이름).not.toContain("등급");
+      expect(이름).not.toContain("기본");
+      expect(이름).not.toContain("희귀");
     }
   });
 });

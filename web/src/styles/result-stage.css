@@ -1,0 +1,476 @@
+/* 삽화가 주인공인 크래프트지 무대. 읽기 영역과 다음 행동의 자리를 분리한다. */
+.game-shell--result {
+  flex: none;
+  height: 100svh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #c9a66f url("/adventure/kraft-paper.jpg") center / cover no-repeat;
+}
+
+.game-shell--result::before {
+  display: none;
+}
+
+.result-stage {
+  --artwork-cap: 50svh;
+  --result-column-gap: 4.5rem;
+  --result-aside-min: 24rem;
+  --result-aside-width: 36rem;
+  --result-frame-size: min(35rem, var(--artwork-cap), calc(100vw - 2rem));
+  padding: 5.25rem 1.5rem 0;
+}
+
+.result-stage .result-spread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 1.25rem;
+  width: min(100%, 90rem);
+  min-height: 0;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.result-reading {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--result-column-gap);
+  min-height: 0;
+  padding: 0.5rem 0.375rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-color: var(--color-brass) transparent;
+  scrollbar-width: thin;
+  animation: result-scene-arrive 260ms ease-out both;
+}
+
+.result-stage .artwork-frame {
+  flex: 0 1 auto;
+  width: var(--result-frame-size);
+  margin-inline: 0;
+  border: 0;
+  outline: 3px solid var(--color-brass);
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: 0 12px 35px rgb(18 32 36 / 32%);
+}
+
+.result-stage .result-content {
+  display: flex;
+  flex: 1 0 40%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  max-width: 36rem;
+  min-width: 0;
+  max-height: 100%;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-color: var(--color-brass) transparent;
+  scrollbar-width: thin;
+}
+
+.result-stage .written-line {
+  flex: none;
+  width: 100%;
+  max-width: none;
+  padding: 1.25rem 1.5rem;
+  border: 2px solid var(--color-brass);
+  border-radius: 1.125rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 8px 26px rgb(18 32 36 / 22%), inset 0 0 0 4px rgb(255 255 255 / 45%);
+  font-family: var(--font-reading);
+  font-size: var(--type-reading-desktop);
+  line-height: var(--leading-child-writing);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.result-stage .tier-badge {
+  flex: none;
+  align-self: flex-start;
+  margin-left: 0.25rem;
+  box-shadow: 0 2px 10px rgb(18 32 36 / 22%);
+}
+
+.result-stage .guide-figure {
+  display: grid;
+  flex: none;
+  grid-template-columns: clamp(6rem, 12vw, 11rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+.result-stage .guide-image {
+  width: 100%;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 6px rgb(18 32 36 / 25%));
+}
+
+.result-stage .guide-line {
+  position: relative;
+  min-width: 0;
+  max-width: none;
+  border: 2px solid var(--color-brass);
+  border-radius: 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 5px 18px rgb(18 32 36 / 18%);
+  font-size: var(--type-companion-desktop);
+  line-height: var(--leading-companion);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.result-stage .guide-line::before {
+  position: absolute;
+  top: 50%;
+  left: -0.5625rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-left: 2px solid var(--color-brass);
+  border-bottom: 2px solid var(--color-brass);
+  background: var(--surface);
+  transform: translateY(-50%) rotate(45deg);
+  content: "";
+}
+
+.result-controls {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.result-stage .result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.75rem;
+}
+
+.result-stage .result-actions :where(.action-primary, .action-secondary) {
+  min-height: 3rem;
+  border: 2px solid var(--color-brass);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 14px rgb(18 32 36 / 24%);
+}
+
+.result-invitation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem 1.25rem;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--color-brass) 75%, transparent);
+  border-radius: 0.875rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  box-shadow: 0 4px 18px rgb(18 32 36 / 18%);
+}
+
+.result-invitation p {
+  color: var(--foreground);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.result-stage .result-invitation [data-튜토리얼안내] {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+.result-controls > [data-튜토리얼안내] {
+  border: 1px solid var(--color-brass);
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+/* 튜토리얼을 마쳤을 때 모험으로 들어가는 문이 주 행동이 된다. */
+.result-controls:has(.result-invitation) .result-actions .action-primary {
+  --control-hover: var(--surface-hover);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.result-stage .result-spread[data-artwork-state="기다림"] .result-reading {
+  overflow: visible;
+}
+
+.result-stage .result-spread[data-artwork-state="기다림"] .artwork-frame {
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+}
+
+.result-stage .result-spread[data-artwork-state="못받음"] .result-content {
+  flex-basis: auto;
+  max-width: 48rem;
+}
+
+.story-opening {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  color: #644323;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1.7;
+  word-break: keep-all;
+}
+
+.story-opening__book {
+  width: clamp(4rem, 9vw, 6rem);
+  height: auto;
+  overflow: visible;
+}
+
+.story-opening__page {
+  transform-origin: 48px 40px;
+  animation: story-page-turn 1.8s ease-in-out infinite;
+}
+
+@keyframes story-page-turn {
+  0%, 15% { transform: scaleX(1); opacity: 0; }
+  25% { opacity: 1; }
+  75% { transform: scaleX(-1); opacity: 1; }
+  90%, 100% { transform: scaleX(-1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-opening__page { animation: none; }
+}
+
+@keyframes result-scene-arrive {
+  from { opacity: 0; transform: translateY(0.375rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (min-width: 1200px) {
+  .result-stage { --artwork-cap: 60svh; }
+}
+
+@media (min-width: 1440px) {
+  .result-stage { --artwork-cap: 65svh; }
+}
+
+/* 그림의 긴 변이 무대 상한을 넘지 않게 하고, 액자는 원본 비율을 따른다. */
+@media (min-width: 701px) {
+  .result-stage {
+    --result-frame-size: min(35rem, var(--artwork-cap), calc(min(100vw - 3rem, 90rem) - var(--result-aside-min) - var(--result-column-gap)));
+  }
+  .result-stage .result-spread[data-artwork-state="떴다"] {
+    display: grid;
+    flex: none;
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) max-content;
+    gap: 1rem var(--result-column-gap);
+    width: fit-content;
+    max-width: min(100%, 90rem);
+    height: var(--result-frame-size);
+    max-height: 100%;
+    margin-block: auto;
+  }
+
+  .result-stage [data-artwork-state="떴다"] .result-reading { display: contents; }
+
+  .result-stage [data-artwork-state="떴다"] .artwork-frame {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    place-self: center start;
+  }
+
+  .result-stage [data-artwork-state="떴다"] .result-content {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    width: var(--result-aside-width);
+    max-width: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  .result-stage [data-artwork-state="떴다"] .result-controls {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+  }
+}
+
+/* 중간 너비의 초대문은 액자 위 빈 공간까지 읽기 영역으로 쓴다.
+   아래 빈 행은 액자 아래 여백과 같게 잡아 버튼 하단 정렬을 유지한다. */
+@media (min-width: 900px) and (max-width: 1399px) and (min-height: 551px) {
+  /* 버튼을 액자 하단에 맞춘 상태에서도 짧은 대사와 캐릭터가 모두 들어가게 한다. */
+  .result-stage [data-artwork-state="떴다"]:not(:has(.result-invitation)) .result-content {
+    gap: 0.75rem;
+  }
+
+  .result-stage .result-spread[data-artwork-state="떴다"]:has(.result-invitation) {
+    flex: 1;
+    height: auto;
+    max-height: none;
+    margin-block: 0;
+    grid-template-rows: minmax(0, 1fr) minmax(0, max-content) max-content max(0px, calc((100% - var(--result-frame-size)) / 2 - 1rem));
+  }
+
+  .result-stage [data-artwork-state="떴다"]:has(.result-invitation) .result-content {
+    grid-row: 2;
+  }
+
+  .result-stage [data-artwork-state="떴다"]:has(.result-invitation) .result-controls {
+    grid-row: 3;
+  }
+}
+
+/* 작은 액자에 튜토리얼 초대문까지 끼우면 읽는 높이가 사라진다.
+   이 조합에서는 다음 행동을 보이게 두고, 나머지 결과는 그림 하단에 맞춘다. */
+@media (min-width: 701px) and (max-width: 899px),
+  (min-width: 701px) and (max-height: 550px) {
+  .result-stage .result-spread[data-artwork-state="떴다"]:has(.result-invitation) {
+    flex: 1;
+    height: auto;
+    max-height: none;
+    margin-block: 0;
+    grid-template-rows: minmax(0, 1fr) minmax(0, max-content) max-content minmax(0, 1fr);
+  }
+
+  .result-stage [data-artwork-state="떴다"]:has(.result-invitation) .result-content {
+    grid-row: 2;
+    max-height: min(58svh, calc(100dvh - 22rem));
+  }
+
+  .result-stage [data-artwork-state="떴다"]:has(.result-invitation) .result-controls {
+    grid-row: 3;
+    align-self: start;
+  }
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .result-stage {
+    --artwork-cap: 38svh;
+    padding: 4rem 0.75rem 0;
+  }
+
+  .result-stage .result-spread { gap: 0.75rem; }
+
+  .result-reading {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 1.5rem;
+    padding: 0.25rem 0.25rem 0.5rem;
+  }
+
+  .result-stage .artwork-frame {
+    flex: none;
+    outline-width: 2px;
+    border-radius: 0;
+  }
+
+  .result-stage .result-content {
+    flex: none;
+    gap: 0.75rem;
+    max-width: none;
+    max-height: none;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .result-stage .written-line {
+    padding: 0.875rem 1rem;
+    border-radius: 0.875rem;
+    font-size: var(--type-reading-mobile);
+    line-height: var(--leading-child-writing);
+  }
+
+  .result-stage .guide-figure { grid-template-columns: 6rem minmax(0, 1fr); }
+  .result-stage .guide-line { padding: 0.75rem; font-size: var(--type-companion-mobile); line-height: var(--leading-companion); }
+  .result-controls { align-items: stretch; gap: 0.5rem; }
+  .result-stage .result-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.375rem;
+  }
+  .result-stage .result-actions .book-link { grid-column: 1 / -1; }
+
+  .result-stage .result-actions :where(.action-primary, .action-secondary) {
+    flex: 1;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.5rem;
+    border-radius: 0.625rem;
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  .result-invitation {
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+  }
+
+  .result-invitation p,
+  .result-controls > [data-튜토리얼안내] { font-size: 1rem; }
+  .result-invitation .action-primary { padding-inline: 0.875rem; }
+  .result-stage .result-spread[data-artwork-state="기다림"] .result-reading { justify-content: center; }
+}
+
+@media (max-height: 550px) and (orientation: landscape) {
+  .result-stage {
+    --artwork-cap: 38svh;
+    --result-column-gap: 2.5rem;
+    --result-aside-min: 18rem;
+    --result-aside-width: 26rem;
+    padding-top: 3.75rem;
+  }
+  .result-stage .result-spread { gap: 0.5rem; }
+  .result-reading { padding-block: 0.125rem; }
+  .result-stage .result-content { flex-basis: 48%; gap: 0.5rem; max-width: 36rem; }
+  .result-stage .written-line { padding: 0.625rem 0.875rem; font-size: var(--type-reading-mobile); line-height: var(--leading-child-writing); }
+  .result-stage .guide-figure { grid-template-columns: 4rem minmax(0, 1fr); }
+  .result-stage .guide-line { padding: 0.5rem 0.75rem; font-size: var(--type-companion-mobile); line-height: var(--leading-companion); }
+  .result-controls { gap: 0.375rem; }
+  .result-stage .result-spread[data-artwork-state="떴다"] { row-gap: 0.5rem; }
+  .result-stage [data-artwork-state="떴다"]:has(.result-invitation) .result-content { max-height: calc(100dvh - 15rem); }
+  .result-stage .result-actions { gap: 0.5rem; }
+
+  .result-stage .result-actions :where(.action-primary, .action-secondary) {
+    min-height: 2.75rem;
+    padding: 0.375rem 0.875rem;
+  }
+
+  .result-invitation { gap: 0.5rem 1rem; padding: 0.375rem 0.75rem; }
+  .result-invitation p, .result-controls > [data-튜토리얼안내] { font-size: 1rem; line-height: 1.5; }
+  .game-shell--result > .game-stage-footer { padding-block: 0.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-reading { animation: none; }
+}

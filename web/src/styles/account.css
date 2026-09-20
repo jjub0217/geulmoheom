@@ -1,0 +1,423 @@
+/* 계정 화면은 좁은 입력 열을 쓰고, 자녀 관리는 넓은 화면에서 목록과 추가를 나눈다. */
+.account-entrance,
+.account-page {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: calc(var(--spacing-gutter) + env(safe-area-inset-left, 0px))
+    calc(var(--spacing-gutter) + env(safe-area-inset-right, 0px));
+}
+
+.account-entrance {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5rem;
+  max-width: 36rem;
+  padding-block: clamp(1.5rem, 7vh, 5rem);
+}
+
+.account-page {
+  flex: 1;
+  max-width: 72rem;
+  padding-block: clamp(1.75rem, 5vw, 4.5rem);
+}
+
+.account-card {
+  min-width: 0;
+  padding: clamp(1.25rem, 3.5vw, 2.5rem);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.account-auth-form,
+.account-details,
+.account-consents,
+.account-credentials {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.account-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
+
+.account-heading::before {
+  width: 2.5rem;
+  height: 0.25rem;
+  margin-bottom: 0.375rem;
+  border-radius: 1rem;
+  background: var(--color-brass);
+  content: "";
+}
+
+.account-heading h1 {
+  font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.045em;
+}
+
+.account-description {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.account-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.account-submit {
+  width: 100%;
+  min-height: 3.25rem;
+}
+
+.account-alternate {
+  align-self: center;
+  text-align: center;
+}
+
+.account-feedback {
+  border-radius: 0.875rem;
+  background: var(--surface-muted);
+  padding: 0.875rem 1rem;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.account-child {
+  max-width: 35rem;
+}
+
+.account-child .account-auth-form {
+  gap: 1.75rem;
+}
+
+.account-child .account-heading {
+  align-items: center;
+  text-align: center;
+}
+
+.account-child .account-code-input {
+  min-height: 4.5rem;
+  padding-inline: 0.75rem;
+  font-size: clamp(1.75rem, 6vw, 2.25rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.38em;
+  text-align: center;
+}
+
+.account-signup-form {
+  display: grid;
+  gap: 2rem;
+  width: 100%;
+  max-width: 39rem;
+  margin-inline: auto;
+}
+
+.account-details {
+  gap: 2rem;
+}
+
+.account-credentials {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--surface);
+}
+
+.account-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: clamp(1.125rem, 2.8vw, 1.75rem);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--surface);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.account-disclosure h2 {
+  font-size: 1.125rem;
+}
+
+.account-disclosure-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-left: 1.125rem;
+  list-style-type: disc;
+}
+
+.account-disclosure-list li::marker {
+  color: var(--color-brass);
+}
+
+.account-disclosure-optional {
+  background: var(--surface-muted);
+}
+
+.account-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.account-checkbox-required {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.account-check {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+  accent-color: var(--accent);
+}
+
+.account-consent-note {
+  padding-left: 2rem;
+  color: var(--muted);
+}
+
+.account-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.account-dashboard-heading {
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-dashboard-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.account-section-title {
+  font-size: 1.375rem;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.03em;
+}
+
+.children-layout {
+  display: grid;
+  align-items: start;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.children-list-section,
+.children-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.children-empty {
+  padding: 1.75rem 1.5rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 1.25rem;
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+
+.child-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: clamp(1.125rem, 2.5vw, 1.75rem);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.child-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.child-name {
+  font-size: 1.375rem;
+  letter-spacing: -0.03em;
+}
+
+.child-age,
+.child-limit {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.child-status {
+  justify-self: start;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--surface-muted);
+  font-size: 1rem;
+}
+
+.child-limit {
+  grid-column: 1 / -1;
+}
+
+.child-access-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.child-delete {
+  align-self: flex-start;
+}
+
+.child-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+.child-create-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.child-create-heading h2 {
+  margin-bottom: 0.25rem;
+}
+
+.access-code-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 1.125rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 1rem;
+  background: var(--surface-muted);
+  font-size: 1rem;
+}
+
+.access-code-value {
+  padding-block: 0.25rem;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: 0.24em;
+}
+
+.account-dialog {
+  width: min(28rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: var(--surface-raised);
+  color: var(--foreground);
+  box-shadow: var(--shadow-card);
+}
+
+.account-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-scarf-deep) 48%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.account-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+@media (min-width: 64rem) {
+  .account-signup-form {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: clamp(2.5rem, 5vw, 5rem);
+    max-width: none;
+  }
+
+  .account-details {
+    padding-top: 0.5rem;
+  }
+
+  .account-credentials {
+    padding: 1.75rem;
+  }
+
+  .children-layout {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
+    gap: 2rem;
+  }
+
+  .children-layout > .access-code-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 26rem) {
+  .account-page {
+    padding-block: 1.25rem;
+  }
+
+  .account-dashboard {
+    gap: 1.25rem;
+  }
+
+  .account-dashboard-heading {
+    padding-bottom: 1rem;
+  }
+
+  .child-card {
+    gap: 1rem;
+  }
+
+  .child-access-actions {
+    gap: 0.75rem;
+    padding-top: 1rem;
+  }
+
+  .account-entrance .account-card {
+    padding: 1.25rem;
+  }
+
+  .account-child .account-auth-form {
+    gap: 1.5rem;
+  }
+}

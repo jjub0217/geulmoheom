@@ -3,6 +3,24 @@ import { expect, test, type Page } from "@playwright/test";
 import { 못닿음, 코드입력 } from "../src/app/child/auth/copy";
 import { 상태표시 } from "../src/app/status-copy";
 
+test.use({ serviceWorkers: "block" });
+
+test.beforeEach(async ({ context, baseURL }) => {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/healthz")) {
+      return route.fulfill({ status: 200, json: { status: "ok" } });
+    }
+    // 각 검사가 선언한 모의 응답 이외에는 실제 인증·데이터 요청을 보내지 않는다.
+    if (url.pathname.startsWith("/api/")) {
+      return route.fulfill({ status: 404, json: { detail: "Unmocked child authentication request" } });
+    }
+    if (url.origin !== origin) return route.abort();
+    return route.continue();
+  });
+});
+
 /**
  * 자녀 인증 화면 (E-3 프론트 짝).
  *
@@ -139,8 +157,7 @@ test("닿지 못하면 아이 사정으로 말한다 — 「서버」가 화면�
   // 한때 이 자리에 「지금 **서버**에 닿지 못했습니다」가 박혀 있었다 (2026-09-07 갈아치웠다).
   // 개발 단서(`data-dev-hints`)는 개발자용이라 세지 않는다 — 운영 번들에서는 아예 안 그려진다.
   const 아이에게보이는것 = await page
-    .locator("main > div > p")
-    .first()
+    .getByText(못닿음, { exact: true })
     .innerText();
   expect(아이에게보이는것).not.toContain("서버");
 });

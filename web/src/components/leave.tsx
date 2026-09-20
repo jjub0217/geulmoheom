@@ -1,11 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { ApiError, NetworkError, apiPostNoBody } from "@/lib/api";
 
 import { 나가기문구 } from "./leave-copy";
+
+// 2026-09-20 사용자 흐름 검수 · docs/문구.md 2.5.
+export const 나가기대기문구 = "나가는 중…";
 
 /**
  * 나가기 — 아이 로그아웃 (백로그 E-3 프론트 짝, `web/tasks/W4.md` 2번).
@@ -32,11 +35,18 @@ import { 나가기문구 } from "./leave-copy";
 export function LeaveButton() {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
+  const 머무는버튼 = useRef<HTMLButtonElement>(null);
+  const 나가기요청중 = useRef(false);
   const [나가는중, set나가는중] = useState(false);
   /** 서버가 준 문구이거나 못닿음 문구. **성공 경로에는 이 자리가 없다** — 화면이 바뀐다. */
   const [실패, set실패] = useState<string | null>(null);
 
+  useLayoutEffect(() => {
+    if (실패 !== null && !나가는중) 머무는버튼.current?.focus();
+  }, [실패, 나가는중]);
+
   const 열기 = () => {
+    if (나가기요청중.current) return;
     // 지난번 실패가 남아 있으면 지운다. 다시 열었을 때 **없는 실패**를 보여주지 않는다.
     set실패(null);
     dialog.current?.showModal();
@@ -48,6 +58,10 @@ export function LeaveButton() {
    * (학부모 로그아웃이 같은 이유로 같은 모양이다 — `parents/signup/page.tsx`.)
    */
   const 나간다 = async () => {
+    // 렌더가 반영되기 전 연달아 눌러도 서버 요청은 하나만 보낸다.
+    if (나가기요청중.current) return;
+    나가기요청중.current = true;
+    set실패(null);
     set나가는중(true);
     try {
       // **401 처리를 태우지 않는다.** 쿠키가 없어도 서버가 204 를 준다 —
@@ -55,6 +69,8 @@ export function LeaveButton() {
       // **정작 지워야 할 상태에서만 막힌다** (`api/공통규약.md` 148).
       await apiPostNoBody("/child/logout");
     } catch (e) {
+      나가기요청중.current = false;
+      set나가는중(false);
       // **닿지 못하면 쿠키가 그대로 살아 있다. 나간 척하지 않는다.**
       // 확인 창을 닫지도 않는다 — 닫으면 아이는 나간 줄 알고, 실제로는 그대로 들어와 있다.
       if (e instanceof NetworkError) {
@@ -67,13 +83,12 @@ export function LeaveButton() {
         return;
       }
       throw e;
-    } finally {
-      set나가는중(false);
     }
 
     // **나간 뒤에는 접속 코드 입력으로 돌아간다. 화면을 새로 만들지 않는다** (`문구.md` 2.3).
     // 3.3 의 안내 한 줄(「부모님이 알려주신 6자리 숫자예요」)이 그대로 다음 행동을 가리킨다.
     // `replace` 다 — 뒤로 가기로 방금 나온 모험 화면에 돌아가지 못하게 한다.
+    // 성공 후에는 화면 이동이 끝날 때까지 잠근다. 이미 처리된 나가기를 취소할 수는 없다.
     router.replace("/child/auth");
   };
 
@@ -82,18 +97,20 @@ export function LeaveButton() {
       <button
         type="button"
         onClick={열기}
-        className="pressable underline underline-offset-4 opacity-70"
+        className="pressable action-quiet"
       >
         {나가기문구.버튼}
       </button>
 
-      {/* **네이티브 `<dialog>` 다.** 포커스 가둠·`Esc`·배경 비활성이 공짜로 따라온다.
-          `Esc` 로 닫히는 것이 **안전한 방향**이라는 점이 중요하다 — 닫히면 머무는 것이고,
-          되돌릴 수 없는 쪽은 반드시 눌러야만 일어난다. 배경 클릭으로는 닫히지 않는다(기본값). */}
+      {/* 전송 전이나 실패 뒤에는 Esc로 머문다. 전송 중 닫아도 서버 요청은 취소되지 않으므로
+          그때는 창을 유지한다. 배경 클릭으로는 닫히지 않는다(네이티브 dialog 기본값). */}
       <dialog
         ref={dialog}
-        className="m-auto max-w-md rounded-2xl border-2 border-brass/40 bg-background
-          p-7 text-foreground backdrop:bg-scarf-deep/50"
+        className="app-dialog"
+        aria-busy={나가는중}
+        onCancel={(event) => {
+          if (나가기요청중.current) event.preventDefault();
+        }}
       >
         <div className="flex flex-col gap-5">
           <h2 className="text-2xl font-semibold">{나가기문구.확인.제목}</h2>
@@ -103,17 +120,25 @@ export function LeaveButton() {
               버튼 옆에 박으면 **버튼이 눈에 띄어** 위 「자리」와 정면으로 부딪힌다. */}
           <p>{나가기문구.확인.한줄}</p>
 
-          {실패 !== null && <p data-나가기실패>{실패}</p>}
+          {나가는중 && <p data-나가기대기 role="status">{나가기대기문구}</p>}
+          {실패 !== null && <p data-나가기실패 role="status">{실패}</p>}
 
           {/* **머무는 쪽이 DOM 에서 먼저다.** `<dialog>` 는 첫 포커스 가능 요소에 포커스를 주므로
               **되돌릴 수 없는 쪽에 포커스가 앉지 않는다.** 보이는 순서도 같아 왼쪽이 안전한 쪽이다. */}
           <div className="flex justify-end gap-3">
-            <form method="dialog">
+            <form
+              method="dialog"
+              onSubmit={(event) => {
+                if (나가기요청중.current) event.preventDefault();
+              }}
+            >
               {/* `method="dialog"` 라 이 버튼은 **서버를 부르지 않고 창만 닫는다.**
                   머무는 것이 곧 아무 일도 안 일어나는 것이다. */}
               <button
+                ref={머무는버튼}
                 type="submit"
-                className="pressable rounded-full px-6 py-3 underline underline-offset-4"
+                disabled={나가는중}
+                className="pressable action-secondary"
               >
                 {나가기문구.확인.머문다}
               </button>
@@ -125,7 +150,7 @@ export function LeaveButton() {
               type="button"
               disabled={나가는중}
               onClick={() => void 나간다()}
-              className="pressable rounded-full bg-scarf px-6 py-3 text-markings disabled:opacity-40"
+              className="pressable action-primary"
             >
               {나가기문구.확인.나간다}
             </button>
