@@ -8,15 +8,21 @@
   margin-inline: auto;
 }
 
-.parent-entry--login { max-width: 28rem; }
-.parent-entry--signup { max-width: 34rem; }
+.parent-entry--login {
+  max-width: 28rem;
+}
+.parent-entry--signup {
+  max-width: 34rem;
+}
 
 .parent-entry .account-heading {
   gap: 0.625rem;
   margin-bottom: 0.25rem;
 }
 
-.parent-entry .account-heading::before { display: none; }
+.parent-entry .account-heading::before {
+  display: none;
+}
 
 .parent-entry .account-description {
   max-width: 34em;
@@ -31,9 +37,16 @@
   gap: 1.375rem;
 }
 
-.parent-entry .account-field { gap: 0.5rem; }
-.parent-entry .form-field { min-height: 3rem; }
-.parent-entry .account-submit { min-height: 3.25rem; margin-top: 0.125rem; }
+.parent-entry .account-field {
+  gap: 0.5rem;
+}
+.parent-entry .form-field {
+  min-height: 3rem;
+}
+.parent-entry .account-submit {
+  min-height: 3.25rem;
+  margin-top: 0.125rem;
+}
 
 .parent-entry .parent-entry-switch {
   min-height: 2.75rem;
@@ -49,11 +62,20 @@
   white-space: normal;
 }
 
+/* **두 문장이지만 알림은 하나다** (2026-09-20 PM 판정). 3.11 이 「무슨 일이 일어났나」와
+   「왜 그런가」를 잇는 한 덩어리인데, 제목↔안내와 같은 간격이면 **따로 온 알림 둘**로 보인다.
+   **이유는 사실에 붙어 있어야 이유로 읽힌다.**
+   ⛔ 공용 `.account-heading` 의 `gap` 을 안 건드린다 — 아이 표지와 가입 화면이 같이 쓴다. */
+.parent-entry--login .account-description + .account-description {
+  margin-top: calc(0.25rem - 0.875rem);
+}
+
 .parent-entry--login > .parent-entry-switch {
   align-self: stretch;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
   border-radius: 0;
+  justify-content: left;
 }
 
 .parent-entry .account-signup-form {
@@ -63,7 +85,9 @@
   max-width: none;
 }
 
-.parent-entry .account-details { padding: 0; }
+.parent-entry .account-details {
+  padding: 0;
+}
 
 .parent-entry .account-credentials {
   padding: 0;
@@ -72,7 +96,9 @@
   background: transparent;
 }
 
-.parent-entry .account-consents { gap: 1.75rem; }
+.parent-entry .account-consents {
+  gap: 1.75rem;
+}
 
 .parent-entry .account-disclosure {
   gap: 1rem;
@@ -99,8 +125,12 @@
   padding-left: 1.125rem;
 }
 
-.parent-entry .account-disclosure-list li { padding-left: 0.25rem; }
-.parent-entry .account-disclosure-list li::marker { color: var(--muted); }
+.parent-entry .account-disclosure-list li {
+  padding-left: 0.25rem;
+}
+.parent-entry .account-disclosure-list li::marker {
+  color: var(--muted);
+}
 
 .parent-entry .account-checkbox {
   min-height: 3rem;
@@ -158,8 +188,10 @@
   width: 100%;
   max-width: none;
   padding: clamp(1.5rem, 4vw, 3.5rem) max(1rem, env(safe-area-inset-right, 0px))
-    max(1.5rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
-  background: linear-gradient(110deg, rgb(246 239 224 / 95%), rgb(252 248 239 / 94%)),
+    max(1.5rem, env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+  background:
+    linear-gradient(110deg, rgb(246 239 224 / 95%), rgb(252 248 239 / 94%)),
     url("/adventure/kraft-paper.jpg") center / cover;
   color: var(--foreground);
   color-scheme: light;
@@ -172,11 +204,17 @@
   border: 1px solid var(--border);
   border-radius: 1.5rem;
   background: rgb(255 251 243 / 92%);
-  box-shadow: 0 18px 56px -28px rgb(73 57 32 / 28%), 0 2px 4px rgb(73 57 32 / 3%);
+  box-shadow:
+    0 18px 56px -28px rgb(73 57 32 / 28%),
+    0 2px 4px rgb(73 57 32 / 3%);
 }
 
-.parent-dashboard-page .account-dashboard-heading { padding-bottom: 1.5rem; }
-.parent-dashboard-page .account-dashboard-heading::before { display: none; }
+.parent-dashboard-page .account-dashboard-heading {
+  padding-bottom: 1.5rem;
+}
+.parent-dashboard-page .account-dashboard-heading::before {
+  display: none;
+}
 .parent-dashboard-page .account-dashboard-heading h1 {
   font-size: clamp(1.75rem, 3vw, 2.375rem);
   font-weight: 650;
@@ -202,23 +240,34 @@
   border-top: 1px solid var(--border);
   border-radius: 0;
 }
-.parent-dashboard-page .children-list-frame .children-list { gap: 1.5rem; }
+.parent-dashboard-page .children-list-frame .children-list {
+  gap: 1.5rem;
+}
 .parent-dashboard-page .child-delete {
   align-self: flex-start;
   margin-top: 0.25rem;
   border-color: color-mix(in srgb, var(--color-vest) 52%, var(--border));
   color: var(--color-vest);
 }
-.parent-dashboard-page .access-code-panel { background: #fff8ea; }
+.parent-dashboard-page .access-code-panel {
+  background: #fff8ea;
+}
 .parent-dashboard-page .children-layout--empty {
   grid-template-columns: minmax(0, 34rem);
   justify-content: center;
 }
-.parent-dashboard-page .children-layout--empty .child-create-form { margin: 0; }
+.parent-dashboard-page .children-layout--empty .child-create-form {
+  margin: 0;
+}
 
 @media (max-width: 40rem) {
-  .parent-dashboard-page { padding: 1rem; }
-  .parent-dashboard-page .account-dashboard { padding: 1.25rem; border-radius: 1.125rem; }
+  .parent-dashboard-page {
+    padding: 1rem;
+  }
+  .parent-dashboard-page .account-dashboard {
+    padding: 1.25rem;
+    border-radius: 1.125rem;
+  }
 }
 
 @media (min-width: 901px) {
@@ -228,7 +277,9 @@
     width: min(100%, 74rem);
   }
 
-  .account-entry--signup .parent-entry--signup { max-width: none; }
+  .account-entry--signup .parent-entry--signup {
+    max-width: none;
+  }
 
   .account-entry--signup .account-credentials {
     display: grid;
@@ -239,14 +290,31 @@
 }
 
 @media (max-width: 40rem) {
-  .parent-entry { gap: 1.125rem; }
-  .parent-entry .account-heading { gap: 0.5rem; }
-  .parent-entry .account-description { font-size: 0.9375rem; line-height: 1.65; }
+  .parent-entry {
+    gap: 1.125rem;
+  }
+  .parent-entry .account-heading {
+    gap: 0.5rem;
+  }
+  .parent-entry .account-description {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+  }
   .parent-entry .account-auth-form,
   .parent-entry .account-details,
-  .parent-entry .account-credentials { gap: 1.125rem; }
-  .parent-entry .account-signup-form { gap: 1.625rem; }
-  .parent-entry .account-consents { gap: 1.5rem; }
-  .parent-entry .account-disclosure { padding-top: 1.375rem; }
-  .parent-entry--login > .parent-entry-switch { padding-top: 1rem; }
+  .parent-entry .account-credentials {
+    gap: 1.125rem;
+  }
+  .parent-entry .account-signup-form {
+    gap: 1.625rem;
+  }
+  .parent-entry .account-consents {
+    gap: 1.5rem;
+  }
+  .parent-entry .account-disclosure {
+    padding-top: 1.375rem;
+  }
+  .parent-entry--login > .parent-entry-switch {
+    padding-top: 1rem;
+  }
 }

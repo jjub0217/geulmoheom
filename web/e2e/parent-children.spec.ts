@@ -524,7 +524,9 @@ test("시간이 지나 풀려도 같은 곳으로 간다 — 다만 안내는 �
   // **기본 안내 그대로다.** 여기서 새 말을 지으면 **같은 사실을 두 곳에서 다르게 쓰는 것**이 된다.
   await expect(page.locator("[data-안내]")).toHaveText(로그인.안내);
   // **아이 탓을 하지 않는다** — 아이가 들어온 것이 아니라 시간이 지난 것이다.
-  expect(await page.locator("main").innerText()).not.toContain(로그인.아이가들어왔다);
+  // **조각마다 본다** — 3.11 문장은 **두 줄**이라 한 덩어리로는 애초에 안 걸린다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 줄 of 로그인.아이가들어왔다) expect(화면).not.toContain(줄);
   // **표식도 안 붙는다.** 붙이면 3.11 문장이 뜨고 **그건 이 경우에 거짓**이다.
   expect(new URL(page.url()).searchParams.has("child_entered")).toBe(false);
 });

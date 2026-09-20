@@ -1,5 +1,5 @@
 /* 본편도 튜토리얼과 같은 「장면 → 동료 → 글쓰기」 무대를 사용한다.
-   첫 배지 안내나 긴 대사가 있으면 문서가 늘어나며, 동료를 입력 상자 뒤로 밀지 않는다. */
+   긴 서사나 긴 대사가 있으면 문서가 늘어나며, 동료를 입력 상자 뒤로 밀지 않는다. */
 .chapter-shell {
   min-height: 100svh;
   min-height: 100dvh;
@@ -65,7 +65,10 @@
 .chapter-stage .chapter-reading:has(.chapter-story:empty) { grid-template-columns: minmax(0, 1fr); }
 .chapter-visual {
   display: grid;
-  place-items: center;
+  /* **가로로는 왼쪽에 붙인다** (2026-09-21 사용자 지적). 종전에는 가운데라 **삽화가 자기 칸
+     안에서 떠 있었고**, 그래서 삽화 왼쪽 가장자리가 「내 책」과 안 맞았다 — 1280 에서 155px,
+     1024 에서 96px 어긋났다. 세로 가운데는 그대로다. */
+  place-items: center start;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -116,7 +119,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.chapter-console .tier-badge-writing-intro { margin-bottom: 0.75rem; }
 .chapter-artwork-notice {
   margin: 0.5rem 0 0;
   color: var(--foreground);
@@ -180,26 +182,6 @@
   .chapter-companion-line { max-height: 4.5rem; }
   /* 본편은 한두 단어보다 다음 행동을 문장으로 쓰는 자리다. 17px·1.7 행간에서 세 줄을 볼 수 있게 한다. */
   .chapter-console .writing-field { min-height: 7rem; height: 7rem; }
-  .chapter-console .tier-badge-writing-intro { position: relative; gap: 0.25rem; max-height: none; overflow: visible; margin-bottom: 0.5rem; padding: 0.5rem 0.625rem 0.125rem; font-size: 0.875rem; line-height: 1.5; }
-  .chapter-console .tier-badge-writing-heading { gap: 0.25rem 0.5rem; }
-  .chapter-console .tier-badge-writing-heading h2 { font-size: 0.875rem; }
-  .chapter-console .tier-badge-writing-preview .tier-badge { min-height: 1.75rem; padding: 0.125rem 0.25rem; font-size: 0.875rem; }
-  .chapter-console .tier-badge-writing-actions { position: relative; }
-  .chapter-console .tier-badge-writing-examples {
-    position: absolute;
-    z-index: 2;
-    right: 0;
-    bottom: calc(100% + 0.25rem);
-    left: 0;
-    max-height: min(10rem, 35svh);
-    padding: 0.75rem;
-    overflow-y: auto;
-    border: 1px solid var(--border-strong);
-    border-radius: 0.625rem;
-    background: #fff8ec;
-    box-shadow: 0 6px 20px rgb(18 32 36 / 20%);
-  }
-  .chapter-console .tier-badge-writing-examples:focus-visible { outline: 2px solid var(--color-brass); outline-offset: 2px; }
   .chapter-ending .guide-figure { flex-direction: column; gap: 1rem; }
   .chapter-ending .guide-image { width: min(12rem, 28svh); }
   .chapter-ending .guide-line { padding: 1rem; text-align: center; }

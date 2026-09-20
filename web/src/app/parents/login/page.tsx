@@ -62,6 +62,17 @@ export default function ParentLogin() {
 
   const 보낼수있다 = email.trim() !== "" && password !== "" && !보내는중;
 
+  /**
+   * 안내는 **줄 단위**다 (`문구.md` **3.11**). 기본 안내는 한 줄, 아이가 들어와서 풀린
+   * 경우는 **두 줄**이다 — **앞은 무슨 일이 일어났나, 뒤는 왜 그런가**로 하는 일이 다르다.
+   *
+   * **한 줄짜리도 배열에 담아 같은 길로 보낸다** — 갈라 두면 **한쪽에만 손이 가서**
+   * 두 갈래가 조용히 달라진다.
+   */
+  const 안내줄들: readonly string[] = 아이가들어왔다
+    ? 로그인.아이가들어왔다
+    : [로그인.안내];
+
   const 들어가기 = async () => {
     set보내는중(true);
     set오류(null);
@@ -119,9 +130,14 @@ export default function ParentLogin() {
           {/* **왜 로그아웃되는지를 먼저 말한다.** 「세션이 만료되었습니다」는 전문 용어라 안 쓴다.
               **아이가 들어와서 풀렸으면 그 사실을 말한다** (`문구.md` 3.11) — 기본 문장은
               **시간을 원인으로 말하는데 그때는 원인이 시간이 아니라서 거짓이 된다.** */}
-          <p data-안내 className="account-description">
-            {아이가들어왔다 ? 로그인.아이가들어왔다 : 로그인.안내}
-          </p>
+          {/* **조각마다 제 요소로 그린다.** `.account-heading` 이 세로 flex 라
+              **새 CSS 없이** 줄이 나뉜다. `data-안내` 는 조각마다 붙는다 —
+              검사들이 그것으로 찾고, 여럿이면 줄 목록으로 읽는다. */}
+          {안내줄들.map((줄) => (
+            <p key={줄} data-안내 className="account-description">
+              {줄}
+            </p>
+          ))}
         </div>
 
         <label className="account-field">

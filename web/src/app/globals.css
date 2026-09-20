@@ -14,7 +14,7 @@
 @import "../styles/chapter-stage.css";
 /* '내 책 펼치기'는 같은 형태를 쓰고, 색으로 강조 정도를 구분한다. */
 @import "../styles/book-link.css";
-/* 결과와 책의 배지 안내는 같은 버튼과 설명 창을 사용한다. */
+/* 결과와 책의 배지는 같은 버튼과 설명 창을 사용한다. */
 @import "../styles/tier-badge.css";
 @import "../styles/story-font.css";
 /* 책 이름을 표시하고 고칠 때는 고운바탕을 쓴다. */
@@ -112,13 +112,18 @@
      ⛔ 동료 대사보다 커야 한다 — 이 화면에서 아이가 읽는 본문이 장면 대사이고
      동료 대사는 곁말이다. 아래 --type-companion-* 보다 항상 큰 값을 유지한다.
      ⛔ "/" 와 "/chapter" 가 같은 토큰을 본다. 한쪽만 고치면 두 화면이 갈린다. */
-  --type-scene-mobile: 1.25rem;
-  --type-scene-desktop: 1.5rem;
+  /* **창 너비를 따라 흐른다** (2026-09-21 사용자 지시). 고정 24px 이었더니
+     **좁은 창에서 서사가 잘렸다** — 1280 에서도 마지막 줄이 안 보였다.
+     ⛔ 아래 동료 대사와 **같은 비율로 같이 줄어든다.** 그래야 어느 너비에서도
+     **장면 대사가 더 크다**는 위계가 유지된다. */
+  --type-scene-mobile: clamp(1.0625rem, 4.4vw, 1.25rem);
+  --type-scene-desktop: clamp(1.1875rem, 1.6vw, 1.5rem);
   --leading-scene: 1.72;
   --leading-chapter: 1.7;
   --leading-child-writing: 1.7;
-  --type-companion-mobile: 1.0625rem;
-  --type-companion-desktop: 1.25rem;
+  /* 장면 대사와 **같이 흐르되 늘 한 단계 아래**다 (위 주석). */
+  --type-companion-mobile: clamp(0.9375rem, 3.6vw, 1.0625rem);
+  --type-companion-desktop: clamp(1rem, 1.25vw, 1.25rem);
   --leading-companion: 1.6;
   /* 캐릭터 팔레트의 명도만 나눈다. 바탕·종이·입력칸이 서로 구분되는 단계다. */
   --background: color-mix(in srgb, var(--color-markings) 65%, white);

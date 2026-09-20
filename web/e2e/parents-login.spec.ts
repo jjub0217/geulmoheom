@@ -269,5 +269,8 @@ test("표식이 없으면 기본 안내 그대로다 — 아무 데서나 아이
   // **만료돼서 온 사람과 처음 오는 사람이 같은 화면에 온다.** 표식이 없으면 원인을 모른다 —
   // 모르면서 「아이가 들어왔다」고 말하면 **없는 일을 지어내는 것**이다.
   await expect(page.locator("[data-안내]")).toHaveText(로그인.안내);
-  expect(await page.locator("main").innerText()).not.toContain(로그인.아이가들어왔다);
+  // **조각마다 본다** — 3.11 문장은 **두 줄**이라 한 덩어리로는 애초에 안 걸린다.
+  // 한 조각만 보면 **나머지 한 줄이 새는 것을 놓친다.**
+  const 화면 = await page.locator("main").innerText();
+  for (const 줄 of 로그인.아이가들어왔다) expect(화면).not.toContain(줄);
 });
