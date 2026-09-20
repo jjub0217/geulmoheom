@@ -4,7 +4,14 @@
   min-height: 100svh;
   min-height: 100dvh;
 }
-.chapter-stage { min-height: 100dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
+/* ⛔ **`min-height: 100dvh` 를 걷었다** (2026-09-21 조사 실측).
+   `<main>` 하나가 창을 꽉 채워, **`<main>` 밖에 있는 「나가기」를 창 아래로 밀어냈다** —
+   1280×800 에서 `y=914`, 420×900 에서 `y=906`. **전 크기에서 첫 화면 밖**이었다.
+   카드 화면(`/`)의 `.game-stage` 에는 이 규칙이 없고 거기선 나가기가 화면 안이다.
+   ⭐ 창을 채우는 일은 **껍데기(`.chapter-shell`)가 이미 한다** — `min-height: 100dvh` 가 거기 있고,
+   무대가 `flex: 1` 로 남는 높이를 가져가면 **바닥글이 그 아래 제자리에 선다.** */
+.chapter-shell { display: flex; flex-direction: column; }
+.chapter-stage { flex: 1; padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
 .chapter-toolbar .book-link {
   padding: 0.5rem 1rem;
   border: 2px solid var(--color-brass);
@@ -182,6 +189,61 @@
   .chapter-ending .guide-figure { flex-direction: column; gap: 1rem; }
   .chapter-ending .guide-image { width: min(12rem, 28svh); }
   .chapter-ending .guide-line { padding: 1rem; text-align: center; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   좁고 긴 화면에서는 2단을 푼다 (2026-09-21 실측).
+
+   **줄당 글자가 원인이었다.** 삽화를 옆에 두면 읽는 칸이 화면 폭의 절반을 조금 넘고,
+   320px 에서 **한 줄에 8.1자**가 된다 — 낱말이 거의 매번 잘린다. 390 에서도 11.3자다.
+   비율을 0.5:1.5 까지 밀어도 10자를 못 넘어서, **단을 푸는 것 말고는 수가 없다.**
+
+   ⛔ **높이 예산은 그대로 쓴다.** `chapter-stage.css` 의 2026-09-20 사용자 판정
+   (「늘리면 쓰는 칸이 첫 화면에서 밀린다 — W6 에서 아이 셋이 다 못 찾은 그 자리」)이
+   여기에도 걸린다. 쌓으면 세로가 더 드는 것이 보통인데, **줄당 글자가 두 배가 되면
+   같은 글이 절반의 줄로 들어오므로** 칸을 안 늘리고도 읽히는 양이 유지된다.
+   그래서 묶음 높이는 건드리지 않고 **안에서만 나눈다.**
+
+   분기는 `result-stage.css` 의 결과 화면이 이미 고른 것과 같다 — 거기서도 같은 폭·방향에서
+   삽화를 글 위로 올린다. 가로로 누운 폰(`max-height: 550px`)은 가로가 넉넉하니 2단을 둔다.
+   ────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) and (orientation: portrait) {
+  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
+    grid-template-columns: minmax(0, 1fr);
+/* **0.7 : 1.3 은 재서 고른 값이다** (후보 넷을 쓸었다).
+       묶음 높이가 고정이라 **삽화 행과 읽는 행은 서로의 것을 빼앗는다.**
+       이 값이 **보이는 글자를 종전(2단)보다 줄이지 않으면서** 삽화를 가장 크게 남긴다. */
+    grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr);
+    gap: 0.5rem;
+  }
+  /* 삽화는 제 행 높이에 맞춘다. 가로 시작선은 그대로 왼쪽 — 「내 책」과 맞춰 둔 것이다. */
+  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) .chapter-visual {
+    height: 100%;
+  }
+  /* 읽는 칸이 제 행을 다 쓰게 둔다. 바깥 묶음이 이미 높이를 물고 있으므로
+     여기서 `max-height` 를 또 걸면 행보다 작아져 빈자리가 생긴다. */
+  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) .chapter-story {
+    max-height: none;
+    height: 100%;
+  }
+}
+
+/* 쓰기 안내가 내려간 뒤에만 읽는 묶음이 자란다 (2026-09-21).
+
+   구조 안내 두 줄은 **첫 턴에만 뜨고**(`chapter/page.tsx`) 390×844 에서 **87px** 을 쓴다.
+   ⛔ **그 자리를 비우기 전에 묶음을 키우면 안 된다** — 첫 턴에서 쓰는 칸이 화면 밖으로
+   100px 밀리는 것을 실측했다. **안내가 있는 동안은 종전 예산 그대로 두고**,
+   안내가 사라진 두 번째 턴부터 그 높이를 **삽화 행**이 받는다.
+
+   그래서 삽화가 **2단이던 때보다 커지고**(390 에서 133px → 169px) 글은 단이 풀린 채로 남는다.
+   `:has()` 로 묶은 이유는 **두 값이 같은 원인에 매여 있기 때문**이다 — 안내가 다시 살아나면
+   칸도 따라 돌아가야 하고, 따로 적어 두면 한쪽만 고쳐진다. */
+@media (max-width: 700px) and (orientation: portrait) {
+  .chapter-stage:not(:has([data-chapter-structure-guide]))
+    .chapter-reading:has(.chapter-visual > .artwork-frame) {
+    grid-template-rows: clamp(5rem, 20svh, 13rem) minmax(0, 1fr);
+    height: clamp(11rem, 38svh, 26rem);
+  }
 }
 
 @media (max-height: 550px) {

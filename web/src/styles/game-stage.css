@@ -110,6 +110,13 @@
 }
 .game-stage__toolbar {
   position: absolute;
+  /* ⛔ **이게 없어서 「내 책 펼치기」가 안 눌렸다** (2026-09-21 조사 실측, 전 크기).
+     본편은 툴바가 **무대보다 DOM 앞**에 있는데 둘 다 `z-index: auto` 라
+     **뒤에 오는 무대가 위에 그려지고**, 무대의 `padding-top` 이 툴바를 정확히 덮었다.
+     `elementFromPoint` 가 그 자리 최상위로 무대를 돌려준다.
+     ⭐ 머리글·바닥글은 진작 `z-index: 4` 를 갖고 잘 닿는다. **툴바에만 없었다.**
+     (카드 화면은 툴바가 무대 **안**에 있어서 안 덮인다 — 그래서 여태 안 드러났다.) */
+  z-index: 4;
   top: calc(1rem + env(safe-area-inset-top, 0px));
   left: 50%;
   width: max-content;
@@ -155,6 +162,17 @@
     75rem
   );
   max-width: none;
+}
+/* **바닥글도 같은 띠에 선다** (2026-09-21 실측). 이 파일 주석이 **「나가기를 별명과 같은
+   오른쪽 선에 맞춘다」**고 적어 뒀는데, **내가 별명을 본문 띠로 옮기면서 그 약속이 깨졌다** —
+   1280 에서 이름·말풍선이 1240, 나가기만 1256 이었다. **주석은 그대로인데 값만 갈렸다.** */
+.game-stage-footer {
+  width: min(
+    100% - 2 * max(var(--game-inline-inset), env(safe-area-inset-left, 0px)),
+    75rem
+  );
+  margin-inline: auto;
+  padding-inline: 0;
 }
 .game-stage-header { justify-content: flex-end; }
 .game-stage__toolbar:has(> .book-link) { display: flex; justify-content: flex-start; }

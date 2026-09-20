@@ -329,9 +329,17 @@ export default function ChapterPage() {
 
       {/* 글쓰기 영역은 동료와 분리하고, 튜토리얼의 공통 콘솔을 재사용한다. */}
       <div ref={쓰는곳} className="game-console chapter-console">
-        <div data-chapter-structure-guide className="chapter-writing-guide">
-          {챕터구조안내.map((줄) => <p key={줄}>{줄}</p>)}
-        </div>
+        {/* **첫 턴에만 보인다** (2026-09-21 실측).
+            이 두 줄은 **「네가 쓴 것이 어디로 가는지」를 알려주는 안내**이지 매 턴의 지시가 아니다.
+            그런데 390×844 에서 **87px** 을 매 턴 먹었고, 그 화면의 세로 예산은
+            **읽는 묶음 236 · 동료 162 · 콘솔 318 · 바닥 60 = 860px 으로 창(844)보다 이미 컸다.**
+            한 번 읽은 말을 열 번 되풀이하느라 **삽화가 53px 로 줄어 있었다.**
+            ⭐ `첫안내` 는 첫 턴을 보내면 꺼지고 이어하기에도 남는다 — 이미 있던 상태다. */}
+        {첫안내 && (
+          <div data-chapter-structure-guide className="chapter-writing-guide">
+            {챕터구조안내.map((줄) => <p key={줄}>{줄}</p>)}
+          </div>
+        )}
         <div className="game-response">
           <div className="game-response__content chapter-controls" aria-busy={보내는중}>
             <AttemptInput
