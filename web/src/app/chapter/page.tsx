@@ -15,6 +15,7 @@ import { CompassIntroduction } from "@/components/compass-introduction";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
 import { 턴문구 } from "@/components/turn-copy";
+import { WrittenLine } from "@/components/written-line";
 import { ApiError, apiGet, apiPost, 인증이풀렸다, 역할이다르다 } from "@/lib/api";
 import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { useArtwork } from "@/lib/artwork";
@@ -28,6 +29,7 @@ type ChapterView = components["schemas"]["ChapterView"];
 type TurnResult = components["schemas"]["TurnResult"];
 type ArtworkRef = components["schemas"]["ArtworkRef"];
 type Guide = components["schemas"]["Guide"];
+type Highlight = components["schemas"]["Highlight"];
 type ChildMe = components["schemas"]["ChildMe"];
 
 function chapterClosure(error: unknown): { guide: Guide | null; line: string | null } | null {
@@ -82,6 +84,17 @@ type 턴상태 = {
   artwork: ArtworkRef | null;
   /** 이번 응답이 새 그림을 만들기 시작했을 때만 안내를 붙인다. */
   새삽화id: string | null;
+  /**
+   * **아이가 방금 보낸 문장.** 보낸 뒤 입력칸은 비우지만 **화면에서 없애지는 않는다.**
+   *
+   * **⛔ 없으면 그림이 원인 없이 나타난다.** 「썼더니 그림이 나왔다」가 이 제품의 한 줄인데
+   * 본편에서는 **「썼더니」가 화면에서 사라졌다** — 카드 결과 화면은 아이 문장·삽화·배지를
+   * 나란히 두는데 본편만 달랐다. 사용자가 **「아이가 쓴 글이 없는데 왜 삽화가 있나」**로
+   * 물어 드러났다 (2026-09-21).
+   *
+   * **⭐ 서버는 이미 `highlights` 를 보내고 있었다** — 받아서 그릴 자리가 없었을 뿐이다.
+   */
+  쓴것: { text: string; highlights: readonly Highlight[] } | null;
 };
 
 export default function ChapterPage() {
@@ -95,6 +108,11 @@ export default function ChapterPage() {
   const [첫안내, set첫안내] = useAdventureState("/chapter", "first", true);
   const [소개끝, set소개끝] = useAdventureState("/chapter", "introductionEnded", false);
   const [처음연출건너뜀, set처음연출건너뜀] = useState(restored && 소개끝);
+  /**
+   * **되묻기가 올 때마다 올린다.** 입력칸이 이 값을 보고 초점을 잡고 커서를 글 맨 뒤에 놓는다.
+   * **횟수를 세는 것이 아니라 「또 왔다」를 알리는 것**이라 같은 값이 두 번 오면 안 된다.
+   */
+  const [이어쓰기신호, set이어쓰기신호] = useState(0);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const submitting = useRef(false);
   const 시작했다 = useRef(false);
@@ -136,6 +154,8 @@ export default function ChapterPage() {
           // **첫 화면에는 직전이 없다.** 1턴이 핵심 씬이라 보통 여기서 온다.
           artwork: 액자에둘것(null, v.artwork),
           새삽화id: null,
+          // 서버는 아이 문장을 안 돌려준다. 이어 들어온 판에서는 비어 있는 게 맞다.
+          쓴것: null,
         },
       });
     };
@@ -195,6 +215,9 @@ export default function ChapterPage() {
         setText("");
         set첫안내(false);
       }
+      // **되묻기는 이어 쓰라는 말이다** (`MVP_PRD.md` 4.4). 글은 그대로 두고
+      // **커서만 맨 뒤로** 보낸다 — 칸을 비우면 「다시 써」를 동작으로 말하는 것이 된다.
+      if (r.outcome === "scaffold") set이어쓰기신호((앞) => 앞 + 1);
       // 책에서 돌아온 현재 장면만 건너뛴다. 새 턴은 같은 타자기 순서로 읽힌다.
       set처음연출건너뜀(false);
 
@@ -209,6 +232,9 @@ export default function ChapterPage() {
           // **⛔ 여덟 턴은 `artwork` 가 없다. 비우지 않는다.**
           artwork: 액자에둘것(view.artwork, r.artwork),
           새삽화id: r.artwork?.artwork_id ?? null,
+          // **되묻기·차단은 갈아 끼우지 않는다** — 그때 아이 글은 입력칸에 그대로 남아 있고,
+          // 같은 문장이 위아래에 두 번 서면 무엇을 고치라는 말인지 흐려진다.
+          쓴것: r.outcome === "result" ? { text, highlights: r.highlights ?? [] } : view.쓴것,
         },
       });
     } catch (e) {
@@ -286,6 +312,10 @@ export default function ChapterPage() {
             </div>
           )}
           <div ref={이야기칸} className="game-story chapter-story" tabIndex={-1}>
+            {/* **내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.** 읽는 순서가 곧 인과다 —
+                카드 결과 화면이 아이 문장과 그림을 나란히 두는 것과 같은 이유이고,
+                본편에만 그 자리가 없었다. 묘사어 표시(`highlights`)도 같이 온다. */}
+            {view.쓴것 && <WrittenLine text={view.쓴것.text} highlights={view.쓴것.highlights} />}
             {view.narrative && <SceneCard card={{ situation: view.narrative }} narrativeClassName="chapter-narrative" />}
           </div>
         </div>
@@ -299,7 +329,9 @@ export default function ChapterPage() {
 
       {/* 글쓰기 영역은 동료와 분리하고, 튜토리얼의 공통 콘솔을 재사용한다. */}
       <div ref={쓰는곳} className="game-console chapter-console">
-        <p data-chapter-structure-guide className="chapter-writing-guide">{챕터구조안내}</p>
+        <div data-chapter-structure-guide className="chapter-writing-guide">
+          {챕터구조안내.map((줄) => <p key={줄}>{줄}</p>)}
+        </div>
         <div className="game-response">
           <div className="game-response__content chapter-controls" aria-busy={보내는중}>
             <AttemptInput
@@ -317,6 +349,7 @@ export default function ChapterPage() {
               보내기라벨={보내는중 ? 챕터보내는중라벨 : 챕터보내기라벨}
               disabled={보내는중}
               showCompass={false}
+              이어쓰기신호={이어쓰기신호}
             />
 
             {sendError && (
@@ -404,8 +437,14 @@ function ChapterArtwork({ 참조, 새그림 }: { 참조: ArtworkRef; 새그림: 
       상태={상태}
       waitingContent={새그림 ? <p>중요한 순간이야! 네 글로 그림을 만들고 있어.</p> : undefined}
     />
-    {새그림 && 상태.kind === "떴다" && 상태.fallback === false && (
-      <p data-chapter-artwork-ready role="status" className="chapter-artwork-notice">새로운 그림이 완성됐어!</p>
-    )}
+    {/* **「새로운 그림이 완성됐어!」를 내렸다** (2026-09-21 사용자 판정).
+        **그림이 오는 것 자체가 그 말이다** — 「중요한 순간이야! 네 글로 그림을 만들고 있어.」가
+        **액자 안에** 있다가 **그림으로 덮이므로**, 말이 그림으로 바뀌는 것으로 이미 닫힌다.
+        한 번 더 말하는 것은 **끝난 이야기를 되풀이하는 것**이고, 액자 밖 좁은 칸에 걸려
+        **자리도 어정쩡했다.**
+        ⚠ 잃는 것 — 기본 에셋으로 대체됐을 때는 안 뜨던 줄이라, **「진짜 내 글로 만든 그림」과
+        「기본 그림」을 화면에서 가를 표시가 없어진다.** 다만 `문구.md` 1.18b 가 그 줄에 건 조건은
+        **「기본 삽화가 성공한 것처럼 말하지 않는다」**로 **거짓말을 막는 쪽**이었고,
+        **아무 말도 안 하면 거짓말도 아니다.** */}
   </>;
 }

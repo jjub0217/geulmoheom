@@ -243,6 +243,17 @@ test("되묻기도 아이 글을 지우지 않는다 — 고쳐 쓰라는 말이
 
   await expect(page.getByText(되묻기.guide!.line)).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveValue(문장);
+
+  // **손끝에 「여기서부터 이어 쓰면 된다」가 전달돼야 한다** (2026-09-21 사용자 요청).
+  // 되묻기 틀 넷 중 셋이 **보태라는 말**인데(`MVP_PRD.md` 4.4), 화면이 그 말을 안 해서
+  // 아이는 **「새 질문 + 이미 차 있는 칸」**으로 읽고 지우고 다시 썼다.
+  // **⛔ 칸을 비우는 쪽으로 풀지 않았다** — 4.4 가 「다시 써」를 금지어로 박아 뒀고,
+  // 비우는 것은 그 말을 **동작으로** 하는 것이다. 초점과 커서로만 말한다.
+  await expect(page.getByRole("textbox")).toBeFocused();
+  const 커서 = await page.getByRole("textbox").evaluate(
+    (칸) => [(칸 as HTMLTextAreaElement).selectionStart, (칸 as HTMLTextAreaElement).selectionEnd],
+  );
+  expect(커서, "커서가 쓴 글 맨 뒤에 있어야 한다").toEqual([문장.length, 문장.length]);
 });
 
 /**

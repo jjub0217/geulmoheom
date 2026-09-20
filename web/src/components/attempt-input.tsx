@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CompassGlow } from "@/components/compass-glow";
 import { useCompassIntroduction } from "@/components/compass-introduction";
@@ -61,6 +61,7 @@ export function AttemptInput({
   안내글,
   disabled = false,
   showCompass = true,
+  이어쓰기신호,
 }: {
   label: string;
   value: string;
@@ -83,6 +84,19 @@ export function AttemptInput({
   disabled?: boolean;
   /** 게임 무대에서는 입력창이 열리기 전에 상위 대화창이 나침반을 소개한다. */
   showCompass?: boolean;
+  /**
+   * **값이 바뀌면 입력칸에 초점을 주고 커서를 글 맨 뒤에 놓는다.** 되묻기가 왔을 때 쓴다.
+   *
+   * **⛔ 칸을 비우지 않는 것이 설계다** — `MVP_PRD.md` **4.4** 의 되묻기 틀 넷 중 셋이
+   * **보태라는 말**이다(「조금만 더 말해줄래?」·「뭐가 보이고 들리는지 알려줘」). 그런데
+   * **화면이 그 말을 안 해서** 아이 눈에는 **「새 질문 + 이미 차 있는 칸」**으로 보였고,
+   * **지우고 새로 쓰는 것이 자연스러운 반응**이 됐다.
+   *
+   * **⛔ 비우는 쪽으로 풀지 않는다.** 4.4 가 **「다시 써」를 금지어로** 박아 뒀는데
+   * **칸을 비우면 그 말을 동작으로 하는 것**이다. 말로 안 하기로 한 것을 동작으로 하면 같다.
+   * **커서를 끝에 두어 「여기서부터 이어 쓰면 된다」를 손끝으로 말한다.**
+   */
+  이어쓰기신호?: number;
 }) {
   const introduction = useCompassIntroduction();
   const 입력창 = useRef<HTMLTextAreaElement>(null);
@@ -95,6 +109,27 @@ export function AttemptInput({
   /** 치환 뒤 커서를 되돌릴 자리. 값이 바뀐 **다음**에 놓아야 해서 렌더를 한 번 건너뛴다. */
   const 되돌릴커서 = useRef<number | null>(null);
   const [안내, set안내] = useState<string | null>(null);
+
+  /**
+   * **처음 뜰 때는 초점을 가져가지 않는다.** 종전에는 신호가 `0` 으로 시작하는 것도
+   * 「바뀌었다」로 쳐서 **화면이 열리자마자 입력칸이 초점을 뺏었다** — 읽는 칸과 동료가
+   * 가져가야 할 초점이었고, **검사 4건이 그것을 잡았다**(2026-09-21).
+   * **바뀐 순간에만** 움직이도록 직전 값을 들고 비교한다.
+   */
+  const 지난신호 = useRef(이어쓰기신호);
+
+  useEffect(() => {
+    if (이어쓰기신호 === undefined) return;
+    if (지난신호.current === 이어쓰기신호) return;
+    지난신호.current = 이어쓰기신호;
+    const 칸 = 입력창.current;
+    if (칸 === null || disabled) return;
+    // **한글 조합 중에는 손대지 않는다.** 커서를 옮기면 조합이 깨진다 — 위 `조합중` 과 같은 이유다.
+    if (조합중.current) return;
+    칸.focus();
+    const 끝 = 칸.value.length;
+    칸.setSelectionRange(끝, 끝);
+  }, [이어쓰기신호, disabled]);
 
   // 값이 화면에 반영된 **직후** 커서를 놓는다. `useEffect` 로 하면 한 프레임 동안
   // 커서가 맨 끝에 가 있는 것이 보인다.
