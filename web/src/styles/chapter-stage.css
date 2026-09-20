@@ -5,9 +5,6 @@
   min-height: 100dvh;
 }
 .chapter-stage { min-height: 100dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
-.chapter-world .activity-marker--chapter { display: flex; align-items: center; gap: 0.55rem; align-self: center; }
-.chapter-world .activity-marker--chapter h1, .chapter-world .activity-marker--chapter p { margin: 0; font: inherit; }
-.chapter-world .activity-marker--chapter p { font-family: var(--font-sans); font-size: 0.82rem; }
 .chapter-toolbar .book-link {
   padding: 0.5rem 1rem;
   border: 2px solid var(--color-brass);
@@ -16,6 +13,8 @@
 }
 
 /* 긴 본편 글은 이야기 안에서 스크롤한다. 시작선·폭·종이는 공통 game-story를 따른다. */
+/* 높이는 그대로 둔다 (2026-09-20 사용자 판정 — 칸을 늘리지 않고 스크롤로 푼다).
+   ⛔ 늘리면 쓰는 칸이 첫 화면에서 밀린다 — W6 에서 아이 셋이 다 못 찾은 그 자리다. */
 .chapter-stage .chapter-reading {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -45,13 +44,19 @@
   width: 100%;
   max-height: clamp(8rem, 28svh, 20rem);
   min-height: 0;
+  /* ⛔ 스크롤은 원래 됐다. 안 보였을 뿐이다 (2026-09-20).
+     아이는 **마지막 줄이 반만 보이는 것**을 「더 있다」가 아니라 「잘렸다」로 읽는다.
+     그래서 둘을 준다 — **자리를 늘 비워 두는 스크롤 막대**와 **아래 끝 흐림**.
+     흐림이 「여기서 끝이 아니다」를 말하고, 막대가 얼마나 남았는지를 말한다. */
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.75rem), transparent 100%);
   outline-offset: -4px;
 }
 .chapter-stage .chapter-narrative {
   margin: 0;
-  font-family: var(--font-reading);
-  font-size: var(--type-reading-desktop);
+  font-family: var(--font-companion);
+  font-size: var(--type-scene-desktop);
   line-height: var(--leading-chapter);
   white-space: pre-wrap;
 }
@@ -85,7 +90,7 @@
 }
 .chapter-companion-line:focus-visible { outline: 2px solid var(--color-brass); }
 .chapter-companion-line p { margin: 0; font-size: inherit; line-height: inherit; opacity: 1; }
-.chapter-companion-line [data-읽는중] { font-family: var(--font-sans); }
+.chapter-companion-line [data-읽는중] { font-family: var(--font-companion); }
 .chapter-console { animation: none; }
 .chapter-writing-guide {
   width: min(100%, 46rem);
@@ -106,7 +111,7 @@
   border-radius: 1rem;
   background: var(--surface);
   font-family: var(--font-reading);
-  font-size: var(--type-reading-desktop);
+  font-size: var(--type-scene-desktop);
   line-height: var(--leading-chapter);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -169,11 +174,12 @@
   .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); }
   .chapter-stage .chapter-reading:has(.chapter-story:empty) { grid-template-columns: minmax(0, 1fr); }
   .chapter-stage .chapter-narrative,
-  .chapter-ending-narrative,
+  .chapter-ending-narrative { font-size: var(--type-scene-mobile); }
   .chapter-writing-guide { font-size: var(--type-reading-mobile); }
   .chapter-writing-guide { margin-bottom: 0.5rem; }
   .chapter-companion-line { max-height: 4.5rem; }
-  .chapter-console .writing-field { min-height: 3rem; height: 3rem; }
+  /* 본편은 한두 단어보다 다음 행동을 문장으로 쓰는 자리다. 17px·1.7 행간에서 세 줄을 볼 수 있게 한다. */
+  .chapter-console .writing-field { min-height: 7rem; height: 7rem; }
   .chapter-console .tier-badge-writing-intro { position: relative; gap: 0.25rem; max-height: none; overflow: visible; margin-bottom: 0.5rem; padding: 0.5rem 0.625rem 0.125rem; font-size: 0.875rem; line-height: 1.5; }
   .chapter-console .tier-badge-writing-heading { gap: 0.25rem 0.5rem; }
   .chapter-console .tier-badge-writing-heading h2 { font-size: 0.875rem; }

@@ -91,12 +91,6 @@
   pointer-events: none;
 }
 
-.tier-badge.tier-badge-button .tier-badge-help-icon {
-  flex: none;
-  width: 0.75rem;
-  height: 0.75rem;
-}
-
 .tier-badge-button:focus-visible,
 .tier-badge-introduction button:focus-visible,
 .tier-badge-writing-intro button:focus-visible,
@@ -290,7 +284,6 @@
   .tier-badge-tooltip,
   .tier-badge-introduction,
   .tier-badge-writing-intro,
-  .tier-badge.tier-badge-button .tier-badge-help-icon,
   .tier-badge-dialog {
     display: none !important;
   }

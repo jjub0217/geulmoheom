@@ -107,6 +107,13 @@
   --font-companion: "Galmuri11", var(--font-sans);
   --type-reading-mobile: 1.0625rem;
   --type-reading-desktop: 1.125rem;
+  /* 장면 대사(GM 서사)만 따로 잡는다 (2026-09-20 사용자 지시). 읽기 토큰을 그대로 키우면
+     쓰는 칸·결과 화면의 아이 문장까지 같이 커져, 물어본 것보다 넓게 바뀐다.
+     ⛔ 동료 대사보다 커야 한다 — 이 화면에서 아이가 읽는 본문이 장면 대사이고
+     동료 대사는 곁말이다. 아래 --type-companion-* 보다 항상 큰 값을 유지한다.
+     ⛔ "/" 와 "/chapter" 가 같은 토큰을 본다. 한쪽만 고치면 두 화면이 갈린다. */
+  --type-scene-mobile: 1.25rem;
+  --type-scene-desktop: 1.5rem;
   --leading-scene: 1.72;
   --leading-chapter: 1.7;
   --leading-child-writing: 1.7;
@@ -256,9 +263,14 @@ body {
   }
 
   .action-secondary {
+    --control-hover: color-mix(in srgb, var(--surface) 88%, var(--color-brass));
     background: var(--surface);
     border-color: var(--border-strong);
     color: var(--foreground);
+  }
+
+  .action-secondary:hover:not(:disabled) {
+    border-color: var(--color-brass);
   }
 
   .action-quiet {

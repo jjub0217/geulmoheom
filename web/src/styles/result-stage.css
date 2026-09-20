@@ -471,6 +471,12 @@
   .game-shell--result > .game-stage-footer { padding-block: 0.25rem; }
 }
 
+/* 320px 폭에서는 두 긴 행동명이 한 줄에 놓일 자리가 없다. 터치 영역을 줄이지 않고 세로로 둔다. */
+@media (max-width: 360px) and (orientation: portrait) {
+  .result-stage .result-actions { grid-template-columns: minmax(0, 1fr); }
+  .result-stage .result-actions .book-link { grid-column: auto; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .result-reading { animation: none; }
 }

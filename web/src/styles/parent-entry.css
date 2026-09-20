@@ -141,6 +141,86 @@
   line-height: 1.75;
 }
 
+/* 가입 뒤의 자녀 관리도 가입 화면과 같은 밝은 종이 위에 둔다.
+   이 범위에서만 색 토큰을 고정해 OS 다크 모드가 학부모 화면을 어둡게 바꾸지 않는다. */
+.parent-dashboard-page {
+  --foreground: #2b4a6f;
+  --muted: #68736f;
+  --border: #d9cbb6;
+  --border-strong: #b6aa95;
+  --surface: #fffbf3;
+  --surface-raised: #fffefb;
+  --surface-muted: #f2ecdf;
+  --accent: #2b4a6f;
+  --button-bg: #2b4a6f;
+  --button-fg: #fffaf0;
+  --button-hover: #345d81;
+  width: 100%;
+  max-width: none;
+  padding: clamp(1.5rem, 4vw, 3.5rem) max(1rem, env(safe-area-inset-right, 0px))
+    max(1.5rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+  background: linear-gradient(110deg, rgb(246 239 224 / 95%), rgb(252 248 239 / 94%)),
+    url("/adventure/kraft-paper.jpg") center / cover;
+  color: var(--foreground);
+  color-scheme: light;
+}
+
+.parent-dashboard-page .account-dashboard {
+  width: min(100%, 74rem);
+  margin-inline: auto;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: rgb(255 251 243 / 92%);
+  box-shadow: 0 18px 56px -28px rgb(73 57 32 / 28%), 0 2px 4px rgb(73 57 32 / 3%);
+}
+
+.parent-dashboard-page .account-dashboard-heading { padding-bottom: 1.5rem; }
+.parent-dashboard-page .account-dashboard-heading::before { display: none; }
+.parent-dashboard-page .account-dashboard-heading h1 {
+  font-size: clamp(1.75rem, 3vw, 2.375rem);
+  font-weight: 650;
+}
+.parent-dashboard-page .child-card,
+.parent-dashboard-page .child-create-form {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+.parent-dashboard-page .children-list-frame {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1rem;
+  border-color: var(--border);
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+.parent-dashboard-page .children-list-frame .child-card {
+  padding: 1.25rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.parent-dashboard-page .children-list-frame .children-list { gap: 1.5rem; }
+.parent-dashboard-page .child-delete {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  border-color: color-mix(in srgb, var(--color-vest) 52%, var(--border));
+  color: var(--color-vest);
+}
+.parent-dashboard-page .access-code-panel { background: #fff8ea; }
+.parent-dashboard-page .children-layout--empty {
+  grid-template-columns: minmax(0, 34rem);
+  justify-content: center;
+}
+.parent-dashboard-page .children-layout--empty .child-create-form { margin: 0; }
+
+@media (max-width: 40rem) {
+  .parent-dashboard-page { padding: 1rem; }
+  .parent-dashboard-page .account-dashboard { padding: 1.25rem; border-radius: 1.125rem; }
+}
+
 @media (min-width: 901px) {
   .account-entry--signup .entry-grid {
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.3fr);

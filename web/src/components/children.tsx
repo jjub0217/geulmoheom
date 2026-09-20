@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import {
@@ -25,7 +25,6 @@ import {
   재발급,
   접속코드,
   지우기,
-  하루상한,
 } from "./children-copy";
 
 type ParentMe = components["schemas"]["ParentMe"];
@@ -240,16 +239,18 @@ export function ChildrenPanel() {
     await 목록불러오기();
   };
 
+  const 아이가있다 = children !== null && children.length > 0;
+  const 첫아이를만든다 = children !== null && children.length === 0;
+
   return (
-    <section className="children-layout">
-      <div className="children-list-section">
-        <h2 className="account-section-title">{목록.제목}</h2>
+    <section className={`children-layout${첫아이를만든다 ? " children-layout--empty" : ""}`}>
+      {(아이가있다 || 목록실패 !== null) && (
+        <div className="account-card children-list-frame">
+          <h2 className="account-section-title">{목록.제목}</h2>
 
-        {목록실패 !== null && <p data-목록실패>{목록실패}</p>}
+        {목록실패 !== null && <p data-목록실패 role="alert" className="account-feedback">{목록실패}</p>}
 
-        {children !== null && children.length === 0 && <p className="children-empty">{목록.비었을때}</p>}
-
-        {children !== null && children.length > 0 && (
+        {아이가있다 && (
           <ul className="children-list">
             {children.map((아이) => (
               <li
@@ -258,17 +259,13 @@ export function ChildrenPanel() {
                 className="child-card"
               >
                 <div className="child-summary">
-                  <strong className="child-name">{아이.nickname}</strong>
-                  <span className="child-age">
-                    {나이선택.find((n) => n.값 === 아이.age_band)?.글자}
-                  </span>
-                  {/* **개수가 아니라 「했다/아직」이다** — 계약에 개수가 없고,
-                      부모가 보려는 것도 오늘 아이가 이걸 했는지다. */}
-                  <span data-오늘 className="child-status">
-                    {아이.played_today ? 목록.오늘썼다 : 목록.오늘아직}
-                  </span>
-                  {/* **상한은 말하지 않으면 없는 것과 같다.** 학부모의 핵심 불안이 도파민이다. */}
-                  <span className="child-limit">{하루상한(아이.daily_cap)}</span>
+                  <p className="child-identity">
+                    <strong className="child-name">{아이.nickname}</strong>
+                    <span aria-hidden="true"> · </span>
+                    <span className="child-age">
+                      {나이선택.find((n) => n.값 === 아이.age_band)?.글자}
+                    </span>
+                  </p>
                 </div>
 
                 {/* **경고가 버튼 옆이다. 누른 뒤가 아니다** (`문구.md` 3.4) —
@@ -276,6 +273,7 @@ export function ChildrenPanel() {
                     **되돌릴 수 없는 실수가 이제 둘이고 장치가 다르다**(3.9) — 이건 버튼 옆
                     한 줄이고 아래 지우기는 창이다. **끊기는 것이 기기냐 책이냐**로 갈렸다. */}
                 <div className="child-access-actions">
+                  <h3 className="child-access-title">{재발급.제목}</h3>
                   <p className="account-description">{재발급.경고}</p>
                   <button
                     type="button"
@@ -297,30 +295,33 @@ export function ChildrenPanel() {
                     **둘을 같은 굵기로 두면 무거운 쪽이 가벼워 보인다.**
                     버튼이 맨 글자인 것은 나가기(2.3)와 같은 이유다 — 자리로 조용하게 두되
                     **글자를 작게 만들지 않는다**(본문 16px 이상이 MUST). */}
-                <button
-                  type="button"
-                  data-지우기
-                  onClick={() => {
-                    // 지난번 「지웠어요」가 남아 있으면 지운다 — 다음 아이를 지우려는데
-                    // 앞 아이의 완료 문장이 떠 있으면 **무엇이 방금 일어난 것인지 갈린다.**
-                    set지웠다(null);
-                    void 지우기전에확인(아이);
-                  }}
-                  className="pressable action-quiet child-delete"
-                >
-                  {지우기.버튼}
-                </button>
+                <div className="child-danger-actions">
+                  <button
+                    type="button"
+                    data-지우기
+                    onClick={() => {
+                      // 지난번 「지웠어요」가 남아 있으면 지운다 — 다음 아이를 지우려는데
+                      // 앞 아이의 완료 문장이 떠 있으면 **무엇이 방금 일어난 것인지 갈린다.**
+                      set지웠다(null);
+                      void 지우기전에확인(아이);
+                    }}
+                    className="pressable action-secondary child-delete"
+                  >
+                    {지우기.버튼}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
 
-        {재발급실패 !== null && <p data-재발급실패>{재발급실패}</p>}
+        {재발급실패 !== null && <p data-재발급실패 role="alert" className="account-feedback">{재발급실패}</p>}
 
         {/* **지운 뒤에 한 줄 말한다.** 목록에서 사라지는 것만으로는 성공과 실패가
             구분되지 않는다 — 못 닿아서 안 지워진 것도 화면에서는 비슷하게 보인다. */}
-        {지웠다 !== null && <p data-지웠다>{지웠다}</p>}
-      </div>
+        {지웠다 !== null && <p data-지웠다 role="status" className="account-feedback">{지웠다}</p>}
+        </div>
+      )}
 
       <form
         className="account-card child-create-form"
@@ -331,12 +332,8 @@ export function ChildrenPanel() {
       >
         <div className="child-create-heading">
           <h2 className="account-section-title">{만들기.제목}</h2>
-          {/* **넣기 전에 알린다.** 서버가 걸러내지만 거절당한 뒤에 아는 것보다 낫고,
-              학부모의 불안은 「거절」이 아니라 **「어디에 남나」**다.
-              **두 문장을 한 `<p>` 에 넣지 않는다** — 「실제 이름도 괜찮습니다」와
-              「걸러집니다」가 붙으면 실명도 걸러지는 것으로 읽힌다 (`children-copy.ts` 주석). */}
+          {/* 이름을 실제 이름과 별명 중 무엇으로 할지, 입력 전에 부모가 고를 수 있게 한다. */}
           <p className="account-description">{만들기.안내}</p>
-          <p className="account-description">{만들기.걸러지는것}</p>
         </div>
 
         <label className="account-field">
@@ -369,7 +366,7 @@ export function ChildrenPanel() {
           </select>
         </label>
 
-        {만들기실패 !== null && <p data-만들기실패>{만들기실패}</p>}
+        {만들기실패 !== null && <p data-만들기실패 role="alert" className="account-feedback">{만들기실패}</p>}
 
         <button
           type="submit"
@@ -407,13 +404,13 @@ export function ChildrenPanel() {
 function AccessCodePanel({ 코드 }: { 코드: 발급된코드 }) {
   return (
     <div data-접속코드 className="access-code-panel">
-      <p className="font-semibold">{접속코드.제목}</p>
+      <p className="access-code-title">{접속코드.제목}</p>
       {/* 숫자는 **띄어 읽을 수 있게** 자간을 준다 — 학부모가 아이에게 불러준다. */}
       <p className="access-code-value">{코드.code}</p>
       {/* **본 그 순간에 말한다.** 나중에 다시 열어보려 하는 것이 실제 실패 모드다. */}
-      <p>{접속코드.한번만}</p>
+      <p className="access-code-validity">{접속코드.한번만}</p>
       {/* 아이 화면(3.2)이 막아주지만 **먼저 알면 아이가 그 벽을 안 만난다.** */}
-      <p>{접속코드.같은주소}</p>
+      <p className="access-code-instruction">{접속코드.같은주소}</p>
     </div>
   );
 }
@@ -443,6 +440,7 @@ function DeleteChildDialog({
 }) {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
+  const 제목id = useId();
   const [지우는중, set지우는중] = useState(false);
   const [실패, set실패] = useState<string | null>(null);
 
@@ -485,13 +483,14 @@ function DeleteChildDialog({
     <dialog
       ref={dialog}
       data-삭제확인
+      aria-labelledby={제목id}
       // `Esc` 와 「그대로 두기」가 둘 다 여기로 온다. **닫히는 방향이 안전한 쪽**이다.
       onClose={닫기}
       className="account-dialog"
     >
       <div className="flex flex-col gap-5">
         {/* **별명을 제목에 넣는다** — 자녀가 여럿일 때 목록 위치로만 구분되면 잘못 누른다. */}
-        <h2 className="account-section-title">{지우기.제목(아이.nickname)}</h2>
+        <h2 id={제목id} className="account-section-title">{지우기.제목(아이.nickname)}</h2>
 
         <div className="flex flex-col gap-2">
           {/* **무엇이 사라지는지 세어서 말한다** — 서버가 문장·그림·책·기록을 함께 지운다. */}
@@ -500,7 +499,7 @@ function DeleteChildDialog({
           <p className="account-description">{지우기.기기도}</p>
         </div>
 
-        {실패 !== null && <p data-삭제실패>{실패}</p>}
+        {실패 !== null && <p data-삭제실패 role="alert" className="account-feedback">{실패}</p>}
 
         {/* **머무는 쪽이 DOM 에서 먼저다.** `<dialog>` 가 첫 포커스 가능 요소에 포커스를 주므로
             **되돌릴 수 없는 쪽에 포커스가 앉지 않는다.** */}

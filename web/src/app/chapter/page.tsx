@@ -8,9 +8,12 @@ import { ArtworkFrame } from "@/components/artwork";
 import { AttemptInput } from "@/components/attempt-input";
 import { BookLink } from "@/components/book-link";
 import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession } from "@/components/book-journey";
-import { ChapterCompanion, chapterErrorGuide } from "@/components/chapter-companion";
+import { LeaveButton } from "@/components/leave";
+import { ChapterCompanion, chapterErrorGuide, chapterGuide } from "@/components/chapter-companion";
 import { 챕터구조안내, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
+import { CompassIntroduction } from "@/components/compass-introduction";
 import { GuideFigure } from "@/components/guide";
+import { SceneCard } from "@/components/scene-card";
 import { TierBadgeWritingIntroduction } from "@/components/tier-badge-writing-intro";
 import { 턴문구 } from "@/components/turn-copy";
 import { ApiError, apiGet, apiPost, 인증이풀렸다, 역할이다르다 } from "@/lib/api";
@@ -26,6 +29,7 @@ type ChapterView = components["schemas"]["ChapterView"];
 type TurnResult = components["schemas"]["TurnResult"];
 type ArtworkRef = components["schemas"]["ArtworkRef"];
 type Guide = components["schemas"]["Guide"];
+type ChildMe = components["schemas"]["ChildMe"];
 
 function chapterClosure(error: unknown): { guide: Guide | null; line: string | null } | null {
   if (!(error instanceof ApiError)) return null;
@@ -91,6 +95,7 @@ export default function ChapterPage() {
   const [sendError, setSendError] = useAdventureState<string | null>("/chapter", "sendError", null);
   const [첫안내, set첫안내] = useAdventureState("/chapter", "first", true);
   const [소개끝, set소개끝] = useAdventureState("/chapter", "introductionEnded", false);
+  const [처음연출건너뜀, set처음연출건너뜀] = useState(restored && 소개끝);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const submitting = useRef(false);
   const 시작했다 = useRef(false);
@@ -191,6 +196,8 @@ export default function ChapterPage() {
         setText("");
         set첫안내(false);
       }
+      // 책에서 돌아온 현재 장면만 건너뛴다. 새 턴은 같은 타자기 순서로 읽힌다.
+      set처음연출건너뜀(false);
 
       새이야기로.current = true;
       새동료말로.current = r.outcome !== "result";
@@ -258,17 +265,20 @@ export default function ChapterPage() {
 
   const view = screen.view;
   const 보내는중 = screen.kind === "sending";
+  const 안내가이드 = chapterGuide(view.guide, 첫안내);
 
   return (
     /* 튜토리얼과 같은 장면 → 동료 → 글쓰기 순서다.
        긴 서사는 읽기 영역에서 넘기고, 첫 배지 안내가 열리면 문서도 자연스럽게 늘어난다.
        고정 높이에 모두 압축해 동료나 입력을 가리지 않는다. */
-    <BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중}>
+    <CompassIntroduction
+      guide={안내가이드}
+      situation={view.narrative ?? ""}
+      cardId={view.chapterId}
+      skipOpening={처음연출건너뜀}
+    ><BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중}>
       {/* 장면과 동료는 튜토리얼과 같은 숲 위에 남는다. */}
       <div className="game-stage__world chapter-world">
-        <header data-활동이름 className="activity-marker activity-marker--chapter">
-          <h1>이어지는 모험</h1><p>모험 진행 중</p>
-        </header>
         <div className="chapter-reading">
           {/* 삽화가 있는 장면만 액자를 보인다. 빈 상자를 만들지 않는다. */}
           {view.artwork && (
@@ -277,15 +287,13 @@ export default function ChapterPage() {
             </div>
           )}
           <div ref={이야기칸} className="game-story chapter-story" tabIndex={-1}>
-            {view.narrative && <p className="scene-narrative chapter-narrative">{view.narrative}</p>}
+            {view.narrative && <SceneCard card={{ situation: view.narrative }} narrativeClassName="chapter-narrative" />}
           </div>
         </div>
         <ChapterCompanion
-          guide={view.guide}
+          guide={안내가이드}
           length={text.length}
           sending={보내는중}
-          first={첫안내}
-          introductionEnded={소개끝}
           messageRef={동료말칸}
         />
       </div>
@@ -321,7 +329,7 @@ export default function ChapterPage() {
           </div>
         </div>
       </div>
-    </ChapterStage></BookOrigin>
+    </ChapterStage></BookOrigin></CompassIntroduction>
   );
 }
 
@@ -332,12 +340,50 @@ function ChapterStage({ children, done = false, status = false, bookDisabled = f
   status?: boolean;
   bookDisabled?: boolean;
 }) {
+  /* **이름은 "/" 와 같은 방법으로 받는다** — `GET /child/me`, 실패는 삼킨다.
+     **이름을 모르는 것과 못 들어온 것은 다르다**(`app/page.tsx` 같은 자리). */
+  const [이름, set이름] = useAdventureState<string | null>("/chapter", "name", null);
+  useEffect(() => {
+    let alive = true;
+    apiGet<ChildMe>("/child/me")
+      .then((me) => {
+        if (alive) set이름(me.nickname);
+      })
+      .catch(() => {
+        // 삼킨다. 이름이 없어도 모험이 막히면 안 된다.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [set이름]);
+
   return (
     <div className={`game-shell chapter-shell${done ? " game-shell--ending" : ""}`}>
       <main className={`game-stage chapter-stage${done ? " chapter-stage--done" : ""}${status ? " chapter-stage--status" : ""}`}>
-        {!done && !status && <header className="game-stage-header chapter-toolbar"><BookLink disabled={bookDisabled} /></header>}
+        {/* **"/" 와 같은 자리·같은 클래스다** (2026-09-20 사용자 지시 — 공통 요소는 두 화면이 같아야 한다).
+            종전에는 이 헤더가 **「내 책」 버튼**을 들고 있어 **이름이 들어갈 자리가 없었다.**
+            "/" 는 **헤더가 이름(오른쪽 위) · 툴바가 「내 책」(가운데 위)**이고, 여기만 달랐다. */}
+        {이름 !== null && (
+          <header className="game-stage-header">
+            <p data-탐험가이름 title={이름} className="text-sm text-[var(--muted)]">
+              {이름}
+            </p>
+          </header>
+        )}
+        {!done && !status && (
+          <div className="game-stage__toolbar">
+            <BookLink disabled={bookDisabled} />
+          </div>
+        )}
         {children}
       </main>
+      {/* **나가기는 `<main>` 밖이다** — "/" 가 그렇게 두고 `문구.md` **2.3** 이 정한 자리다.
+          **모험 한가운데서 나갈 길이 없던 것이 이 화면의 결함이었다.**
+          **완결·상태 화면에서도 그대로 둔다** — "/" 가 「들어온 뒤에는 상태를 안 가린다」로
+          정한 것과 같다. 오락가락하는 컨트롤이 오히려 눌러보게 만든다. */}
+      <footer className="game-stage-footer">
+        <LeaveButton />
+      </footer>
     </div>
   );
 }

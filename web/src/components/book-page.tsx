@@ -103,7 +103,7 @@ export function BookPageFrame({ page, startPageNumber }: { page: BookPage; start
 
       <div className="book-page-writing">
         <div className="book-page-tier">
-          <TierBadge tier={page.tier} helpPresentation="tooltip" />
+          <TierBadge tier={page.tier} />
         </div>
 
         {/* **아이가 쓴 그 문장이다.** 여기가 이 화면의 주인공이라 가장 크다. */}

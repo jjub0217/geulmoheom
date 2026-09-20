@@ -169,10 +169,9 @@ export default function ChildAuth() {
             </p>
           </div>
 
-          <div className="child-entry-ticket">
-            <label className="account-field child-entry-code">
-              <span className="field-label child-entry-code-label">{코드입력.라벨}</span>
-              <input
+          <label className="account-field child-entry-code">
+            <span className="field-label child-entry-code-label">{코드입력.라벨}</span>
+            <input
                 // `text` + `inputMode="numeric"` — `type="number"` 는 앞자리 0 을 흘리고
                 // 스피너가 붙는다. 6자리 코드는 **수가 아니라 글자**다.
                 type="text"
@@ -193,10 +192,9 @@ export default function ChildAuth() {
                 required
                 readOnly={보내는중}
                 spellCheck={false}
-                className="form-field account-code-input child-entry-code-input"
-              />
-            </label>
-          </div>
+              className="form-field account-code-input child-entry-code-input"
+            />
+          </label>
 
           {/* **서버가 준 문구다.** 화면이 지은 말이 아니고, 자리도 입력칸 곁이다 —
               무엇에 대한 말인지 아이가 찾지 않아도 되게. */}

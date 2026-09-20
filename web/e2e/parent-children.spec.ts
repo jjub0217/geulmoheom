@@ -10,7 +10,6 @@ import {
   재발급,
   접속코드,
   지우기,
-  하루상한,
 } from "../src/components/children-copy";
 import { 학부모오류문구, 폼 } from "../src/app/parents/signup/copy";
 import { 로그인 } from "../src/app/parents/login/copy";
@@ -61,11 +60,11 @@ async function 관리화면(page: Page, children: ChildSummary[]) {
 
 const 코드칸 = (page: Page) => page.locator("[data-접속코드]");
 
-test("아이가 없으면 없다고 말하고 추가하라고 한다", async ({ page }) => {
+test("첫 아이를 만들 때는 빈 목록 대신 아이 추가와 코드 받기를 먼저 보여 준다", async ({ page }) => {
   await 관리화면(page, []);
 
-  await expect(page.getByText(목록.비었을때)).toBeVisible();
-  // **빈 화면으로 두지 않는다.** 아무것도 없으면 학부모는 고장인지 빈 것인지 모른다.
+  await expect(page.getByText(폼.가입됨안내)).toBeVisible();
+  await expect(page.getByText(목록.제목)).toHaveCount(0);
   await expect(page.getByRole("button", { name: 만들기.버튼 })).toBeVisible();
 });
 
@@ -76,10 +75,7 @@ test("자녀 만들기 안내는 실제 이름도 된다고 말한다 — 별명
 
   const 화면 = await page.locator("main").innerText();
 
-  // **둘이 다 있어야 한다.** 위는 **된다**는 말이고 아래는 **안 되는 것**이라 하나만 남으면
-  // 고지가 반쪽이 된다 (`문구.md` 3.4).
   expect(화면).toContain(만들기.안내);
-  expect(화면).toContain(만들기.걸러지는것);
 
   // **⛔ 옛 안내가 돌아오면 마스킹을 꺼도 효과가 0 이다** (2026-09-10).
   // 화면이 「별명으로 지어주세요」라고 말하면 **학부모가 별명을 지어 주고 아이 이름은 책에 안 들어간다.**
@@ -87,28 +83,24 @@ test("자녀 만들기 안내는 실제 이름도 된다고 말한다 — 별명
   expect(화면).not.toContain("실명");
   expect(화면).not.toContain("별명으로 지어주세요");
 
-  // **입력칸 라벨은 아직 「별명」이고 이 안내와 어긋난다. 알고 두는 것이다** —
-  // 「작가명」 판정과 한 건으로 묶었다 (`문구.md` 3.4 「열린 자리」).
-  //
-  // **여기에 `getByLabel(만들기.별명)` 을 두지 않는다.** 기대값을 상수에서 읽으면
-  // 라벨을 「이름」으로 바꿔도 검사가 따라가 초록이다 — **축 ⑭ 가 잡으려는 그 모양**이고
-  // 2026-09-10 에 이 자리에서 실제로 한 번 세웠다가 뒤집기에서 걸렸다.
-  // **못 무는 단언은 없느니만 못하다** — 「검사가 덮고 있다」로 읽힌다. 그래서 주석만 남긴다.
+  // 안내와 입력칸 라벨은 모두 이름을 가리켜야 한다.
+  await expect(page.getByLabel("아이 이름")).toBeVisible();
 });
 
-test("목록은 오늘 썼는지와 하루 상한을 함께 보여준다", async ({ page }) => {
+test("목록은 아이 정보와 접속 코드 관리만 보여준다", async ({ page }) => {
   await 관리화면(page, [아이, { ...아이, child_id: "c-2222", nickname: "달빛", played_today: true }]);
 
-  await expect(page.getByText(아이.nickname)).toBeVisible();
-  // **개수가 아니라 「했다/아직」이다** — 계약에 개수가 없다(`played_today` 는 참/거짓).
-  await expect(page.locator("[data-오늘]").first()).toHaveText(목록.오늘아직);
-  await expect(page.locator("[data-오늘]").nth(1)).toHaveText(목록.오늘썼다);
+  await expect(page.locator("[data-자녀]").first()).toContainText(`${아이.nickname} · 만 11세`);
+  await expect(page.getByRole("heading", { name: 재발급.제목 })).toHaveCount(2);
 
-  // **상한은 말하지 않으면 없는 것과 같다.** 학부모의 핵심 불안이 도파민이다.
-  await expect(page.getByText(하루상한(아이.daily_cap)).first()).toBeVisible();
+  // `played_today` 와 `daily_cap` 은 접속 상태도, 부모가 이 화면에서 해야 할 일도 아니다.
+  // API가 코드 사용·만료·현재 로그인 상태를 주지 않으므로 화면은 상태를 추측하지 않는다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 숨길말 of ["오늘 이야기를 썼어요", "오늘은 아직 이야기를 쓰지 않았어요", "하루에 이야기를"]) {
+    expect(화면).not.toContain(숨길말);
+  }
 
   // **아이 화면 어휘가 여기 나오면 안 된다** (`용어사전.md` 9장).
-  const 화면 = await page.locator("main").innerText();
   for (const 금지어 of ["카드", "장면", "탐험가", "점수", "채점", "연습"]) {
     expect(화면).not.toContain(금지어);
   }
@@ -251,23 +243,14 @@ test("나이 선택지는 셋뿐이다 — 계약이 닫아 둔 것이다", asyn
   }
 });
 
-test("동의 시각을 기계 말로 내지 않는다", async ({ page }) => {
+test("동의 시각은 자녀 접속 관리 화면에 표시하지 않는다", async ({ page }) => {
   await 관리화면(page, []);
 
-  // **`문구.md` 6장.** 한때 이 자리에 `2026-09-08T01:00:00Z` 가 그대로 나갔다 —
-  // 문장은 3.6 에 등록돼 있었는데 **값의 형식이 어디에도 없었다.**
   const 화면 = await page.locator("main").innerText();
+  expect(화면).not.toContain("동의하신 날짜와 시간");
+  expect(화면).not.toContain("2026년 9월 8일");
   expect(화면).not.toContain("2026-09-08T01:00:00Z");
   expect(화면).not.toContain("Z");
-
-  // 로컬 시간으로 바뀐다 — 서버가 준 UTC 를 그대로 쓰면 아홉 시간 어긋난다.
-  const 같은순간 = new Date("2026-09-08T01:00:00Z");
-  await expect(
-    page.getByText(`${같은순간.getFullYear()}년 ${같은순간.getMonth() + 1}월 ${같은순간.getDate()}일`),
-  ).toBeVisible();
-
-  // **초를 안 보여준다.** 화면은 사람이 확인하는 자리다.
-  expect(화면).not.toMatch(/\d+초/);
 });
 
 /**

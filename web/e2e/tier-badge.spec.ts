@@ -246,9 +246,9 @@ test("첫 결과에서 배지 설명을 읽고 닫아도 짧은 안내를 확인
   await submitScene(page);
   await expect(page.locator("[data-배지첫안내]")).toBeVisible();
   const badge = page.locator("main button[data-티어배지]:visible");
-  await expect(badge.locator(".tier-badge-help-icon")).toBeVisible();
+  await expect(badge.locator(".tier-badge-help-icon")).toHaveCount(0);
   await badge.hover();
-  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(page.getByRole("tooltip")).toHaveText(배지안내.제목);
   await badge.click();
   const dialog = await checkDialog(page);
   await page.keyboard.press("Escape");

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import type { components } from "@/api/types.gen";
 import { useCompassIntroduction } from "@/components/compass-introduction";
@@ -33,13 +33,27 @@ function GuideText({ text, visible = text, caret = false }: { text: string; visi
  * (`docs/api/Stage0.md` 3절). 특히 `compass_bright`·`compass_dim` 은 **평가 결과**를 뜻하므로
  * 제출 전에는 어떤 이유로도 켜지 않는다 — 입력 중 화면은 `default` 를 넘긴다.
  */
-export function GuideFigure({ guide, stage = false, compass }: { guide: Guide; stage?: boolean; compass?: ReactNode }) {
+export function GuideFigure({
+  guide,
+  stage = false,
+  compass,
+  className = "",
+  messageRef,
+  messageClassName = "",
+}: {
+  guide: Guide;
+  stage?: boolean;
+  compass?: ReactNode;
+  className?: string;
+  messageRef?: Ref<HTMLDivElement>;
+  messageClassName?: string;
+}) {
   const introduction = useCompassIntroduction();
   const dialogue = introduction?.line === guide.line ? introduction : null;
   const speaking = dialogue !== null && dialogue.phase !== "narrative" && dialogue.phase !== "complete";
   const partial = dialogue !== null && dialogue.visible !== guide.line;
   return (
-    <figure className="guide-figure" data-guide-phase={dialogue?.phase}>
+    <figure className={`guide-figure${className ? ` ${className}` : ""}`} data-guide-phase={dialogue?.phase}>
       {stage && <span className="compass-source" data-compass-source aria-hidden="true" />}
       <Image
         // 무대용은 같은 표정의 투명 배경본이다. 서버가 고른 표정은 그대로 둔다.
@@ -64,7 +78,32 @@ export function GuideFigure({ guide, stage = false, compass }: { guide: Guide; s
       {/* 서버 문장은 그대로다. 소개 중에도 전체 높이를 미리 잡아 입력창이 밀리지 않는다.
           스크린리더에는 한 글자씩 알리지 않고 처음부터 전체 문장 하나를 제공한다. */}
       <figcaption className="guide-line">
-        {dialogue ? (
+        {messageRef ? (
+          <div ref={messageRef} className={messageClassName} tabIndex={-1}>
+            {dialogue ? (
+              <span
+                data-guide-dialogue
+                className={`guide-dialogue${speaking ? " pressable" : ""}`}
+                role={speaking ? "button" : undefined}
+                tabIndex={speaking ? 0 : undefined}
+                aria-label={speaking ? guide.line : undefined}
+                onClick={speaking ? dialogue.advance : undefined}
+                onKeyDown={speaking ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    dialogue.advance();
+                  }
+                } : undefined}
+              >
+                <span className="guide-dialogue-space" aria-hidden="true"><GuideText text={guide.line} visible="" /></span>
+                <span className="guide-dialogue-typed" data-guide-typed aria-hidden={partial ? true : undefined}>
+                  <GuideText text={guide.line} visible={dialogue.visible} caret={dialogue.phase === "prefix" || dialogue.phase === "rest"} />
+                </span>
+                {partial && <span className="sr-only">{guide.line}</span>}
+              </span>
+            ) : stage ? <GuideText text={guide.line} /> : guide.line}
+          </div>
+        ) : dialogue ? (
           <span
             data-guide-dialogue
             className={`guide-dialogue${speaking ? " pressable" : ""}`}

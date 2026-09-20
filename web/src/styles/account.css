@@ -258,10 +258,14 @@
 }
 
 .child-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.5rem 1rem;
+  min-width: 0;
+}
+
+.child-identity {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .child-name {
@@ -269,22 +273,17 @@
   letter-spacing: -0.03em;
 }
 
-.child-age,
-.child-limit {
+.child-age {
   color: var(--muted);
   font-size: 1rem;
+  white-space: nowrap;
 }
 
-.child-status {
-  justify-self: start;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.5rem;
-  background: var(--surface-muted);
+.child-access-title {
+  margin: 0;
+  color: var(--foreground);
   font-size: 1rem;
-}
-
-.child-limit {
-  grid-column: 1 / -1;
+  font-weight: 650;
 }
 
 .child-access-actions {
@@ -300,13 +299,21 @@
   align-self: flex-start;
 }
 
+/* 재발급과 달리 삭제는 되돌릴 수 없으므로, 같은 카드 안에서도 별도 행동 묶음으로 구분한다. */
+.child-danger-actions {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
 .child-create-form {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   padding: clamp(1.25rem, 2.5vw, 2rem);
-  background: var(--surface-muted);
-  box-shadow: none;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
 }
 
 .child-create-heading {
@@ -338,6 +345,25 @@
   font-weight: 650;
   line-height: 1.4;
   letter-spacing: 0.24em;
+}
+
+.access-code-title {
+  margin: 0;
+  color: var(--foreground);
+  font-weight: 650;
+}
+
+.access-code-validity {
+  margin: 0;
+  color: var(--foreground);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.access-code-instruction {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
 }
 
 .account-dialog {

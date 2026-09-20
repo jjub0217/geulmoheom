@@ -18,8 +18,6 @@ import {
 import { ChildrenPanel } from "@/components/children";
 import { AccountEntry } from "@/components/account-entry";
 
-import { 날짜시각 } from "@/lib/format";
-
 import { 아이입장으로보낼곳 } from "@/lib/parent-kicked";
 
 import { 상태표시 } from "@/app/status-copy";
@@ -54,7 +52,7 @@ type Screen =
   /** 로그아웃됨 — 가입 폼을 보여준다 */
   | { kind: "가입전" }
   /** 로그인됨 */
-  | { kind: "가입됨"; consentAt: string }
+  | { kind: "가입됨" }
   /** 서버가 형식을 갖춰 거절했다. 문구는 서버가 준 것을 그대로 쓴다 */
   | { kind: "거절"; line: string }
   /**
@@ -86,8 +84,8 @@ export default function ParentSignup() {
     let alive = true;
 
     apiGet<ParentMe>("/parents/me")
-      .then((me) => {
-        if (alive) setScreen({ kind: "가입됨", consentAt: me.consent_at });
+      .then(() => {
+        if (alive) setScreen({ kind: "가입됨" });
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -136,8 +134,8 @@ export default function ParentSignup() {
         // **별개 필드로 보낸다.** 위 동의에 딸려 보내지 않는다.
         labeling_consent: labelingConsent,
       };
-      const res = await apiPost<SignupResponse>("/parents/signup", body);
-      setScreen({ kind: "가입됨", consentAt: res.consent_at });
+      await apiPost<SignupResponse>("/parents/signup", body);
+      setScreen({ kind: "가입됨" });
     } catch (e) {
       if (e instanceof ApiError) {
         // **⛔ `code` 를 안 가린다. 모든 가입 실패에 같은 문장이다** (`문구.md` 3.6).
@@ -309,7 +307,7 @@ export default function ParentSignup() {
               {/* **자리가 버튼 곁이다** — 방금 누른 것에 대한 대답이라, 폼 위로 올리면
                   부모가 무엇 때문에 나온 말인지 찾아야 한다. 로그인 화면과 같은 규칙이다. */}
               {제출오류 !== null && (
-                <p data-오류 role="status" className="account-feedback">
+                <p data-오류 role="alert" className="account-feedback">
                   {제출오류}
                 </p>
               )}
@@ -335,6 +333,7 @@ export default function ParentSignup() {
         <div className="account-dashboard">
           <div className="account-heading account-dashboard-heading">
             <h1>{폼.가입됨}</h1>
+            <p className="account-description">{폼.가입됨안내}</p>
           </div>
 
           {/* **⛔ 자녀 관리가 위다** (2026-09-15, W6 14번 PM 판정 — 「그 화면에 온 사람이
@@ -347,21 +346,6 @@ export default function ParentSignup() {
           </div>
 
           <div className="account-dashboard-footer">
-            {/* **기계가 준 값을 그대로 내지 않는다** (`문구.md` 6장). 한때 여기에
-                `2026-09-08T01:00:00Z` 가 그대로 나갔다 — **문장은 3.6 에 등록돼 있었는데
-                값의 형식이 어디에도 없었다.** 못 읽는 값이면 **줄을 통째로 안 그린다**:
-                「NaN년」을 내보내느니 없는 편이 낫다. **학부모는 자기가 무엇에 동의했는지
-                확인하러 온다** — 그래서 **없애지 않고 자리만 내린다.** */}
-            {날짜시각(screen.consentAt) !== null && (
-              <p className="account-description">
-                {폼.동의기록}{" "}
-                <time dateTime={screen.consentAt}>{날짜시각(screen.consentAt)}</time>
-              </p>
-            )}
-            {/* **「모든 기기에서 로그아웃됩니다」 같은 말을 쓰지 않는다** — 지금은 거짓말이다.
-                `token_version` 은 컬럼만 있고 올리는 코드가 없다(E-3/E-4).
-                **「전부 로그아웃」처럼 보이게 만들지도 않는다** — 이 호출은 자녀 쿠키를 안 건드리고,
-                가족 태블릿에서 **아이 세션은 살아 있어야 한다.** 그래서 주장 없이 이름만 둔다. */}
             <button
               type="button"
               onClick={() => void 로그아웃()}
@@ -401,7 +385,7 @@ export default function ParentSignup() {
 
 /** 입장 화면만 새 표지를 사용하고, 로그인 뒤 자녀 관리의 레이아웃은 유지한다. */
 function ParentSignupFrame({ signedIn, children }: { signedIn: boolean; children: ReactNode }) {
-  if (signedIn) return <main className="account-page">{children}</main>;
+  if (signedIn) return <main className="account-page parent-dashboard-page">{children}</main>;
   return (
     <AccountEntry kind="signup">
       <div className="parent-entry parent-entry--signup">{children}</div>

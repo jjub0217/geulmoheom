@@ -3,7 +3,7 @@
 import { useId } from "react";
 
 /** 장식은 그림으로, 이름은 실제 글자로 남겨 크기가 달라도 읽을 수 있게 한다. */
-export function TierBadgeCrest({ name, help = false }: { name: string; help?: boolean }) {
+export function TierBadgeCrest({ name }: { name: string }) {
   const metalId = useId();
   const glazeId = useId();
 
@@ -37,13 +37,6 @@ export function TierBadgeCrest({ name, help = false }: { name: string; help?: bo
       </svg>
       <span className="tier-badge-caption">
         <span>{name}</span>
-        {help && (
-          <svg className="tier-badge-help-icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-            <circle cx="8" cy="8" r="6.2" />
-            <path d="M6.4 5.8a1.65 1.65 0 0 1 3.2.55c0 1.3-1.6 1.3-1.6 2.55" />
-            <circle cx="8" cy="11" r=".3" fill="currentColor" />
-          </svg>
-        )}
       </span>
     </>
   );

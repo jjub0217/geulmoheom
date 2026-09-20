@@ -38,10 +38,9 @@ const 색: Record<Tier, string> = {
  * (`문구.md` 1.5). **그림을 못 받았을 때는 그린다**: 아이는 자기 문장이 통했다는 것을
  * 알아야 하고, 그림은 「내 책」에서 다시 본다 (1.7).
  */
-export function TierBadge({ tier, introduce = false, helpPresentation = "icon" }: {
+export function TierBadge({ tier, introduce = false }: {
   tier: Tier;
   introduce?: boolean;
-  helpPresentation?: "icon" | "tooltip";
 }) {
   const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -49,7 +48,7 @@ export function TierBadge({ tier, introduce = false, helpPresentation = "icon" }
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [tooltipDismissed, setTooltipDismissed] = useState(false);
-  const tooltipVisible = helpPresentation === "tooltip" && !open && !tooltipDismissed && (hovered || focused);
+  const tooltipVisible = !open && !tooltipDismissed && (hovered || focused);
 
   useEffect(() => {
     if (!tooltipVisible) return;
@@ -103,7 +102,7 @@ export function TierBadge({ tier, introduce = false, helpPresentation = "icon" }
             setOpen(true);
           }}
         >
-          <TierBadgeCrest name={티어이름[tier]} help={helpPresentation === "icon"} />
+          <TierBadgeCrest name={티어이름[tier]} />
         </button>
         {tooltipVisible && (
           <span id={tooltipId} role="tooltip" className="tier-badge-tooltip">

@@ -38,6 +38,7 @@ const 하던모험버튼 = "모험 계속하기";
 export function ChapterDoor() {
   /** `null` 은 **아직 모른다**. 모르는 동안에도 문은 그린다 — 위 주석. */
   const [하던게있나, set하던게있나] = useState<boolean | null>(null);
+  const [툴팁을보이나, set툴팁을보이나] = useState(false);
 
   useEffect(() => {
     let 살아있나 = true;
@@ -73,13 +74,27 @@ export function ChapterDoor() {
       <p>
         {이어간다 ? 하던모험안내 : 모험문.기다린다}
       </p>
-      <Link
-        href="/chapter"
-        data-모험문버튼
-        className="pressable action-primary shrink-0"
-      >
-        {이어간다 ? 하던모험버튼 : 모험문.떠나기}
-      </Link>
+      <span className="chapter-door__action">
+        <Link
+          href="/chapter"
+          data-모험문버튼
+          aria-describedby={툴팁을보이나 ? "chapter-door-writing-tooltip" : undefined}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== "touch") set툴팁을보이나(true);
+          }}
+          onPointerLeave={() => set툴팁을보이나(false)}
+          onFocus={() => set툴팁을보이나(true)}
+          onBlur={() => set툴팁을보이나(false)}
+          className="pressable action-primary shrink-0"
+        >
+          {이어간다 ? 하던모험버튼 : 모험문.떠나기}
+        </Link>
+        {툴팁을보이나 && (
+          <span id="chapter-door-writing-tooltip" data-모험문툴팁 role="tooltip" className="chapter-door__tooltip">
+            다음에 무슨 일이 일어날지 직접 쓰면, 네 글대로 이야기가 이어져.
+          </span>
+        )}
+      </span>
     </div>
   );
 }

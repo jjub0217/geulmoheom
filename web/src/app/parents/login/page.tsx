@@ -155,7 +155,7 @@ export default function ParentLogin() {
         {/* **자리가 입력칸 곁이다** — 무엇에 대한 말인지 부모가 찾지 않아도 되게.
             아이 화면 오류를 둔 자리와 같은 규칙이다. */}
         {오류 !== null && (
-          <p data-오류 role="status" className="account-feedback">
+          <p data-오류 role="alert" className="account-feedback">
             {오류}
           </p>
         )}

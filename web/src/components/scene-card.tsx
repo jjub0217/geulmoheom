@@ -11,9 +11,11 @@ type Card = components["schemas"]["Card"];
 export function SceneCard({
   card,
   children,
+  narrativeClassName = "",
 }: {
-  card: Card;
+  card: Pick<Card, "situation">;
   children?: ReactNode;
+  narrativeClassName?: string;
 }) {
   const introduction = useCompassIntroduction();
   const scene = introduction?.situation === card.situation ? introduction : null;
@@ -22,7 +24,7 @@ export function SceneCard({
   return (
     <section className="scene-card" data-scene-phase={scene?.phase}>
       <p
-        className={`scene-narrative${scene ? " scene-dialogue" : ""}${narrating ? " pressable" : ""}`}
+        className={`scene-narrative${narrativeClassName ? ` ${narrativeClassName}` : ""}${scene ? " scene-dialogue" : ""}${narrating ? " pressable" : ""}`}
         role={narrating ? "button" : undefined}
         tabIndex={narrating ? 0 : undefined}
         aria-label={narrating ? card.situation : undefined}
