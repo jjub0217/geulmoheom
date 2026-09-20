@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { TierBadgeCrest } from "@/components/tier-badge-crest";
 
-/** `docs/문구.md` 1.8. 설명은 아이가 원할 때 열고, 첫 안내는 확인 전까지 유지한다. */
+/**
+ * `docs/문구.md` 1.8. **설명은 아이가 원할 때만 연다.**
+ *
+ * **⛔ 종전 「첫 안내」 줄(「네가 쓴 묘사로 얻은 배지야…」 + 「알겠어」)은
+ * 2026-09-21 사용자 판정으로 내렸다** — **설명이 세 겹이었다.**
+ * 배지에 올리면 **툴팁**, 누르면 **설명 창**, 그 아래 또 한 줄이 있었다.
+ * **조건은 앞의 둘이 살아 있는 것**이었고 둘 다 그대로다(`tier-badge.tsx`).
+ * **`문구.md` 1.8 은 아직 그 줄을 들고 있다 — PM 이 지워야 한 벌이 맞는다.**
+ */
 export const 배지안내 = {
-  첫안내: "네가 쓴 묘사로 얻은 배지야. 배지를 누르면 뜻을 볼 수 있어.",
-  확인: "알겠어",
   제목: "배지 알아보기",
   설명: "이야기에 무엇을 했는지뿐 아니라 어떻게 했는지, 무엇이 보이고 들렸는지, 어떤 기분이었는지도 담아 봐. 담은 내용에 따라 받을 수 있는 배지가 달라져.",
   순서: "배지는 탐험가, 영웅, 전설 순서로 이어져.",
@@ -15,71 +21,6 @@ export const 배지안내 = {
   책안내: "책에는 모험 중에 얻은 배지를 남겨.",
   닫기: "닫기",
 } as const;
-
-export const 배지안내저장키 = "geulmoheom:tier-badge-introduced";
-
-/** 확인 여부 하나만 저장한다. 쓰기 전 안내와 결과 안내의 기억은 서로 섞지 않는다. */
-export function createBadgeAcknowledgement(storageKey: string) {
-  let 확인함 = false;
-  const 구독자 = new Set<() => void>();
-
-  function 확인했나() {
-    if (확인함) return true;
-    try {
-      return window.localStorage.getItem(storageKey) === "true";
-    } catch {
-      return false;
-    }
-  }
-
-  function 확인하기() {
-    확인함 = true;
-    try {
-      window.localStorage.setItem(storageKey, "true");
-    } catch {
-      // 계정·아이·문장은 저장하지 않는다. 저장소가 막혀도 현재 탭의 확인 상태는 지킨다.
-    }
-    for (const 알리기 of 구독자) 알리기();
-  }
-
-  function 구독(알리기: () => void) {
-    구독자.add(알리기);
-    const 다른탭확인 = (event: StorageEvent) => {
-      if (event.key === storageKey) 알리기();
-    };
-    window.addEventListener("storage", 다른탭확인);
-    return () => {
-      구독자.delete(알리기);
-      window.removeEventListener("storage", 다른탭확인);
-    };
-  }
-
-  return { 확인했나, 확인하기, 구독 };
-}
-
-const { 확인했나, 확인하기, 구독 } = createBadgeAcknowledgement(배지안내저장키);
-const 서버에서는숨김 = () => true;
-
-export function TierBadgeIntroduction({ onConfirm }: { onConfirm: () => void }) {
-  const 이미확인함 = useSyncExternalStore(구독, 확인했나, 서버에서는숨김);
-  if (이미확인함) return null;
-
-  return (
-    <span data-배지첫안내 className="tier-badge-introduction">
-      <span>{배지안내.첫안내}</span>
-      <button
-        type="button"
-        data-배지안내확인
-        onClick={() => {
-          확인하기();
-          onConfirm();
-        }}
-      >
-        {배지안내.확인}
-      </button>
-    </span>
-  );
-}
 
 export function TierBadgeHelp({ names, onClose }: {
   names: Record<"basic" | "rare" | "legendary", string>;
@@ -113,7 +54,6 @@ export function TierBadgeHelp({ names, onClose }: {
       onClose={(event) => {
         // Strict Mode의 effect 재실행에서 온 이전 close 이벤트는 새 창을 닫지 않는다.
         if (event.currentTarget.open) return;
-        확인하기();
         onClose();
       }}
     >

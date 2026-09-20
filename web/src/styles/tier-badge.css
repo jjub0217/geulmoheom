@@ -92,84 +92,12 @@
 }
 
 .tier-badge-button:focus-visible,
-.tier-badge-introduction button:focus-visible,
-.tier-badge-writing-intro button:focus-visible,
-.tier-badge-writing-intro summary:focus-visible,
 .tier-badge-help-actions button:focus-visible {
   outline: 3px solid #294f87;
   outline-offset: 4px;
 }
 
-.tier-badge-introduction {
-  display: flex;
-  flex-basis: 100%;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
-  max-width: 30rem;
-  padding: 0.875rem 1rem;
-  border: 1px solid #d5c6ac;
-  border-radius: 0.75rem;
-  background: #fff8ec;
-  color: #294f67;
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.6;
-}
-
-.tier-badge-introduction > span {
-  flex: 1 1 16rem;
-}
-
-.tier-badge-introduction button {
-  flex: none;
-  min-height: 2.75rem;
-  padding: 0.375rem 0.25rem;
-  border-radius: 0.25rem;
-  color: #294f67;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-.tier-badge-writing-intro {
-  display: grid;
-  flex: none;
-  gap: 0.625rem;
-  padding: 1rem 1.125rem 0.625rem;
-  border: 1px solid #d5c6ac;
-  border-radius: 0.875rem;
-  background: #fff8ec;
-  color: #294f67;
-  font-size: 1rem;
-  line-height: 1.6;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.tier-badge-writing-heading {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-}
-
-.tier-badge-writing-heading h2 {
-  font-size: 1.0625rem;
-  font-weight: 600;
-}
-
-.tier-badge-writing-preview {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: min(100%, 24rem);
-  min-width: 0;
-  gap: 0.375rem;
-}
-
-/* 좁은 안내 줄에서는 세 견본을 같은 비율로 줄인다. 실제 배지 버튼은 136×72를 지킨다. */
-.tier-badge-writing-heading .tier-badge-writing-preview > .tier-badge.tier-badge-crest,
+/* 설명 창의 세 견본은 같은 비율로 줄인다. 실제 배지 버튼은 136×72를 지킨다. */
 .tier-badge-preview > .tier-badge.tier-badge-crest {
   justify-self: center;
   width: 100%;
@@ -179,43 +107,6 @@
   aspect-ratio: 136 / 72;
   padding: 0;
   font-size: 0.9375rem;
-}
-
-.tier-badge-writing-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.tier-badge-writing-actions details {
-  flex: 1;
-  min-width: 0;
-}
-
-.tier-badge-writing-actions summary,
-.tier-badge-writing-actions button {
-  min-height: 2.75rem;
-  padding-block: 0.5rem;
-  border-radius: 0.25rem;
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-.tier-badge-writing-actions button {
-  flex: none;
-  padding-inline: 0.5rem;
-}
-
-.tier-badge-writing-examples {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.25rem 0 0.75rem;
-}
-
-.tier-badge-writing-examples > span {
-  padding-left: 0.5rem;
 }
 
 .tier-badge-dialog {
@@ -282,8 +173,6 @@
 
 @media print {
   .tier-badge-tooltip,
-  .tier-badge-introduction,
-  .tier-badge-writing-intro,
   .tier-badge-dialog {
     display: none !important;
   }

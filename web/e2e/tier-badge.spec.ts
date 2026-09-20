@@ -3,13 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 import type { components, paths } from "../src/api/types.gen";
 import { 티어이름 } from "../src/components/tier-badge";
 import { 배지안내 } from "../src/components/tier-badge-help";
-import { 배지쓰기안내, 배지쓰기안내저장키 } from "../src/components/tier-badge-writing-intro";
 
 type Card = paths["/api/v1/cards/next"]["get"]["responses"][200]["content"]["application/json"];
 type Book = components["schemas"]["Book"];
 type AttemptResult = components["schemas"]["AttemptResult"];
 
-const STORAGE_KEY = "geulmoheom:tier-badge-introduced";
 const ARTWORK_URL = "http://localhost:3000/api/v1/artworks/badge-test-image/image";
 const card: Card = {
   card_id: "badge-test-card",
@@ -123,7 +121,6 @@ test("책 배지에서 설명을 키보드로 열고 Escape와 닫기 모두 원
   const badge = page.locator("main button[data-티어배지]:visible").first();
   await expect(badge).toHaveText(티어이름.basic);
   await expect(badge.locator(".tier-badge-help-icon")).toHaveCount(0);
-  await expect(page.locator("[data-배지첫안내]")).toHaveCount(0);
   await badge.focus();
   await expect(page.getByRole("tooltip")).toHaveText(배지안내.제목);
   await page.keyboard.press("Escape");
@@ -204,48 +201,19 @@ test("배지 설명을 연 채 인쇄해도 설명은 빠지고 책의 세 배�
   await page.keyboard.press("Escape");
 });
 
-test("첫 결과 안내는 확인하기 전에는 남고 확인 후에는 새 결과와 재접속에서 반복하지 않는다", async ({ page, context }) => {
+/**
+ * **⛔ 첫 안내를 걷어낸 자리의 난간이다** (2026-09-21 사용자 판정).
+ *
+ * 없애도 된다는 **조건이 「배지에 올리면 툴팁, 누르면 설명 창」이었다.**
+ * 책 화면은 위에서 재고 있었지만 **결과 화면을 재는 자리가 없었다** —
+ * **조건이 깨지면 아이는 배지의 뜻을 알 길이 아예 없어진다.**
+ */
+test("결과 화면 배지도 올리면 툴팁, 누르면 설명 창이 열린다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
   await submitScene(page);
-  const introduction = page.locator("[data-배지첫안내]");
-  await expect(introduction).toContainText(배지안내.첫안내);
-  await expect(introduction).toBeVisible();
-  expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBeNull();
-  expect(await introduction.evaluate((element) => element.contains(document.activeElement))).toBe(false);
-
-  await page.emulateMedia({ media: "print" });
-  await expect(introduction).toBeHidden();
-  await page.emulateMedia({ media: "screen" });
-  await expect(introduction).toBeVisible();
-
-  // 표시만 보고 떠나면 확인한 것으로 기록하지 않는다.
-  await page.reload();
-  await submitScene(page, "은빛 잎을 손바닥에 올려 햇빛에 비춰 보았다.");
-  await expect(introduction).toBeVisible();
-  await page.locator("[data-배지안내확인]").click();
-  await expect(introduction).toBeHidden();
-  expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe("true");
-
-  await page.locator("[data-다음장면]").click();
-  await submitScene(page, "문틈으로 불어오는 바람을 따라 작은 길을 걸었다.");
-  await expect(introduction).toBeHidden();
-
-  // 새 탭은 컴포넌트 메모리를 공유하지 않는다. 같은 브라우저 저장값으로 재접속한다.
-  const reopened = await context.newPage();
-  await mockApi(reopened);
-  await reopened.goto("/");
-  await submitScene(reopened);
-  await expect(reopened.locator("[data-배지첫안내]")).toBeHidden();
-  await reopened.close();
-});
-
-test("첫 결과에서 배지 설명을 읽고 닫아도 짧은 안내를 확인한 것으로 기록한다", async ({ page }) => {
-  await mockApi(page);
-  await page.goto("/");
-  await submitScene(page);
-  await expect(page.locator("[data-배지첫안내]")).toBeVisible();
   const badge = page.locator("main button[data-티어배지]:visible");
+  await expect(badge).toHaveText(티어이름.rare);
   await expect(badge.locator(".tier-badge-help-icon")).toHaveCount(0);
   await badge.hover();
   await expect(page.getByRole("tooltip")).toHaveText(배지안내.제목);
@@ -254,69 +222,12 @@ test("첫 결과에서 배지 설명을 읽고 닫아도 짧은 안내를 확인
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(badge).toBeFocused();
-  await expect(page.locator("[data-배지첫안내]")).toBeHidden();
-  expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe("true");
+  // **설명은 아이가 열 때만 열린다.** 「저절로 뜨는 줄이 없다」를 재는 자리는 여기가 아니라
+  // `card-screen.spec.ts` 의 **결과 화면 줄 목록**이다 — 거기가 화면에 남은 것을 통째로 센다.
 });
 
-test("예전 결과 안내를 확인했어도 쓰기 전에 배지와 예시를 보고 확인 없이 글을 보낼 수 있다", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "true"), STORAGE_KEY);
-  await mockApi(page);
-  await page.goto("/");
-  const introduction = page.locator("[data-배지쓰기안내]");
-  await expect(introduction).toBeVisible();
-  await expect(introduction).toHaveAccessibleName(배지쓰기안내.제목);
-  await expect(introduction).toContainText(배지쓰기안내.설명);
-  await expect(introduction.locator(".tier-badge-writing-preview .tier-badge")).toHaveText(tiers.map((tier) => 티어이름[tier]));
-  await expect(introduction.locator("[data-티어배지]")).toHaveCount(0);
-  expect(await introduction.evaluate((element) => element.contains(document.activeElement))).toBe(false);
-  await expect(page.getByLabel(card.prompt_label)).toBeEnabled();
-
-  const example = introduction.locator("[data-배지쓰기예시]");
-  await expect(example).not.toHaveAttribute("open", "");
-  await expect(example.getByText(배지쓰기안내.자세한예시, { exact: true })).toBeHidden();
-  await example.locator("summary").click();
-  await expect(example.getByText(배지쓰기안내.처음예시, { exact: true })).toBeVisible();
-  await expect(example.getByText(배지쓰기안내.자세한예시, { exact: true })).toBeVisible();
-
-  await page.emulateMedia({ media: "print" });
-  await expect(introduction).toBeHidden();
-  await page.emulateMedia({ media: "screen" });
-  await expect(introduction).toBeVisible();
-
-  await submitScene(page);
-  expect(await page.evaluate((key) => localStorage.getItem(key), 배지쓰기안내저장키)).toBeNull();
-  await expect(page.locator("[data-배지첫안내]")).toHaveCount(0);
-  await page.locator("[data-다음장면]").click();
-  // 보내기는 확인을 대신하지 않는다. 다음 쓰기에서도 안내를 다시 볼 수 있다.
-  await expect(introduction).toBeVisible();
-});
-
-test("쓰기 전 안내 확인은 입력을 보존하고 입력칸에 돌아오며 결과 안내와 별도로 기억한다", async ({ page, context }) => {
-  await mockApi(page);
-  await page.goto("/");
-  const introduction = page.locator("[data-배지쓰기안내]");
-  await expect(introduction).toBeVisible();
-  const input = page.getByLabel(card.prompt_label);
-  const text = "조용히 손잡이를 돌려 문 너머의 소리에 귀를 기울였다.";
-  await input.fill(text);
-  await introduction.locator("[data-배지쓰기확인]").click();
-  await expect(introduction).toBeHidden();
-  await expect(input).toHaveValue(text);
-  await expect(input).toBeFocused();
-  expect(await page.evaluate((key) => localStorage.getItem(key), 배지쓰기안내저장키)).toBe("true");
-  expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBeNull();
-  await submitScene(page, text);
-  await expect(page.locator("[data-배지첫안내]")).toBeVisible();
-
-  const reopened = await context.newPage();
-  await mockApi(reopened);
-  await reopened.goto("/");
-  await expect(reopened.getByLabel(card.prompt_label)).toBeVisible();
-  await expect(reopened.locator("[data-배지쓰기안내]")).toHaveCount(0);
-  await reopened.close();
-});
-
-test("브라우저 저장소가 막혀도 안내 확인과 글쓰기가 되고 다음 결과 이후 확인을 기억한다", async ({ page }) => {
+/** `문구.md` **1.8** — 「저장 기능을 사용할 수 없어도 배지와 설명은 동작한다」. */
+test("브라우저 저장소가 막혀도 글쓰기·배지·설명 창이 그대로 돈다", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
@@ -327,14 +238,18 @@ test("브라우저 저장소가 막혀도 안내 확인과 글쓰기가 되고 �
   });
   await mockApi(page);
   await page.goto("/");
-  const introduction = page.locator("[data-배지쓰기안내]");
-  await expect(introduction).toBeVisible();
-  await introduction.locator("[data-배지쓰기확인]").click();
-  await expect(introduction).toBeHidden();
+  await expect(page.getByLabel(card.prompt_label)).toBeVisible();
   await submitScene(page);
+  const badge = page.locator("main button[data-티어배지]:visible");
+  await expect(badge).toHaveText(티어이름.rare);
+  await badge.click();
+  const dialog = await checkDialog(page);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
   await page.locator("[data-다음장면]").click();
   await expect(page.getByLabel(card.prompt_label)).toBeVisible();
-  await expect(introduction).toHaveCount(0);
+  await submitScene(page, "문틈으로 불어오는 바람을 따라 작은 길을 걸었다.");
+  await expect(page.locator("main button[data-티어배지]:visible")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -343,21 +258,6 @@ test("320px에서도 새 배지 이름을 같은 크기로 읽고 결과·책·�
   await mockApi(page);
   await page.goto("/");
   const names = ["탐험가", "영웅", "전설"];
-  const introduction = page.locator("[data-배지쓰기안내]");
-  await expect(introduction).toBeVisible();
-  const samples = introduction.locator(".tier-badge-writing-preview .tier-badge");
-  await expect(samples).toHaveText(names);
-  const sampleSizes = await samples.evaluateAll((elements) => elements.map((element) => {
-    const bounds = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    return { width: bounds.width, height: bounds.height, font: style.fontSize, weight: style.fontWeight, opacity: style.opacity, fits: element.scrollWidth <= element.clientWidth };
-  }));
-  for (const sample of sampleSizes) {
-    expect(sample.fits).toBe(true);
-    expect(Math.abs(sample.width - sampleSizes[0].width)).toBeLessThan(1);
-    expect(Math.abs(sample.height - sampleSizes[0].height)).toBeLessThan(1);
-    expect([sample.font, sample.weight, sample.opacity]).toEqual([sampleSizes[0].font, sampleSizes[0].weight, sampleSizes[0].opacity]);
-  }
 
   await submitScene(page);
   const resultBadge = page.locator("main button[data-티어배지]:visible");
@@ -369,12 +269,15 @@ test("320px에서도 새 배지 이름을 같은 크기로 읽고 결과·책·�
   await expect(dialogSamples).toHaveText(names);
   const dialogSizes = await dialogSamples.evaluateAll((elements) => elements.map((element) => {
     const bounds = element.getBoundingClientRect();
-    return { width: bounds.width, height: bounds.height, fits: element.scrollWidth <= element.clientWidth };
+    const style = getComputedStyle(element);
+    return { width: bounds.width, height: bounds.height, font: style.fontSize, weight: style.fontWeight, opacity: style.opacity, fits: element.scrollWidth <= element.clientWidth };
   }));
+  // 세 이름은 같은 크기·같은 무게로 읽힌다. 하나만 커지면 그것이 등수가 된다.
   for (const sample of dialogSizes) {
     expect(sample.fits).toBe(true);
     expect(Math.abs(sample.width - dialogSizes[0].width)).toBeLessThan(1);
     expect(Math.abs(sample.height - dialogSizes[0].height)).toBeLessThan(1);
+    expect([sample.font, sample.weight, sample.opacity]).toEqual([dialogSizes[0].font, dialogSizes[0].weight, dialogSizes[0].opacity]);
   }
   await page.keyboard.press("Escape");
   await page.goto("/book");

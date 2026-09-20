@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 
 import type { components } from "@/api/types.gen";
 import { TierBadgeCrest } from "@/components/tier-badge-crest";
-import { TierBadgeHelp, TierBadgeIntroduction, 배지안내 } from "@/components/tier-badge-help";
+import { TierBadgeHelp, 배지안내 } from "@/components/tier-badge-help";
 
 type Tier = components["schemas"]["AttemptResult"]["tier"];
 
@@ -13,7 +13,7 @@ type Tier = components["schemas"]["AttemptResult"]["tier"];
  * 티어 배지 문구 (`docs/문구.md` **1.8** · `용어사전.md` 36행 **아이 화면** 열).
  *
  * 사용자 승인: 명사형 게임 보상 이름인 탐험가·영웅·전설을 함께 쓴다.
- * 서버 키·판정은 그대로 두고 결과·책·사전안내가 이 이름을 함께 쓴다.
+ * 서버 키·판정은 그대로 두고 결과·책·설명 창이 이 이름을 함께 쓴다.
  * 「티어」는 내부 용어라 아이 화면에 붙이지 않는다.
  */
 export const 티어이름: Record<Tier, string> = {
@@ -38,10 +38,7 @@ const 색: Record<Tier, string> = {
  * (`문구.md` 1.5). **그림을 못 받았을 때는 그린다**: 아이는 자기 문장이 통했다는 것을
  * 알아야 하고, 그림은 「내 책」에서 다시 본다 (1.7).
  */
-export function TierBadge({ tier, introduce = false }: {
-  tier: Tier;
-  introduce?: boolean;
-}) {
+export function TierBadge({ tier }: { tier: Tier }) {
   const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const tooltipId = useId();
@@ -110,7 +107,6 @@ export function TierBadge({ tier, introduce = false }: {
           </span>
         )}
       </span>
-      {introduce && <TierBadgeIntroduction onConfirm={() => button.current?.focus()} />}
       {open && createPortal(
         <TierBadgeHelp names={티어이름} onClose={close} />,
         document.body,
