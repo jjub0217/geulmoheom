@@ -267,10 +267,20 @@ const 보여줄등급 = process.env.E2E_SHOW_GRADE ?? null;
  * **`.artworks/` 는 로컬 캐시라 기계마다 있는 파일이 다르고 파일명에 해시가 붙는다.**
  * 그래서 **경로를 박지 않고 찾고, 없으면 조용히 떨어진다** — CI 와 다른 기계에서 안 깨진다.
  */
+/**
+ * **⛔ mime 을 넘기지 않으면 깨진 그림이 뜬다** (2026-09-20 실측).
+ * 가짜의 `그림응답(바이트, mime="image/png")` 이 **기본값이 PNG** 라, JPG 를 넣고 mime 을
+ * 안 주면 **서버가 JPEG 바이트를 `image/png` 로 내보낸다** — 브라우저가 못 읽고
+ * **액자가 남색 빈 상자**가 된다. 확장자에서 뽑아 같이 넘긴다.
+ */
+function mime추정(경로) {
+  return /\.jpe?g$/i.test(경로) ? "image/jpeg" : /\.webp$/i.test(경로) ? "image/webp" : "image/png";
+}
+
 function 보여줄그림고르기() {
   const 지정 = process.env.E2E_SHOW_ARTWORK;
   if (지정) {
-    if (existsSync(지정)) return { 경로: 지정, 출처: "E2E_SHOW_ARTWORK" };
+    if (existsSync(지정)) return { 경로: 지정, mime: mime추정(지정), 출처: "E2E_SHOW_ARTWORK" };
     console.log(`[하네스] ⚠ E2E_SHOW_ARTWORK 가 가리키는 파일이 없다 — 캐시에서 찾는다: ${지정}`);
   }
   // 사용자 승인(2026-09-19): 한 면이 정사각형인 그림책 판형을 보여 준다.
@@ -283,10 +293,11 @@ function 보여줄그림고르기() {
       .sort();
     // 카드 삽화(`c01_…`)를 먼저 고른다 — 안내 줄에 어느 카드인지가 드러난다.
     const 고른것 = 후보.find((이름) => /^c\d+_/.test(이름)) ?? 후보[0];
-    if (고른것) return { 경로: resolve(캐시, 고른것), 출처: `삽화 캐시 — ${고른것}` };
+    if (고른것) return { 경로: resolve(캐시, 고른것), mime: mime추정(고른것), 출처: `삽화 캐시 — ${고른것}` };
   }
   return {
     경로: resolve(저장소, "docs/캐릭터/표정/default.png"),
+    mime: "image/png",
     출처: "가이드 표정 — ⚠ 1024×1024 정사각이라 진짜 삽화와 비율이 다르다",
   };
 }
@@ -303,7 +314,7 @@ const 가짜파이썬 = 보여주기
       보여줄등급
         ? `글 = 글응답({**기본글, "grade": ${JSON.stringify(보여줄등급)}})`
         : "글 = None",
-      `그림 = 그림응답(open(${JSON.stringify(보여줄그림.경로)}, "rb").read())`,
+      `그림 = 그림응답(open(${JSON.stringify(보여줄그림.경로)}, "rb").read(), ${JSON.stringify(보여줄그림.mime)})`,
       "with 가짜앞단(글=글, 그림=그림) as f:",
       "    print(f.base_url, flush=True)",
       "    while True:",
