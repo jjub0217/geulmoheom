@@ -24,7 +24,7 @@ from app import db
 from app.api.v1 import stage1
 from app.evaluator import 평가결과
 from app.gm import GM출력, 서사결과, 선택지
-from app.guide_lines import 시련대사, 완결대사, 챕터진행대사, 카드첫말
+from app.guide_lines import 시련대사, 완결대사, 완결대사_그림, 챕터진행대사, 카드첫말
 from app.models import Chapter, Child, Event
 from app.moderation import 검사결과
 
@@ -360,7 +360,10 @@ async def test_시련을_넘으면_다음_턴이_완결이다(client: TestClient
     assert 몸["beat"] == "resolution"
     assert 몸["chapter_done"] is True
     assert 몸["guide"]["expression"] == "session_end"
-    assert 몸["guide"]["line"] in 완결대사()
+    # **대표 그림이 있으면 1.20 의 「대표 그림 상태」 표에서 고른다** (2026-09-20).
+    # **셋 다 받는다** — 이 검사는 한 판을 끝까지 굴리는 것이라 그림이 준비됐는지가
+    # 시점에 따라 갈리고, **문장 하나로 못 박으면 그 갈림을 검사가 거짓으로 만든다.**
+    assert 몸["guide"]["line"] in [*완결대사(), *완결대사_그림().values()]
 
     async with db.SessionLocal() as session:
         행 = (await session.execute(select(Chapter))).scalar_one()

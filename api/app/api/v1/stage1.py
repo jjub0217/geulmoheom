@@ -44,6 +44,7 @@ from app.gm import 도입프롬프트, 서사, 시스템지시, 턴프롬프트
 from app.guide_lines import (
     시련대사,
     완결대사,
+    완결대사_그림,
     자해대사,
     종료대사,
     차단대사,
@@ -430,15 +431,8 @@ async def create_turn(
 def _진행가이드(챕터id: object, 진행: 진행기.진행, *, 대표삽화: ArtworkRef | None = None) -> Guide:
     """진행 사실을 안내한다. 글자 수나 등급으로 표정·대사를 추정하지 않는다."""
     if 진행.완결 and 대표삽화 is not None:
-        if 대표삽화.status == "ready":
-            return Guide(
-                expression="session_end",
-                line="이야기를 완성했어! 네가 쓴 글과 그림이 책에 담겼어.",
-            )
-        return Guide(
-            expression="session_end",
-            line="이야기를 완성했어! 네 글은 책에 담겼고, 그림도 곧 완성돼.",
-        )
+        상태 = "준비됨" if 대표삽화.status == "ready" else "준비 중"
+        return Guide(expression="session_end", line=완결대사_그림()[상태])
     if 진행.완결:
         return Guide(expression="session_end", line=하나(완결대사(), 챕터id))
     if 진행.비트 == "trial":
