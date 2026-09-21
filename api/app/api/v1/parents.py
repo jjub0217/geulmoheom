@@ -26,6 +26,7 @@ from app.accounts import (
     접속코드만들기,
 )
 from app.api.v1.deps import Session, require_parent
+from app.artwork_store import 개인삽화파기
 from app.auth import PARENT_COOKIE, clear_auth_cookie, set_auth_cookie
 from app.card_store import 오늘시작 as 오늘시작기준
 from app.errors import AppError, ErrorCode
@@ -260,6 +261,16 @@ async def update_child(
 async def delete_child(child_id: str, 학부모: ParentRow, session: Session) -> None:
     """자녀 데이터 즉시 파기 — attempts, books, artworks, events 는 FK `CASCADE` 로 함께 간다.
 
+    **⛔ 삽화 파일이 먼저고 DB 가 나중이다** (2026-09-21 사용자 지시). 순서가 이 방향인
+    이유는 하나다 — **파일이 남았는데 아이 정보를 지우면 학부모는 파기됐다고 읽는다.**
+    행이 사라지면 **파일 경로를 읽을 길도 없어져** 나중에 지울 수도 없다.
+    **하나라도 못 지우면 아무것도 안 지우고 오류를 낸다** — `INTERNAL_ERROR` 는 학부모
+    화면에서 **「잠시 문제가 생겼습니다. 잠시 뒤에 다시 시도해 주세요.」**로 나가고
+    (`문구.md` 3.8), **아이가 목록에 남아 있어야 다시 누를 수 있다.**
+
+    **대가를 안다** — 저장소가 오래 멈춰 있으면 그동안 학부모가 못 지운다. 「즉시 파기」와
+    부딪치는 자리이고, **지운 척하는 쪽보다 낫다**고 판정했다.
+
     **`token_version` 을 먼저 올린다.** 행이 지워지면 `require_child` 가 어차피 401 을
     내지만, 지우는 순서가 바뀌거나 실패해도 토큰이 살아남지 않게 한 번 더 닫는다.
 
@@ -269,6 +280,10 @@ async def delete_child(child_id: str, 학부모: ParentRow, session: Session) ->
     살아 있는 아이의 카운터를 지운 채로 끝난다.
     """
     아이 = await _내자녀(child_id, 학부모, session)
+
+    if await 개인삽화파기(session, 아이.id):
+        raise AppError(ErrorCode.INTERNAL_ERROR)
+
     아이.token_version += 1
     await session.flush()
     await session.delete(아이)

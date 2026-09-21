@@ -91,6 +91,25 @@ def _키(card_id: str, tier: str, 확: str) -> str:
     return f"artworks/{card_id}_{tier}-{_조각(card_id, tier)}.{확}"
 
 
+개인접두어 = "artworks/시도/"
+"""**그 아이만의 삽화가 사는 자리.** 자녀를 지울 때 **지워도 되는 것과 지우면 안 되는
+것을 가르는 유일한 기준**이다 (2026-09-21 사용자 지시).
+
+**⛔ 「그 아이 행이 가리키는 키」를 기준으로 삼으면 안 된다.** 캐시가 맞으면 **공용 조합
+키가 그 아이 행의 `r2_key` 에 그대로 들어간다**(`artwork_store.만들기`) — 행을 기준으로
+지우면 **여러 아이가 같이 보는 `legendary` 18장이 한 아이의 삭제에 딸려 간다.**
+
+**만드는 쪽과 지우는 쪽이 같은 문자열을 써야 한다.** 두 군데에 적으면 한쪽만 바뀌고,
+그러면 **지우는 쪽이 아무것도 못 찾아 조용히 통과한다** — 틀린 방향이 「안 지워졌는데
+지웠다고 한다」라 제일 나쁜 쪽이다.
+"""
+
+
+def 개인삽화인가(오브젝트키: str) -> bool:
+    """**공용 삽화와 개인 삽화를 가른다.** 위 `개인접두어` 하나로만 판단한다."""
+    return 오브젝트키.startswith(개인접두어)
+
+
 def 시도키(artwork_id: uuid.UUID, mime: str) -> str | None:
     """**아이 문장으로 구운 그림 한 장**의 키 (`adr/0015` ②). 모르는 형식이면 `None`.
 
@@ -109,7 +128,7 @@ def 시도키(artwork_id: uuid.UUID, mime: str) -> str | None:
     if not 확:
         logger.warning("모르는 이미지 형식이라 저장하지 않는다: %s", mime)
         return None
-    return f"artworks/시도/{artwork_id}-{_조각('시도', str(artwork_id))}.{확}"
+    return f"{개인접두어}{artwork_id}-{_조각('시도', str(artwork_id))}.{확}"
 
 
 def _조각(*부분: str) -> str:
@@ -306,6 +325,64 @@ async def 읽기(오브젝트키: str) -> bytes | None:
         # **예외 메시지를 싣지 않는다.** botocore 는 요청 정보를 통째로 문자열에 담는다.
         logger.warning("삽화 읽기 실패", extra={"exc_type": type(exc).__name__})
         return None
+
+
+async def 지우기(오브젝트키: str) -> bool:
+    """개인 삽화 파일 하나를 지운다. **지워졌거나 원래 없으면 `True`, 못 지웠으면 `False`.**
+
+    **⛔ 「원래 없었다」를 성공으로 친다** (2026-09-21 사용자 지시). 같은 삭제 요청을 다시
+    보내도 안전해야 하는데, 첫 시도가 **파일까지 지우고 DB 커밋에서 실패**했다면 두 번째
+    시도는 **이미 없는 파일**을 만난다. 거기서 실패로 세면 **학부모가 영영 못 지운다.**
+    S3 의 `delete_object` 는 없는 키에도 성공을 주므로 이 성질이 그대로 따라온다.
+
+    **⛔ 공용 삽화는 거부한다.** 부르는 쪽(`artwork_store.개인삽화파기`)이 이미 거르지만
+    **거기 버그가 나면 다른 아이들의 그림이 사라진다.** AWS 권한도 같은 것을 막지만
+    (삭제 권한을 `artworks/시도/` 안쪽에만 준다) **로컬 보관함에는 그 권한이 없다** —
+    개발·프리테스트에서 지워지는 것을 막는 것은 이 줄뿐이다.
+
+    **실패를 예외로 내보내지 않는다.** 부르는 쪽이 **몇 개가 남았는지**를 세어 판단한다 —
+    첫 실패에서 멈추면 **나머지를 시도조차 안 한 채** 학부모에게 오류가 가고, 다시 눌러도
+    같은 자리에서 또 멈춘다.
+    """
+    if not 개인삽화인가(오브젝트키):
+        # **로그에 키를 싣지 않는다** — 키에 `artwork_id` 가 들어 있다.
+        logger.error("공용 삽화를 지우라는 요청을 거부했다")
+        return False
+
+    if not 설정됐나():
+        return await _로컬에서지우기(오브젝트키)
+
+    try:
+        await asyncio.to_thread(
+            _클라이언트().delete_object,
+            Bucket=get_settings().s3_bucket,
+            Key=오브젝트키,
+        )
+    except Exception as exc:
+        # **예외 메시지를 싣지 않는다.** botocore 는 요청 정보를 통째로 문자열에 담는다.
+        logger.warning("삽화 삭제 실패", extra={"exc_type": type(exc).__name__})
+        return False
+
+    return True
+
+
+async def _로컬에서지우기(오브젝트키: str) -> bool:
+    """저장소가 없을 때의 자리. **`로컬경로()` 와 같은 방어를 쓴다** — 보관함 밖을
+    가리키는 키를 거부한다. 읽기에서 막고 삭제에서 안 막으면 **`../` 한 조각으로
+    서버의 아무 파일이나 지워진다.**
+    """
+    경로 = (로컬보관함 / 오브젝트키).resolve()
+    if not 경로.is_relative_to(로컬보관함.resolve()):
+        logger.warning("보관함 밖을 가리키는 키를 거부했다")
+        return False
+
+    try:
+        await asyncio.to_thread(경로.unlink, missing_ok=True)
+    except OSError as exc:
+        logger.warning("삽화 로컬 삭제 실패", extra={"exc_type": type(exc).__name__})
+        return False
+
+    return True
 
 
 def mime추측(오브젝트키: str) -> str:

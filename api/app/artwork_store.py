@@ -21,6 +21,7 @@
 그 결정을 실제로 지키는 자리다.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -35,7 +36,7 @@ from app.config import REPO_ROOT
 from app.middleware import current_request_id
 from app.models import Artwork, CardAttempt, Chapter
 from app.schemas.stage0 import Tier
-from app.storage import mime추측, 시도키, 올리기, 읽기, 조합찾기
+from app.storage import mime추측, 개인삽화인가, 시도키, 올리기, 읽기, 조합찾기, 지우기
 
 logger = logging.getLogger(__name__)
 
@@ -401,3 +402,70 @@ async def 바이트읽기(삽화: Artwork) -> tuple[bytes, str] | None:
     # **확장자에서 되돌린다.** 여기에 mime 을 손으로 적으면 파일을 바꿀 때 한쪽만
     # 바뀌고, 틀린 mime 은 브라우저가 다운로드로 처리해 **그림이 조용히 안 뜬다.**
     return 기본, mime추측(기본에셋.name)
+
+
+# ── 자녀 삭제 때의 파일 파기 ────────────────────────────
+
+
+async def _개인삽화키(session: AsyncSession, child_id: uuid.UUID) -> list[str]:
+    """그 아이의 **개인 삽화 파일 경로**만 모은다.
+
+    **⛔ 출처가 둘이라 둘 다 탄다** — `artworks` 에는 `child_id` 가 없고 **카드 시도**
+    (`card_attempt_id`) 아니면 **챕터**(`chapter_id`) 중 하나가 채워진다. 한 쪽만 조회하면
+    **나머지가 조용히 남는다.**
+
+    **⛔ 여기서 공용 키를 걸러 낸다.** 캐시가 맞은 행은 **공용 조합 키를 그대로 가리키고**
+    있어서, 거르지 않으면 **다른 아이들이 함께 보는 파일**을 지우러 간다.
+
+    **중복을 없앤다** — 같은 파일을 두 행이 가리킬 수 있고, 두 번 지우러 가는 것은
+    낭비다(틀리지는 않는다. `지우기` 가 없는 파일을 성공으로 치므로).
+    """
+    카드쪽 = (
+        select(Artwork.r2_key)
+        .join(CardAttempt, Artwork.card_attempt_id == CardAttempt.id)
+        .where(CardAttempt.child_id == child_id, Artwork.r2_key.is_not(None))
+    )
+    챕터쪽 = (
+        select(Artwork.r2_key)
+        .join(Chapter, Artwork.chapter_id == Chapter.id)
+        .where(Chapter.child_id == child_id, Artwork.r2_key.is_not(None))
+    )
+
+    키: set[str] = set()
+    for 질의 in (카드쪽, 챕터쪽):
+        키.update(k for k in (await session.scalars(질의)).all() if k and 개인삽화인가(k))
+
+    return sorted(키)
+
+
+async def 개인삽화파기(session: AsyncSession, child_id: uuid.UUID) -> list[str]:
+    """그 아이의 삽화 파일을 지우고 **못 지운 것의 개수를 알려 준다** (빈 목록이면 다 지웠다).
+
+    **⛔ 부르는 쪽이 이것을 보고 DB 를 지울지 정한다** (2026-09-21 사용자 지시).
+    **파일이 남았는데 아이 정보를 지우면 학부모는 파기됐다고 읽는다** — 그 거짓이 이
+    기능에서 제일 나쁜 실패다. 그래서 **파일이 먼저고 DB 가 나중**이다.
+
+    **첫 실패에서 멈추지 않는다.** 멈추면 **나머지를 시도조차 안 한 채** 오류가 가고,
+    학부모가 다시 눌러도 같은 자리에서 또 멈춘다. 다 해 보고 남은 것을 센다.
+
+    **함께 던진다.** 파일 하나가 네트워크 왕복 하나이고 **학부모가 응답을 기다리는
+    중**이라, 차례로 돌면 삽화 수만큼 곱해진다. 한 아이의 삽화는 많아야 수십 장이라
+    한꺼번에 던져도 저장소에 부담이 되지 않는다.
+
+    **⛔ 못 지운 키를 로그에 남기지 않는다** — 키에 `artwork_id` 가 들어 있다. 남길지는
+    대표 판단이 필요한 자리라 지금은 **개수만** 남긴다.
+    """
+    키들 = await _개인삽화키(session, child_id)
+    if not 키들:
+        return []
+
+    결과 = await asyncio.gather(*(지우기(키) for 키 in 키들))
+    못지운것 = [키 for 키, 됐나 in zip(키들, 결과, strict=True) if not 됐나]
+
+    if 못지운것:
+        logger.warning(
+            "삽화 파일을 다 못 지웠다",
+            extra={"남은수": len(못지운것), "전체수": len(키들)},
+        )
+
+    return 못지운것
