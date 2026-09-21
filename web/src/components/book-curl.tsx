@@ -94,9 +94,9 @@ export function BookCurl({ transition }: { transition: BookCurlTransition | null
     >
       {next ? (
         <>
-          <div className="book-curl-fixed book-curl-fixed--left" data-curl-fixed-left={faces.fixedLeft!.page.page_no}>
-            <CurlArtwork snapshot={faces.fixedLeft!} />
-          </div>
+          {/* 고정 왼쪽은 아래의 실제 현재 페이지를 그대로 보인다. 같은 이미지를 다시
+              그리면 정적 배포와 개발 서버의 이미지 배치 차이가 전환 중 점프로 드러난다. */}
+          <div className="book-curl-fixed book-curl-fixed--left" data-curl-fixed-left={faces.fixedLeft!.page.page_no} />
           <div className="book-curl-under book-curl-under--right" data-curl-under-right={faces.underRight!.page.page_no}>
             <CurlWriting snapshot={faces.underRight!} />
           </div>
@@ -106,9 +106,8 @@ export function BookCurl({ transition }: { transition: BookCurlTransition | null
           <div className="book-curl-under book-curl-under--left" data-curl-under-left={faces.underLeft!.page.page_no}>
             <CurlArtwork snapshot={faces.underLeft!} />
           </div>
-          <div className="book-curl-fixed book-curl-fixed--right" data-curl-fixed-right={faces.fixedRight!.page.page_no}>
-            <CurlWriting snapshot={faces.fixedRight!} />
-          </div>
+          {/* 이전 넘김의 고정 오른쪽도 실제 현재 글 면을 그대로 노출한다. */}
+          <div className="book-curl-fixed book-curl-fixed--right" data-curl-fixed-right={faces.fixedRight!.page.page_no} />
         </>
       )}
       <TurningLeaf direction={transition.direction} front={faces.turningFront} back={faces.turningBack} />

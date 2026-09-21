@@ -226,11 +226,20 @@ test("데스크톱 컬은 A 글 앞면·B 삽화 뒷면·B 글 아래 면을 한
   await openBook(page);
   await waitForBookArtwork(page);
 
+  const stableArtwork = page.locator('.book-reader-page[data-current="true"] .book-page-artwork img');
+  const stableArtworkBefore = (await stableArtwork.boundingBox())!;
   await page.locator("[data-book-next]").click();
   const nextCurl = page.locator("[data-book-curl]");
   await expect(nextCurl).toBeVisible();
   await expect(nextCurl).toHaveAttribute("data-curl-direction", "next");
   await expect(nextCurl.locator("[data-curl-fixed-left]")).toHaveAttribute("data-curl-fixed-left", "1");
+  await expect(nextCurl.locator("[data-curl-fixed-left] img")).toHaveCount(0);
+  await expect(nextCurl.locator("[data-curl-fixed-left]")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(stableArtwork).toBeVisible();
+  const stableArtworkDuring = (await stableArtwork.boundingBox())!;
+  for (const key of ["x", "y", "width", "height"] as const) {
+    expect(Math.abs(stableArtworkBefore[key] - stableArtworkDuring[key])).toBeLessThanOrEqual(.5);
+  }
   await expect(nextCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "1");
   await expect(nextCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "3");
   await expect(nextCurl.locator("[data-curl-under-right]")).toHaveAttribute("data-curl-under-right", "3");
@@ -268,6 +277,8 @@ test("데스크톱 컬은 A 글 앞면·B 삽화 뒷면·B 글 아래 면을 한
   const turningArtwork = nextCurl.locator(".book-curl-leaf-face--back img");
   await expect(turningArtwork).toHaveAttribute("src", `${book.pages[1].artwork_url}?book-layout=square-20260919`);
   await expect(turningArtwork).toHaveCSS("object-fit", "cover");
+  await expect(turningArtwork).toHaveCSS("object-position", "50% 50%");
+  await expect(turningArtwork).toHaveCSS("position", "absolute");
   await expect(page.locator("[data-book-next]")).toBeDisabled();
   await expect(nextCurl).toHaveCount(0);
   await sceneMatches(page, 1);
@@ -277,6 +288,7 @@ test("데스크톱 컬은 A 글 앞면·B 삽화 뒷면·B 글 아래 면을 한
   await expect(previousCurl).toBeVisible();
   await expect(previousCurl).toHaveAttribute("data-curl-direction", "previous");
   await expect(previousCurl.locator("[data-curl-fixed-right]")).toHaveAttribute("data-curl-fixed-right", "3");
+  await expect(previousCurl.locator("[data-curl-fixed-right] [data-curl-writing-page]")).toHaveCount(0);
   await expect(previousCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "3");
   await expect(previousCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "1");
   await expect(previousCurl.locator("[data-curl-under-left]")).toHaveAttribute("data-curl-under-left", "1");
