@@ -11,7 +11,7 @@ import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession
 import { useBookPageCount } from "@/components/book-progress";
 import { LeaveButton } from "@/components/leave";
 import { ChapterCompanion, chapterErrorGuide, chapterGuide } from "@/components/chapter-companion";
-import { 챕터구조안내, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
+import { 결과라벨, 챕터구조안내, 챕터다시쓰기라벨, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
 import { CompassIntroduction } from "@/components/compass-introduction";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
@@ -314,6 +314,12 @@ export default function ChapterPage() {
     ><BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중} bookHidden={책이비었나}>
       {/* 장면과 동료는 튜토리얼과 같은 숲 위에 남는다. */}
       <div className="game-stage__world chapter-world">
+        {/* ⛔ **아이 문장을 읽는 상자 밖으로 꺼냈다** (2026-09-22 사용자 지시).
+            종전에는 **자기 글과 이어진 이야기가 같은 상자 안에 붙어 있었고**, 그 상자가
+            스크롤돼서 **어디까지가 자기 글인지 구분이 안 됐다.** 읽는 순서를 눈에 보이게
+            한다 — **내가 쓴 것 → 그래서 벌어진 일**이고 그 순서가 곧 인과다.
+            묘사어 표시(`highlights`)는 그대로 따라온다.
+            **⛔ 첫 글 전에는 안 그린다** — 그때는 쓴 글이 없다. 빈 상자를 만들지 않는다. */}
         <div className="chapter-reading">
           {/* 삽화가 있는 장면만 액자를 보인다. 빈 상자를 만들지 않는다. */}
           {view.artwork && (
@@ -322,10 +328,23 @@ export default function ChapterPage() {
             </div>
           )}
           <div ref={이야기칸} className="game-story chapter-story" tabIndex={-1}>
-            {/* **내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.** 읽는 순서가 곧 인과다 —
-                카드 결과 화면이 아이 문장과 그림을 나란히 두는 것과 같은 이유이고,
-                본편에만 그 자리가 없었다. 묘사어 표시(`highlights`)도 같이 온다. */}
-            {view.쓴것 && <WrittenLine text={view.쓴것.text} highlights={view.쓴것.highlights} />}
+            {/* **내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.** 읽는 순서가 곧 인과다.
+                **⛔ 둘을 여기서 꺼내지 않는다** (2026-09-22 실측). 밖으로 올렸더니
+                **읽는 묶음 높이가 화면 크기 단계마다 따로 정해져 있어**, 360·320·1280 에서
+                **삽화가 눌리거나 보내기 버튼이 화면 밖**으로 나갔다. 기준선과 대조해서
+                **내가 만든 회귀**임을 확인하고 되돌렸다.
+                **⭐ 가르는 일은 자리가 아니라 표시가 한다** — 작은 글자 한 마디와 여백이다.
+                **라벨은 아이 문장이 있을 때만 단다** — 첫 화면에는 견줄 것이 없어
+                「이어진 이야기」가 무엇에 이어졌는지 말하지 못하고, 빈 표시가 된다. */}
+            {view.쓴것 && (
+              <>
+                <p className="chapter-part-label">{결과라벨.내글}</p>
+                <WrittenLine text={view.쓴것.text} highlights={view.쓴것.highlights} />
+              </>
+            )}
+            {view.쓴것 && view.narrative && (
+              <p className="chapter-part-label chapter-part-label--이어진">{결과라벨.이어진이야기}</p>
+            )}
             {view.narrative && <SceneCard card={{ situation: view.narrative }} narrativeClassName="chapter-narrative" />}
           </div>
         </div>
@@ -360,7 +379,12 @@ export default function ChapterPage() {
         <div className="game-response">
           <div className="game-response__content chapter-controls" aria-busy={보내는중}>
             <AttemptInput
-              label={챕터쓰기라벨}
+              // **두 번째 글부터 제목이 바뀐다** (2026-09-22 사용자 지시).
+              // 바로 위에서 래서판다가 「네가 쓴 대로 이야기가 이어졌어.」라고 말하는데
+              // 여기서 같은 질문을 되풀이하면 **처음 보는 화면과 구분이 안 된다.**
+              // **가르는 것은 「이 챕터에서 글을 한 번이라도 썼나」**이고, 그 증거가
+              // 화면에 있는 아이 문장이다 — 서버가 준 것이라 새로고침해도 남는다.
+              label={view.쓴것 ? 챕터다시쓰기라벨 : 챕터쓰기라벨}
               안내글={턴문구.입력안내}
               value={text}
               onChange={(value) => {

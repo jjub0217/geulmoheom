@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { paths } from "../src/api/types.gen";
 // 문구를 문자열로 박지 않는다 — `docs/문구.md` 1.18 이 SSOT 다.
-import { 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
+import { 결과라벨, 챕터다시쓰기라벨, 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
 import { 못닿음 } from "../src/app/copy";
 
 /**
@@ -646,4 +646,71 @@ test("완결 화면에는 버튼이 그대로 있다 — 들어올 때 센 쪽�
   await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
   await expect(page.locator('.chapter-ending a[href="/book"]')).toBeVisible();
+});
+
+/**
+ * ## ⛔ 결과를 보는 것과 다음 글을 쓰는 것이 안 갈렸다
+ *
+ * 아이가 글을 등록하면 **방금 쓴 글·새 삽화·이어진 이야기·래서판다·입력창**이 한꺼번에
+ * 보였다. **11~12살이 화면만 보고 「내 글로 이야기가 이어졌고 이제 다음을 써야 한다」를
+ * 알 수 있어야 한다**는 것이 사용자 지시다 (2026-09-22).
+ *
+ * **⛔ 가르는 수단은 자리가 아니라 표시와 여백이다.** 아이 글을 읽는 상자 밖으로
+ * 꺼내 봤더니 **360·320·1280 에서 삽화가 눌리거나 보내기 버튼이 화면 밖**으로 나갔다 —
+ * 기준선과 대조해 **내가 만든 회귀**임을 확인하고 되돌렸다.
+ */
+test("글을 보내면 내 글과 이어진 이야기를 표시로 가른다", async ({ page }) => {
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+
+  await page.goto("/chapter");
+  // **첫 글 전에는 표시가 없다** — 견줄 것이 없어 「이어진 이야기」가 무엇에 이어졌는지
+  // 말하지 못하고, 빈 표시가 된다.
+  await expect(page.getByText(결과라벨.내글)).toHaveCount(0);
+  await expect(page.getByText(결과라벨.이어진이야기)).toHaveCount(0);
+
+  await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+
+  await expect(page.getByText(결과라벨.내글)).toBeVisible();
+  await expect(page.getByText(결과라벨.이어진이야기)).toBeVisible();
+
+  // **읽는 순서가 곧 인과다** — 내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.
+  const 내글 = await page.getByText(결과라벨.내글).boundingBox();
+  const 이어진 = await page.getByText(결과라벨.이어진이야기).boundingBox();
+  expect(이어진!.y).toBeGreaterThan(내글!.y);
+});
+
+test("두 번째 글부터 입력 영역이 같은 질문을 되풀이하지 않는다", async ({ page }) => {
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+
+  await page.goto("/chapter");
+  // 첫 글 전에는 기존 제목 그대로다. 그때는 「이번에는」이 가리킬 지난번이 없다.
+  await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toBeVisible();
+
+  await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+
+  // **래서판다가 바로 위에서 「네가 쓴 대로 이야기가 이어졌어.」라고 말한다.**
+  // 그 아래에서 같은 질문을 또 하면 처음 보는 화면과 구분이 안 된다.
+  await expect(page.getByRole("textbox", { name: 챕터다시쓰기라벨 })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toHaveCount(0);
+});
+
+test("글을 보낸 뒤 초점이 입력칸으로 가지 않는다 — 키보드가 갑자기 열리면 안 된다", async ({
+  page,
+}) => {
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+
+  await page.goto("/chapter");
+  await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+  await expect(page.getByText(결과라벨.내글)).toBeVisible();
+
+  // **읽을 것으로 먼저 간다.** 입력칸으로 가면 모바일에서 키보드가 올라와
+  // **삽화와 이어진 이야기를 덮는다.**
+  const 초점 = await page.evaluate(() => document.activeElement?.id ?? "");
+  expect(초점).not.toBe("attempt");
 });
