@@ -246,6 +246,37 @@
   }
 }
 
+/* 누운 화면이 낮을 때 동료 크기를 창 높이에 맞춘다 (2026-09-21 실측).
+
+   ⛔ 1280×800 에서 **문서가 972px** 이었다. 창보다 172px 크고, 그래서 나가기가 y=960 으로
+   첫 화면 밖이었다. 그런데 **빈 여백은 42.7%** 다 — 가로는 남는데 세로만 모자랐다.
+
+   ⭐ 범인은 동료 블록 280px 이고, **그 높이는 사실상 래서판다 그림 하나**다(264px).
+   공용 값이 `clamp(12rem, 33svh, 30rem)` 인데, **카드 화면에는 없는 읽는 묶음 224px 이
+   본편에는 더 있다.** 같은 창 높이를 둘이 다르게 나눠 써야 하는데 값이 하나였다.
+
+   그래서 본편에서만 낮춘다. 카드 화면(`/`)은 건드리지 않는다 — 거기선 넘치지 않는다. */
+@media (orientation: landscape) and (max-height: 900px) {
+  .chapter-world .guide-figure { --companion-size: clamp(7rem, 18svh, 12rem); }
+
+  /* 읽는 칸을 22svh 로 낮춘다. 읽는 칸은 스크롤되고 **쓰는 칸은 안 된다** —
+     둘 중 하나가 첫 화면을 벗어나야 한다면 스크롤되는 쪽이다.
+     ⚠ 첫 턴은 쓰기 안내 61px 이 더 있어 1280×800 에서 나가기가 31px 밖에 남는다.
+     더 줄이면 첫 화면에 보이는 글이 4줄에서 3줄이 되는데, **첫 턴이 아이가 이야기를
+     처음 읽는 자리**라 그 맞바꿈은 하지 않았다. 판정이 말한 쓰는 칸은 들어와 있다. */
+  .chapter-stage .chapter-reading,
+  .chapter-stage .chapter-story {
+    height: clamp(7rem, 22svh, 16rem);
+    max-height: clamp(7rem, 22svh, 16rem);
+  }
+
+  /* 나가기를 첫 화면 안으로 들이는 마지막 46px. 바닥 띠가 46px 짜리 버튼에 66px 을
+     쓰고 있었고, 나침반이 동료 그림보다 커져 있었다 — 그림을 18svh 로 낮추면서 생긴
+     역전이라 같이 맞춘다. */
+  .chapter-shell > .game-stage-footer { padding-block: 0.25rem max(0.375rem, env(safe-area-inset-bottom, 0px)); }
+  .chapter-world .game-compass { width: 6rem; height: 6rem; }
+}
+
 @media (max-height: 550px) {
   /* 자판·가로 화면에서도 현재 이야기와 동료를 다시 읽을 수 있게 문서 스크롤을 허용한다. */
   .chapter-shell { height: auto; min-height: 100dvh; }
