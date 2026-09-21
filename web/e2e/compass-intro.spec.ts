@@ -47,6 +47,22 @@ const 가이드 = (page: Page) => page.locator("[data-guide-phase]");
 const 보이는대사 = (page: Page) => page.locator("[data-guide-typed]");
 const 보이는상황 = (page: Page) => page.locator("[data-scene-typed]");
 const 나침반 = (page: Page) => page.locator("[data-compass-introducing]");
+
+/**
+ * **배치된 자리.** `boundingBox()` 를 쓰지 않는다 — 그건 `transform` 까지 더해서 재기 때문이다.
+ *
+ * ⛔ 2026-09-21 에 이것 때문에 네 건이 깨져 있었다. 나침반이 움직인 게 아니라
+ * **동료가 들어오는 연출이 아직 돌고 있었다** — `.guide-figure` 에
+ * `translateY(6.83px → 1.61px)` 가 걸려 있고, 같은 조상 아래 있는 나침반의
+ * `boundingBox()` 가 그 값을 같이 물고 왔다.
+ *
+ * ⭐ 바로 아래 주석이 재려던 것은 **「레이아웃 자리」**다. 연출로 잠깐 밀리는 것은
+ * 의도된 움직임이고, 배치가 바뀌는 것은 결함이다. 둘을 가르는 것이 `offset*` 이다.
+ */
+const 배치자리 = (요소: Locator) =>
+  요소.evaluate((e: HTMLElement) => ({
+    x: e.offsetLeft, y: e.offsetTop, width: e.offsetWidth, height: e.offsetHeight,
+  }));
 const 응답 = (page: Page) => page.locator(".game-response");
 const 입력 = (page: Page) => page.getByLabel(카드.prompt_label);
 
@@ -186,7 +202,7 @@ for (const [width, height] of [[360, 640], [1280, 800]] as const) {
     await expect(나침반(page)).toHaveAttribute("data-compass-introducing", "true");
     const 도착나침반 = page.locator("[data-compass-destination]");
     await expect(도착나침반).toHaveAttribute("data-compass-arrival-pending", "true");
-    const 도착전자리 = await 도착나침반.boundingBox();
+    const 도착전자리 = await 배치자리(도착나침반);
     await page.clock.runFor(50);
     await expect(page.locator("[data-compass-arrival]")).toBeVisible();
     await page.clock.runFor(500);
@@ -194,7 +210,7 @@ for (const [width, height] of [[360, 640], [1280, 800]] as const) {
     await expect(보이는대사(page)).toHaveText(소개앞말);
     await 입력아직없음(page);
     // 복제본만 화면 위에서 움직인다. 최종 나침반의 레이아웃 자리는 전혀 바뀌지 않는다.
-    expect(await 도착나침반.boundingBox()).toEqual(도착전자리);
+    expect(await 배치자리(도착나침반)).toEqual(도착전자리);
     await 높이유지();
 
     await 차례까지(page, "rest");

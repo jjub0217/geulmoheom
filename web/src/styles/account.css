@@ -447,3 +447,44 @@
     gap: 1.5rem;
   }
 }
+
+/* 세로가 짧은 폰 — 360×640 이 여기다 (2026-09-21 실측).
+
+   ⛔ 「아이 추가하기」가 y=714 로 첫 화면(640) 밖이었다. 자녀가 하나뿐인데도 그렇다.
+   자녀 카드가 360px 이고, 그중 198px 이 접속 코드 관리(경고문만 84px)다.
+   나머지는 칸과 칸 사이 여백이다.
+
+   ⭐ 글은 안 줄인다 — 경고문은 부모가 읽어야 하는 문장이다. 여백만 좁힌다.
+   본편 화면에서 한 것과 같은 방식이다. */
+@media (max-width: 30rem) and (max-height: 700px) {
+  .account-page {
+    padding-block: 0.75rem;
+  }
+  .account-dashboard {
+    gap: 0.75rem;
+  }
+  .account-dashboard-heading {
+    padding-bottom: 0.625rem;
+  }
+  .children-layout {
+    gap: 0.875rem;
+  }
+  .children-list-frame {
+    padding: 0.875rem;
+  }
+  .children-list-section,
+  .children-list {
+    gap: 0.625rem;
+  }
+  .child-card {
+    gap: 0.625rem;
+    padding: 0.875rem;
+  }
+  .child-access-actions {
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+  }
+  .child-danger-actions {
+    padding-top: 0.75rem;
+  }
+}

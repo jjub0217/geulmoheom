@@ -241,10 +241,21 @@ export function ChildrenPanel() {
 
   const 아이가있다 = children !== null && children.length > 0;
   const 첫아이를만든다 = children !== null && children.length === 0;
+  /**
+   * **목록 틀을 언제 보이나.**
+   *
+   * ⛔ 종전에는 「아이가 있거나 목록을 못 불렀을 때」였다. 그래서 **마지막 아이를 지우면
+   * 「지웠어요」가 그 틀과 함께 통째로 사라졌다** — 지웠다는 말이 목록 안에 들어 있는데
+   * 목록이 비면 목록이 안 그려지기 때문이다.
+   *
+   * **그게 이 검사가 막으려던 바로 그 상황이다** — 「목록에서 사라지는 것으로 대신하지 않는다」.
+   * 아이가 하나뿐인 부모에게는 그 한 줄이 **성공과 실패를 가르는 유일한 신호**다.
+   */
+  const 목록틀을보인다 = 아이가있다 || 목록실패 !== null || 지웠다 !== null;
 
   return (
-    <section className={`children-layout${첫아이를만든다 ? " children-layout--empty" : ""}`}>
-      {(아이가있다 || 목록실패 !== null) && (
+    <section className={`children-layout${첫아이를만든다 && !목록틀을보인다 ? " children-layout--empty" : ""}`}>
+      {목록틀을보인다 && (
         <div className="account-card children-list-frame">
           <h2 className="account-section-title">{목록.제목}</h2>
 
