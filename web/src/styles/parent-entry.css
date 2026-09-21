@@ -216,7 +216,12 @@
   display: none;
 }
 .parent-dashboard-page .account-dashboard-heading h1 {
-  font-size: clamp(1.75rem, 3vw, 2.375rem);
+  /* ⛔ **2rem 은 32px 이다** (2026-09-21 사용자 지시) — 기준 글자 크기가 브라우저 기본
+     16px 이라 그렇다. 종전 상한은 2.375rem(38px) 이었다.
+     ⚠ **이 줄은 이 화면에만 닿는다** — `.parent-dashboard-page` 는 부모가 로그인한 뒤의
+     화면에만 붙는다(`signup/page.tsx`). 공용 기본값은 `account.css` 의
+     `.account-heading h1` 이고 **그쪽을 건드리면 학부모 로그인·가입 화면이 같이 움직인다.** */
+  font-size: clamp(1.75rem, 3vw, 2rem);
   font-weight: 650;
 }
 .parent-dashboard-page .child-card,
