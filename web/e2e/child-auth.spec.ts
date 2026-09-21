@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { 못닿음, 코드입력 } from "../src/app/child/auth/copy";
+import { 입장문구 } from "../src/components/account-entry";
+import { 폼 } from "../src/app/parents/signup/copy";
 import { 상태표시 } from "../src/app/status-copy";
 
 test.use({ serviceWorkers: "block" });
@@ -257,4 +259,47 @@ test("코드를 보내는 동안 기다린다고 말한다 — 식은 서버는 
   // 끝나면 그 말이 사라진다 — 남아 있으면 **끝난 뒤에도 기다리는 것처럼 보인다.**
   await page.waitForURL("**/");
   await expect(page.locator("[data-확인중]")).toHaveCount(0);
+});
+
+/**
+ * **맨 주소로 들어온 어른이 갇히지 않는다** (계획 「해커톤 제출 전」 ① · `문구.md` 3.3 새 절).
+ *
+ * ⛔ **막다른 길이었다.** 서비스 주소를 그냥 열면 자동으로 이 화면에 오는데
+ * (`app/page.tsx` 의 `router.replace("/child/auth")`), 화면은 **6자리 접속 코드**를 요구한다.
+ * **처음 온 사람에게는 그 코드가 없고, 코드를 만들 방법도 되돌아갈 데도 없었다.**
+ * **서비스를 처음 여는 사람이 정확히 그 사람이다.**
+ *
+ * ⭐ **재는 것은 문장이 아니라 길이다.** 문구가 화면에 있는지가 아니라
+ * **맨 주소에서 부모 가입 폼까지 손으로 닿는지**를 끝까지 걷는다 — 그것이 완료 조건이었다.
+ *
+ * 문장은 `account-entry.tsx`·`signup/copy.ts` 에서 가져온다. 여기 베껴 적으면 문구가 바뀌는 날
+ * 검사가 제품을 붙잡는다.
+ */
+test("맨 주소로 들어온 어른이 갇히지 않는다 — 접속 코드가 없어도 부모 가입까지 걸어간다", async ({ page }) => {
+  const 안들어왔다 = (route: { fulfill: (r: object) => unknown }) =>
+    route.fulfill({ status: 401, json: { error: { code: "UNAUTHENTICATED", message: "검사용 응답" } } });
+  // ⭐ 맨 주소를 인증 화면으로 보내는 것은 `/cards/next` 의 401 이다 (`app/page.tsx`) —
+  //    `/child/me` 가 아니다. 셋 다 「아직 안 들어왔다」로 둔다.
+  await page.route("**/api/v1/cards/next", 안들어왔다);
+  await page.route("**/api/v1/child/me", 안들어왔다);
+  await page.route("**/api/v1/parents/me", 안들어왔다);
+
+  // 맨 주소다. 아이 인증 화면으로 보내지는 것이 지금 동작이다.
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/child\/auth$/);
+  await expect(page.getByRole("heading", { name: 코드입력.제목 })).toBeVisible();
+
+  // **자기 얘기인 사람만 걸리는 물음이다** — 코드를 들고 온 아이는 그냥 지나간다.
+  await expect(page.getByText(입장문구.코드없음)).toBeVisible();
+  await expect(page.getByText(입장문구.부모안내)).toBeVisible();
+
+  const 가는길 = page.getByRole("link", { name: 입장문구.부모가입 });
+  await expect(가는길).toBeVisible();
+  await expect(가는길).toHaveAttribute("href", "/parents/signup");
+
+  // **누르면 실제로 닿는다.** 여기까지가 「손으로 닿는다」다.
+  await 가는길.click();
+  await expect(page).toHaveURL(/\/parents\/signup$/);
+  // ⛔ 401 은 가입 폼을 띄운다. 알려진 「가입 무한 고리」는 아이 코드를 이미 넣은 뒤(403)에만 난다.
+  await expect(page.getByRole("button", { name: 폼.가입하기 })).toBeVisible();
 });
