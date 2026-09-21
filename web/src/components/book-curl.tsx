@@ -1,7 +1,14 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- 780ms 동안만 보이는 aria-hidden 종이 복제본이다. */
+/* eslint-disable @next/next/no-img-element -- 전환 중에만 보이는 aria-hidden 종이 복제본이다. */
+
+import { type CSSProperties, useLayoutEffect, useRef } from "react";
 
 import type { components } from "@/api/types.gen";
+import {
+  BOOK_CURL_DURATION_MS,
+  BOOK_CURL_STRIP_COUNT,
+  bookCurlStripPoses,
+} from "@/components/book-curl-geometry";
 import { bookCurlFaces, type BookCurlDirection } from "@/components/book-curl-model";
 import { 티어이름 } from "@/components/tier-badge";
 import { TierBadgeCrest } from "@/components/tier-badge-crest";
@@ -55,32 +62,98 @@ function CurlWriting({ snapshot }: { snapshot: BookCurlSnapshot }) {
   );
 }
 
-function TurningLeaf({ direction, front, back }: {
+function TurningLeaf({ direction, front, back, onFinish }: {
   direction: BookCurlDirection;
   front: BookCurlSnapshot;
   back: BookCurlSnapshot;
+  onFinish: () => void;
 }) {
+  const turningRef = useRef<HTMLDivElement>(null);
   const frontIsWriting = direction === "next";
+  const strips = Array.from({ length: BOOK_CURL_STRIP_COUNT }, (_, index) => index);
+
+  useLayoutEffect(() => {
+    const turning = turningRef.current;
+    if (!turning) return;
+    const width = turning.getBoundingClientRect().width / 2;
+    const stripElements = Array.from(turning.querySelectorAll<HTMLElement>(".book-curl-strip"));
+    const frameCount = 33;
+    const frames = Array.from({ length: frameCount }, (_, frameIndex) => {
+      const offset = frameIndex / (frameCount - 1);
+      return { offset, poses: bookCurlStripPoses(direction, offset, width) };
+    });
+    const animations = stripElements.map((strip, stripIndex) => {
+      const animation = strip.animate(frames.map(({ offset, poses }) => ({
+        offset,
+        transform: `translate3d(${poses[stripIndex].x}px, 0, ${poses[stripIndex].z}px) rotateY(${poses[stripIndex].angle}deg)`,
+      })), {
+        duration: BOOK_CURL_DURATION_MS,
+        easing: "linear",
+        fill: "both",
+      });
+      return animation;
+    });
+    let cancelled = false;
+    Promise.all(animations.map((animation) => animation.finished.catch(() => undefined))).then(() => {
+      if (!cancelled) onFinish();
+    });
+    return () => {
+      cancelled = true;
+      animations.forEach((animation) => animation.cancel());
+    };
+  }, [direction, onFinish]);
+
   return (
     <div
+      ref={turningRef}
       className={`book-curl-turning book-curl-turning--${direction}`}
       data-curl-turning-front={front.page.page_no}
       data-curl-turning-back={back.page.page_no}
+      data-curl-strip-count={BOOK_CURL_STRIP_COUNT}
     >
-      <div className="book-curl-leaf-face book-curl-leaf-face--front">
-        {frontIsWriting ? <CurlWriting snapshot={front} /> : <CurlArtwork snapshot={front} />}
-        <div className="book-curl-sheen" />
-      </div>
-      <div className="book-curl-leaf-face book-curl-leaf-face--back">
-        {frontIsWriting ? <CurlArtwork snapshot={back} /> : <CurlWriting snapshot={back} />}
-        <div className="book-curl-sheen" />
-      </div>
+      {strips.map((index) => {
+        const left = direction === "next"
+          ? 50 + index * 50 / BOOK_CURL_STRIP_COUNT
+          : index * 50 / BOOK_CURL_STRIP_COUNT;
+        const style = {
+          left: `${left}%`,
+          width: `${50 / BOOK_CURL_STRIP_COUNT}%`,
+        } satisfies CSSProperties;
+        const frontContentStyle = {
+          left: `${-index * 100}%`,
+          width: `${BOOK_CURL_STRIP_COUNT * 100}%`,
+        } satisfies CSSProperties;
+        const backIndex = BOOK_CURL_STRIP_COUNT - index - 1;
+        const backContentStyle = {
+          left: `${-backIndex * 100}%`,
+          width: `${BOOK_CURL_STRIP_COUNT * 100}%`,
+        } satisfies CSSProperties;
+        return (
+          <div className="book-curl-strip" data-curl-strip={index} key={index} style={style}>
+            <div className="book-curl-strip-face book-curl-strip-face--front">
+              <div className="book-curl-strip-content" style={frontContentStyle}>
+                {frontIsWriting ? <CurlWriting snapshot={front} /> : <CurlArtwork snapshot={front} />}
+              </div>
+              <div className="book-curl-strip-shade" style={frontContentStyle} />
+            </div>
+            <div className="book-curl-strip-face book-curl-strip-face--back">
+              <div className="book-curl-strip-content" style={backContentStyle}>
+                {frontIsWriting ? <CurlArtwork snapshot={back} /> : <CurlWriting snapshot={back} />}
+              </div>
+              <div className="book-curl-strip-shade" style={backContentStyle} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 /** 전환 중에만 보이는 비상호작용 복제본. 실제 읽기·인쇄 DOM을 대신하지 않는다. */
-export function BookCurl({ transition }: { transition: BookCurlTransition | null }) {
+export function BookCurl({ transition, onFinish }: {
+  transition: BookCurlTransition | null;
+  onFinish: () => void;
+}) {
   if (!transition) return null;
 
   const faces = bookCurlFaces(transition.direction, transition.current, transition.adjacent);
@@ -110,7 +183,13 @@ export function BookCurl({ transition }: { transition: BookCurlTransition | null
           <div className="book-curl-fixed book-curl-fixed--right" data-curl-fixed-right={faces.fixedRight!.page.page_no} />
         </>
       )}
-      <TurningLeaf direction={transition.direction} front={faces.turningFront} back={faces.turningBack} />
+      <div className={`book-curl-cast-shadow book-curl-cast-shadow--${transition.direction}`} />
+      <TurningLeaf
+        direction={transition.direction}
+        front={faces.turningFront}
+        back={faces.turningBack}
+        onFinish={onFinish}
+      />
     </div>
   );
 }

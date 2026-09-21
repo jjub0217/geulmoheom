@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 
 import type { components } from "@/api/types.gen";
 import { BookCurl, type BookCurlSnapshot, type BookCurlTransition } from "@/components/book-curl";
+import { BOOK_CURL_DURATION_MS } from "@/components/book-curl-geometry";
 import { bookArtworkSource, BookPageFrame } from "@/components/book-page";
 
 type BookPage = components["schemas"]["BookPage"];
@@ -59,18 +60,21 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
     phaseRef.current = "idle";
     setPhase("idle");
   }, []);
+  const finishActiveCurl = useCallback(() => {
+    const active = curlRef.current;
+    if (active) finishDesktopCurl(active.targetIndex);
+  }, [finishDesktopCurl]);
 
   useEffect(() => {
-    const finishForNarrowScreen = () => {
-      const active = curlRef.current;
-      if (active && !matchMedia("(min-width: 56rem)").matches) finishDesktopCurl(active.targetIndex);
-    };
-    addEventListener("resize", finishForNarrowScreen);
+    // 스트립 좌표는 시작 시점의 책 크기로 계산한다. 전환 중 판형이 바뀌면 현재
+    // 목표 장면을 확정해 찌그러진 종이를 남기지 않는다.
+    const finishForResize = () => finishActiveCurl();
+    addEventListener("resize", finishForResize);
     return () => {
-      removeEventListener("resize", finishForNarrowScreen);
+      removeEventListener("resize", finishForResize);
       if (transitionTimer.current !== null) window.clearTimeout(transitionTimer.current);
     };
-  }, [finishDesktopCurl]);
+  }, [finishActiveCurl]);
 
   useLayoutEffect(() => {
     if (phase !== "idle") return;
@@ -120,7 +124,12 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
       setCurl(nextCurl);
       phaseRef.current = "curl";
       setPhase("curl");
-      transitionTimer.current = window.setTimeout(() => finishDesktopCurl(index), 780);
+      // Web Animations 완료 이벤트가 정상 경로다. 백그라운드 탭 등에서 완료
+      // 이벤트가 지연될 때만 이 타이머가 안전장치로 장면을 확정한다.
+      transitionTimer.current = window.setTimeout(
+        () => finishDesktopCurl(index),
+        BOOK_CURL_DURATION_MS + 240,
+      );
       return;
     }
     setReadingIndex(index);
@@ -177,7 +186,7 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
             </div>
           ))}
         </div>
-        <BookCurl transition={curl} />
+        <BookCurl transition={curl} onFinish={finishActiveCurl} />
       </div>
 
       <nav className="book-pagination print:hidden" aria-label={책쪽이동라벨}>

@@ -99,6 +99,12 @@ async function sceneMatches(page: Page, index: number) {
   const scene = page.locator("[data-책쪽]:visible");
   await expect(scene).toHaveCount(1);
   await expect(scene).toHaveAttribute("data-scene-number", String(numbers[index]));
+  // 모바일의 200ms 진입 이동이 끝난 뒤 판형을 잰다. 중간 transform 좌표를
+  // 정적 레이아웃 오차로 오인하면 실행 속도에 따라 이 검사가 흔들린다.
+  await scene.evaluate(async (element) => {
+    await Promise.all(element.parentElement!.getAnimations({ subtree: true })
+      .map((animation) => animation.finished.catch(() => undefined)));
+  });
   await expect(scene.locator(".book-page-writing [data-책문장]")).toHaveText(book.pages[index].text);
   await expect(scene.locator(".book-page-writing [data-티어배지]")).toHaveCount(1);
   await expect(scene.locator(".book-page-writing [data-티어배지]")).toHaveText(티어이름[book.pages[index].tier]);
@@ -231,67 +237,130 @@ test("데스크톱 컬은 A 글 앞면·B 삽화 뒷면·B 글 아래 면을 한
   await page.locator("[data-book-next]").click();
   const nextCurl = page.locator("[data-book-curl]");
   await expect(nextCurl).toBeVisible();
-  await expect(nextCurl).toHaveAttribute("data-curl-direction", "next");
-  await expect(nextCurl.locator("[data-curl-fixed-left]")).toHaveAttribute("data-curl-fixed-left", "1");
-  await expect(nextCurl.locator("[data-curl-fixed-left] img")).toHaveCount(0);
-  await expect(nextCurl.locator("[data-curl-fixed-left]")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(stableArtwork).toBeVisible();
-  const stableArtworkDuring = (await stableArtwork.boundingBox())!;
+  await nextCurl.evaluate((root) => root.getAnimations({ subtree: true }).forEach((animation) => {
+    animation.pause();
+    animation.currentTime = 430;
+  }));
+  const snapshot = await nextCurl.evaluate((root) => {
+    const select = <T extends Element>(selector: string) => root.querySelector<T>(selector)!;
+    const strips = Array.from(root.querySelectorAll<HTMLElement>("[data-curl-strip]"));
+    const fixed = select<HTMLElement>("[data-curl-fixed-left]");
+    const artwork = document.querySelector<HTMLElement>('.book-reader-page[data-current="true"] .book-page-artwork img')!;
+    const activeScene = document.querySelector<HTMLElement>('.book-reader-page[data-current="true"] [data-책쪽]')!;
+    const writingOffsets = [".book-page-tier", ".book-page-text", ".book-page-footer"].map((selector) => {
+      const actual = activeScene.querySelector<HTMLElement>(`.book-page-writing ${selector}`)!;
+      const clone = select<HTMLElement>(`[data-curl-writing-page="1"] ${selector}`);
+      return {
+        actual: { top: actual.offsetTop, height: actual.offsetHeight },
+        clone: { top: clone.offsetTop, height: clone.offsetHeight },
+      };
+    });
+    const backArtwork = select<HTMLImageElement>(".book-curl-strip-face--back img");
+    const box = (element: Element) => {
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+    };
+    return {
+      artwork: box(artwork),
+      artworkStyle: {
+        fit: getComputedStyle(backArtwork).objectFit,
+        position: getComputedStyle(backArtwork).objectPosition,
+        positioning: getComputedStyle(backArtwork).position,
+      },
+      artworkSrc: backArtwork.getAttribute("src"),
+      backfaceBack: getComputedStyle(select(".book-curl-strip-face--back")).backfaceVisibility,
+      backfaceFront: getComputedStyle(select(".book-curl-strip-face--front")).backfaceVisibility,
+      badgeA: select('[data-curl-writing-page="1"] [data-curl-tier-badge]').textContent,
+      badgeB: select('[data-curl-writing-page="3"] [data-curl-tier-badge]').textContent,
+      box: box(root),
+      curvedBoxes: strips.map((strip) => box(strip)),
+      curvedTransforms: strips.map((strip) => getComputedStyle(strip).transform),
+      direction: (root as HTMLElement).dataset.curlDirection,
+      fixedBackground: getComputedStyle(fixed).backgroundColor,
+      fixedImages: fixed.querySelectorAll("img").length,
+      fixedLeft: fixed.dataset.curlFixedLeft,
+      footerA: select('[data-curl-writing-page="1"] .book-page-footer').textContent,
+      footerB: select('[data-curl-writing-page="3"] .book-page-footer').textContent,
+      interactive: root.querySelectorAll("button, [tabindex]").length,
+      nextDisabled: document.querySelector<HTMLButtonElement>("[data-book-next]")!.disabled,
+      ornamentsA: select('[data-curl-writing-page="1"]').querySelectorAll(".tier-badge-ornament").length,
+      ornamentsB: select('[data-curl-writing-page="3"]').querySelectorAll(".tier-badge-ornament").length,
+      overflow: getComputedStyle(root).overflow,
+      sceneBox: box(activeScene),
+      stripCount: strips.length,
+      stripCountAttribute: select<HTMLElement>("[data-curl-strip-count]").dataset.curlStripCount,
+      turningBack: select<HTMLElement>("[data-curl-turning-back]").dataset.curlTurningBack,
+      turningFront: select<HTMLElement>("[data-curl-turning-front]").dataset.curlTurningFront,
+      underRight: select<HTMLElement>("[data-curl-under-right]").dataset.curlUnderRight,
+      writingOffsets,
+    };
+  });
+  await nextCurl.evaluate((root) => root.getAnimations({ subtree: true }).forEach((animation) => animation.play()));
+  expect(snapshot.direction).toBe("next");
+  expect(snapshot.fixedLeft).toBe("1");
+  expect(snapshot.fixedImages).toBe(0);
+  expect(snapshot.fixedBackground).toBe("rgba(0, 0, 0, 0)");
   for (const key of ["x", "y", "width", "height"] as const) {
-    expect(Math.abs(stableArtworkBefore[key] - stableArtworkDuring[key])).toBeLessThanOrEqual(.5);
+    expect(Math.abs(stableArtworkBefore[key] - snapshot.artwork[key])).toBeLessThanOrEqual(.5);
   }
-  await expect(nextCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "1");
-  await expect(nextCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "3");
-  await expect(nextCurl.locator("[data-curl-under-right]")).toHaveAttribute("data-curl-under-right", "3");
-  await expect(nextCurl.locator(".book-curl-ridges")).toHaveCount(0);
-  await expect(nextCurl.locator(".book-curl-leaf-face--front")).toHaveCSS("backface-visibility", "hidden");
-  await expect(nextCurl.locator(".book-curl-leaf-face--back")).toHaveCSS("backface-visibility", "hidden");
-  await expect(nextCurl.locator("button, [tabindex]")).toHaveCount(0);
-  await expect(nextCurl.locator('[data-curl-writing-page="1"] [data-curl-tier-badge]')).toHaveText(티어이름.basic);
-  await expect(nextCurl.locator('[data-curl-writing-page="3"] [data-curl-tier-badge]')).toHaveText(티어이름.rare);
-  await expect(nextCurl.locator('[data-curl-writing-page="1"] .tier-badge-ornament')).toHaveCount(1);
-  await expect(nextCurl.locator('[data-curl-writing-page="3"] .tier-badge-ornament')).toHaveCount(1);
-  await expect(nextCurl.locator('[data-curl-writing-page="1"] .book-page-footer')).toHaveText("2");
-  await expect(nextCurl.locator('[data-curl-writing-page="3"] .book-page-footer')).toHaveText("4");
-  const activeScene = page.locator('.book-reader-page[data-current="true"] [data-책쪽]');
-  const actualWriting = activeScene.locator(".book-page-writing");
-  const turningWriting = nextCurl.locator('[data-curl-writing-page="1"]');
-  for (const selector of [".book-page-tier", ".book-page-text", ".book-page-footer"]) {
-    const actualOffset = await actualWriting.locator(selector).evaluate((element) => ({
-      top: (element as HTMLElement).offsetTop,
-      height: (element as HTMLElement).offsetHeight,
-    }));
-    const cloneOffset = await turningWriting.locator(selector).evaluate((element) => ({
-      top: (element as HTMLElement).offsetTop,
-      height: (element as HTMLElement).offsetHeight,
-    }));
-    expect(Math.abs(actualOffset.top - cloneOffset.top)).toBeLessThanOrEqual(1);
-    expect(Math.abs(actualOffset.height - cloneOffset.height)).toBeLessThanOrEqual(1);
+  expect(snapshot.turningFront).toBe("1");
+  expect(snapshot.turningBack).toBe("3");
+  expect(snapshot.underRight).toBe("3");
+  expect(snapshot.stripCount).toBe(16);
+  expect(snapshot.stripCountAttribute).toBe("16");
+  expect(snapshot.overflow).toBe("visible");
+  expect(new Set(snapshot.curvedTransforms).size).toBeGreaterThan(10);
+  expect(Math.max(...snapshot.curvedBoxes.map(({ y }) => y)) - Math.min(...snapshot.curvedBoxes.map(({ y }) => y))).toBeGreaterThan(2);
+  expect(Math.max(...snapshot.curvedBoxes.map(({ height }) => height)) - Math.min(...snapshot.curvedBoxes.map(({ height }) => height))).toBeGreaterThan(2);
+  expect(snapshot.backfaceFront).toBe("hidden");
+  expect(snapshot.backfaceBack).toBe("hidden");
+  expect(snapshot.interactive).toBe(0);
+  expect(snapshot.nextDisabled).toBe(true);
+  expect(snapshot.badgeA).toBe(티어이름.basic);
+  expect(snapshot.badgeB).toBe(티어이름.rare);
+  expect(snapshot.ornamentsA).toBe(1);
+  expect(snapshot.ornamentsB).toBe(1);
+  expect(snapshot.footerA).toContain("2");
+  expect(snapshot.footerB).toContain("4");
+  for (const { actual, clone } of snapshot.writingOffsets) {
+    expect(Math.abs(actual.top - clone.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs(actual.height - clone.height)).toBeLessThanOrEqual(1);
   }
-  const curlBox = (await nextCurl.boundingBox())!;
-  const sceneBox = (await activeScene.boundingBox())!;
-  // 전환 복제본이 실제 책과 같은 판형을 써서 위아래·좌우로 튀어나오지 않는다.
+  // 좌표 기준 상자는 실제 책과 같고, 종이 곡면만 overflow 영역으로 솟아오른다.
   for (const key of ["x", "y", "width", "height"] as const) {
-    expect(Math.abs(curlBox[key] - sceneBox[key])).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(snapshot.box[key] - snapshot.sceneBox[key])).toBeLessThanOrEqual(1.5);
   }
-  const turningArtwork = nextCurl.locator(".book-curl-leaf-face--back img");
-  await expect(turningArtwork).toHaveAttribute("src", `${book.pages[1].artwork_url}?book-layout=square-20260919`);
-  await expect(turningArtwork).toHaveCSS("object-fit", "cover");
-  await expect(turningArtwork).toHaveCSS("object-position", "50% 50%");
-  await expect(turningArtwork).toHaveCSS("position", "absolute");
-  await expect(page.locator("[data-book-next]")).toBeDisabled();
+  expect(snapshot.artworkSrc).toBe(`${book.pages[1].artwork_url}?book-layout=square-20260919`);
+  expect(snapshot.artworkStyle.fit).toBe("cover");
+  expect(snapshot.artworkStyle.position).toBe("50% 50%");
+  expect(snapshot.artworkStyle.positioning).toBe("absolute");
   await expect(nextCurl).toHaveCount(0);
   await sceneMatches(page, 1);
 
   await page.locator("[data-book-previous]").click();
   const previousCurl = page.locator("[data-book-curl]");
   await expect(previousCurl).toBeVisible();
-  await expect(previousCurl).toHaveAttribute("data-curl-direction", "previous");
-  await expect(previousCurl.locator("[data-curl-fixed-right]")).toHaveAttribute("data-curl-fixed-right", "3");
-  await expect(previousCurl.locator("[data-curl-fixed-right] [data-curl-writing-page]")).toHaveCount(0);
-  await expect(previousCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "3");
-  await expect(previousCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "1");
-  await expect(previousCurl.locator("[data-curl-under-left]")).toHaveAttribute("data-curl-under-left", "1");
+  await previousCurl.evaluate((root) => root.getAnimations({ subtree: true }).forEach((animation) => {
+    animation.pause();
+    animation.currentTime = 430;
+  }));
+  const previousSnapshot = await previousCurl.evaluate((root) => ({
+    direction: (root as HTMLElement).dataset.curlDirection,
+    fixedRight: root.querySelector<HTMLElement>("[data-curl-fixed-right]")!.dataset.curlFixedRight,
+    fixedWriting: root.querySelectorAll("[data-curl-fixed-right] [data-curl-writing-page]").length,
+    turningFront: root.querySelector<HTMLElement>("[data-curl-turning-front]")!.dataset.curlTurningFront,
+    turningBack: root.querySelector<HTMLElement>("[data-curl-turning-back]")!.dataset.curlTurningBack,
+    underLeft: root.querySelector<HTMLElement>("[data-curl-under-left]")!.dataset.curlUnderLeft,
+    transforms: Array.from(root.querySelectorAll<HTMLElement>("[data-curl-strip]"), (strip) => getComputedStyle(strip).transform),
+  }));
+  await previousCurl.evaluate((root) => root.getAnimations({ subtree: true }).forEach((animation) => animation.play()));
+  expect(previousSnapshot.direction).toBe("previous");
+  expect(previousSnapshot.fixedRight).toBe("3");
+  expect(previousSnapshot.fixedWriting).toBe(0);
+  expect(previousSnapshot.turningFront).toBe("3");
+  expect(previousSnapshot.turningBack).toBe("1");
+  expect(previousSnapshot.underLeft).toBe("1");
+  expect(new Set(previousSnapshot.transforms).size).toBeGreaterThan(10);
   await expect(previousCurl).toHaveCount(0);
   await sceneMatches(page, 0);
 });
