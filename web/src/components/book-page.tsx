@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import type { components } from "@/api/types.gen";
 import { TierBadge } from "@/components/tier-badge";
@@ -35,7 +35,7 @@ function bookArtworkSource(url: string) {
  * **하이라이트를 칠하지 않는다.** 결과 화면의 표시는 **그 순간 무엇이 통했는지**를 말하는 것이고,
  * 책은 **문장 자체를 두는 자리**다. 계약도 `highlights` 를 여기 안 준다.
  */
-export function BookPageFrame({ page, startPageNumber }: { page: BookPage; startPageNumber: number }) {
+export function BookPageFrame({ page, startPageNumber, onArtworkUrl }: { page: BookPage; startPageNumber: number; onArtworkUrl?: (pageNo: number, url: string | null) => void }) {
   /** 화면 판형은 1:1이고, 실제 원본 비율은 전체 그림을 보존하는 인쇄에 사용한다. */
   const [비율, set비율] = useState(빈자리비율);
   const [다시확인, set다시확인] = useState(0);
@@ -43,6 +43,7 @@ export function BookPageFrame({ page, startPageNumber }: { page: BookPage; start
   const 삽화상태 = useArtwork(page.artwork ?? null, 다시확인, 책폴링상한);
   const 삽화주소 = 삽화상태.kind === "떴다" ? 삽화상태.url : page.artwork_url;
   const 삽화면있음 = (page.artwork !== null && page.artwork !== undefined) || 삽화주소 !== null;
+  useEffect(() => { onArtworkUrl?.(page.page_no, 삽화주소); }, [onArtworkUrl, page.page_no, 삽화주소]);
   return (
     // **`data-책쪽` 은 인쇄가 쓴다** (`globals.css` `@media print`) —
     // 한 장면의 삽화와 원문을 함께 인쇄하기 위한 표식이다.

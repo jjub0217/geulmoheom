@@ -209,6 +209,44 @@ test("넓은 화면은 같은 장면의 그림과 글을 좌우에 놓고 서버
   await expect(page.locator("[data-책문장]")).toHaveText(book.pages.map((item) => item.text));
 });
 
+test("데스크톱 컬은 A 글 앞면·B 삽화 뒷면·B 글 아래 면을 한 장으로만 넘긴다", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openBook(page);
+  await waitForBookArtwork(page);
+
+  await page.locator("[data-book-next]").click();
+  const nextCurl = page.locator("[data-book-curl]");
+  await expect(nextCurl).toBeVisible();
+  await expect(nextCurl).toHaveAttribute("data-curl-direction", "next");
+  await expect(nextCurl.locator("[data-curl-fixed-left]")).toHaveAttribute("data-curl-fixed-left", "1");
+  await expect(nextCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "1");
+  await expect(nextCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "3");
+  await expect(nextCurl.locator("[data-curl-under-right]")).toHaveAttribute("data-curl-under-right", "3");
+  await expect(page.locator("[data-book-next]")).toBeDisabled();
+  await expect(nextCurl).toHaveCount(0);
+  await sceneMatches(page, 1);
+
+  await page.locator("[data-book-previous]").click();
+  const previousCurl = page.locator("[data-book-curl]");
+  await expect(previousCurl).toBeVisible();
+  await expect(previousCurl).toHaveAttribute("data-curl-direction", "previous");
+  await expect(previousCurl.locator("[data-curl-fixed-right]")).toHaveAttribute("data-curl-fixed-right", "3");
+  await expect(previousCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "3");
+  await expect(previousCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "1");
+  await expect(previousCurl.locator("[data-curl-under-left]")).toHaveAttribute("data-curl-under-left", "1");
+  await expect(previousCurl).toHaveCount(0);
+  await sceneMatches(page, 0);
+});
+
+test("reduced motion에서는 컬 복제본 없이 즉시 장면만 바꾼다", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openBook(page);
+  await page.locator("[data-book-next]").click();
+  await expect(page.locator("[data-book-curl]")).toHaveCount(0);
+  await sceneMatches(page, 1);
+});
+
 test("좁은 화면은 같은 장면의 그림 아래에서 글을 읽고 앞뒤 경계에서 멈춘다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openBook(page);
