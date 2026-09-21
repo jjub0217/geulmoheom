@@ -67,12 +67,34 @@
      흐림이 「여기서 끝이 아니다」를 말하고, 막대가 얼마나 남았는지를 말한다. */
   overflow-y: auto;
   scrollbar-gutter: stable;
+  /* ⛔ 흐림이 28px 이었다. 그런데 **한 줄이 29~35px** 이다 (2026-09-21 실측).
+     「여기서 끝이 아니다」를 말하려던 장치가 **마지막 줄을 통째로 먹고 있었다** —
+     360×640 에서 온전히 읽히는 줄이 넷 중 **하나**였다.
+     ⭐ 바로 위 주석이 「마지막 줄이 반만 보이면 아이는 잘렸다로 읽는다」라고 적어 뒀는데,
+     그 모양을 만든 것이 이 흐림이었다. 한 줄보다 확실히 작게 잡는다. */
   mask-image: linear-gradient(
     to bottom,
-    #000 calc(100% - 1.75rem),
+    #000 calc(100% - 0.5rem),
     transparent 100%
   );
   outline-offset: -4px;
+}
+/* 막대는 늘 보이게 둔다. `scrollbar-gutter: stable` 은 **자리만 비우고 막대를 안 그린다** —
+   겹침 막대를 쓰는 기기에서는 자리조차 0px 이다. 폭을 직접 주면 그리는 막대로 바뀐다.
+   흐림이 「더 있다」를 말하고 막대가 **얼마나 남았는지**를 말한다. */
+.chapter-stage .chapter-story {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-brass) 60%, transparent) transparent;
+}
+.chapter-stage .chapter-story::-webkit-scrollbar {
+  width: 6px;
+}
+.chapter-stage .chapter-story::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chapter-stage .chapter-story::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-brass) 60%, transparent);
 }
 .chapter-stage .chapter-narrative {
   margin: 0;
