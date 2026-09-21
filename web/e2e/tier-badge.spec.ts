@@ -3,6 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import type { components, paths } from "../src/api/types.gen";
 import { 티어이름 } from "../src/components/tier-badge";
 import { 배지안내 } from "../src/components/tier-badge-help";
+// **문장을 여기 베껴 적지 않는다.** 2026-09-20 에 바뀐 문구를 이 파일만 안 따라와 6건이 깨져 있었다.
+import { 버튼 } from "../src/app/copy";
 
 type Card = paths["/api/v1/cards/next"]["get"]["responses"][200]["content"]["application/json"];
 type Book = components["schemas"]["Book"];
@@ -93,7 +95,7 @@ async function mockApi(page: Page) {
 
 async function submitScene(page: Page, text = "문 앞에 떨어진 나뭇잎을 집어 살펴보았다.") {
   await page.getByLabel(card.prompt_label).fill(text);
-  await page.getByRole("button", { name: "내 장면 만들기", exact: true }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기, exact: true }).click();
   await expect(page.locator("main button[data-티어배지]:visible")).toBeVisible();
 }
 
@@ -262,7 +264,8 @@ test("320px에서도 새 배지 이름을 같은 크기로 읽고 결과·책·�
   await submitScene(page);
   const resultBadge = page.locator("main button[data-티어배지]:visible");
   await expect(resultBadge).toHaveText(names[1]);
-  await expect(resultBadge).toHaveAccessibleName(`${names[1]} 배지 알아보기`);
+  // 읽어주는 이름도 코드에서 조립한다 — 2026-09-20 에 쉼표가 들어갔는데 이 줄만 안 따라왔다
+  await expect(resultBadge).toHaveAccessibleName(`${names[1]} 배지, ${배지안내.제목}`);
   await resultBadge.click();
   const dialog = await checkDialog(page);
   const dialogSamples = dialog.locator(".tier-badge-preview .tier-badge");
@@ -287,7 +290,7 @@ test("320px에서도 새 배지 이름을 같은 크기로 읽고 결과·책·�
   for (let index = 0; index < names.length; index += 1) {
     // 다른 책장은 접근성 트리에서 숨겨져 있다. 실제로 펼친 뒤 읽을 이름을 확인한다.
     await expect(bookBadges.nth(index)).toBeVisible();
-    await expect(bookBadges.nth(index)).toHaveAccessibleName(`${names[index]} 배지 알아보기`);
+    await expect(bookBadges.nth(index)).toHaveAccessibleName(`${names[index]} 배지, ${배지안내.제목}`);
     bookBadgeSizes.push((await bookBadges.nth(index).boundingBox())!);
     if (index < names.length - 1) await page.locator("[data-book-next]").click();
   }

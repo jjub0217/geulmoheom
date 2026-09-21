@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { components, paths } from "../src/api/types.gen";
+// **문장을 베껴 적지 않는다** — 2026-09-20 에 바뀐 문구를 이 줄만 안 따라와 깨져 있었다.
+import { 버튼 } from "../src/app/copy";
+import { 챕터보내는중라벨 } from "../src/components/chapter-writing";
 
 type Chapter = paths["/api/v1/chapters/current"]["get"]["responses"][200]["content"]["application/json"];
 type Turn = paths["/api/v1/turns"]["post"]["responses"][200]["content"]["application/json"];
@@ -251,7 +254,7 @@ for (const path of ["/chapter", "/"] as const) {
       await expect(page.getByRole("textbox")).toHaveAttribute("readonly", "");
       await expect(page.getByRole("textbox")).toHaveValue(original);
       await expect(page.locator(".writing-actions button")).toBeDisabled();
-      await expect(page.locator(".writing-actions button")).toHaveText(path === "/chapter" ? "이야기를 잇는 중…" : "장면을 만드는 중…");
+      await expect(page.locator(".writing-actions button")).toHaveText(path === "/chapter" ? 챕터보내는중라벨 : 버튼.그림준비중);
       // aria-disabled인 링크는 기본 탐색이 남을 수 있다. 실제 포인터 클릭도 막혀야 한다.
       await link.click({ force: true });
       await expect.poll(() => new URL(page.url()).pathname).toBe(path);
