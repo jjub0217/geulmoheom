@@ -5,7 +5,6 @@ import type { components } from "../src/api/types.gen";
 import {
   나이선택,
   만들기,
-  목록,
   못닿음,
   재발급,
   접속코드,
@@ -64,7 +63,9 @@ test("첫 아이를 만들 때는 빈 목록 대신 아이 추가와 코드 받�
   await 관리화면(page, []);
 
   await expect(page.getByText(폼.가입됨안내)).toBeVisible();
-  await expect(page.getByText(목록.제목)).toHaveCount(0);
+  // ⛔ 「아이 목록」 제목은 이제 아무 상태에서도 없다 (2026-09-21) —
+  // 자리를 없앤 것이지 다른 말로 바꾼 것이 아니다. 옛말이 되살아나면 여기서 걸린다.
+  await expect(page.getByText("아이 목록")).toHaveCount(0);
   await expect(page.getByRole("button", { name: 만들기.버튼 })).toBeVisible();
 });
 
@@ -90,8 +91,15 @@ test("자녀 만들기 안내는 실제 이름도 된다고 말한다 — 별명
 test("목록은 아이 정보와 접속 코드 관리만 보여준다", async ({ page }) => {
   await 관리화면(page, [아이, { ...아이, child_id: "c-2222", nickname: "달빛", played_today: true }]);
 
-  await expect(page.locator("[data-자녀]").first()).toContainText(`${아이.nickname} · 만 11세`);
-  await expect(page.getByRole("heading", { name: 재발급.제목 })).toHaveCount(2);
+  // **이름과 나이가 한 줄에 가운뎃점으로 붙어 있지 않다** (2026-09-21) — 둘의 위계가
+  // 안 보여서 갈랐다. 재는 것은 **둘 다 카드에 있다**이지 붙어 있는 모양이 아니다.
+  const 첫카드 = page.locator("[data-자녀]").first();
+  await expect(첫카드).toContainText(아이.nickname);
+  await expect(첫카드).toContainText("만 11세");
+  await expect(첫카드).not.toContainText(`${아이.nickname} · `);
+  // ⛔ **「접속 코드 관리」 제목을 걷었다** — 별도 관리 메뉴처럼 보였다.
+  // 경고 한 줄이 그 몫을 한다: 무엇을 하는 버튼인지와 그 대가를 같이 말한다.
+  await expect(page.getByText(재발급.경고)).toHaveCount(2);
 
   // `played_today` 와 `daily_cap` 은 접속 상태도, 부모가 이 화면에서 해야 할 일도 아니다.
   // API가 코드 사용·만료·현재 로그인 상태를 주지 않으므로 화면은 상태를 추측하지 않는다.
@@ -280,8 +288,7 @@ test("지우기는 되묻는다 — 누르는 것만으로 안 지워진다", as
 
   // **무엇이 사라지는지 세어서 말한다** — 서버가 문장·그림·책·기록을 함께 지운다.
   // 「아이를 지웁니다」로 끝나면 학부모는 **책도 사라진다는 것을 지운 뒤에 안다.**
-  await expect(확인창(page)).toContainText(지우기.사라진다);
-  await expect(확인창(page)).toContainText(지우기.되돌릴수없다);
+  await expect(확인창(page)).toContainText(지우기.사라진다(아이.nickname));
   await expect(확인창(page)).toContainText(지우기.기기도);
 });
 
@@ -295,9 +302,13 @@ test("제목에 별명이 들어간다 — 목록 위치로만 구분되면 잘�
   await expect(확인창(page)).toContainText(지우기.제목("달빛나비"));
   await expect(확인창(page)).not.toContainText(아이.nickname);
 
-  // **받침 없는 별명에 「을」이 붙으면 안 된다** (`문구.md` 6장 — 값이 문장에 들어가는 모양).
-  expect(지우기.제목("달빛나비")).toContain("나비를");
-  expect(지우기.제목(아이.nickname)).toContain("나침반을");
+  // **조사 분기가 제목에서 본문으로 옮겨갔다** (2026-09-21) — 제목의 「의」는 받침과
+  // 무관하지만 본문의 「⟨별명⟩**이** 쓴 글」은 갈린다. 받침이 없으면 **「나비가」**여야 한다.
+  // (`문구.md` 6장 — 기계가 준 값이 문장에 들어가는 모양을 정하는 자리다.)
+  expect(지우기.사라진다("달빛나비")).toContain("나비가 쓴");
+  expect(지우기.사라진다(아이.nickname)).toContain("나침반이 쓴");
+  // 제목에는 조사가 안 붙는다 — 붙이면 「나비의의」 같은 것이 난다.
+  expect(지우기.제목("달빛나비")).toContain("달빛나비의 정보를");
 });
 
 test("첫 포커스와 Esc 가 둘 다 「그대로 두기」다", async ({ page }) => {

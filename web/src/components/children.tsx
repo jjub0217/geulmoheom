@@ -19,7 +19,6 @@ import { 학부모오류문구 } from "@/app/parents/signup/copy";
 import {
   나이선택,
   만들기,
-  목록,
   못닿음,
   별명이걸렸다,
   재발급,
@@ -255,10 +254,13 @@ export function ChildrenPanel() {
 
   return (
     <section className={`children-layout${첫아이를만든다 && !목록틀을보인다 ? " children-layout--empty" : ""}`}>
+      {/* ⛔ **바깥 목록 틀을 걷었다** (2026-09-21 사용자 지시).
+          종전에는 `account-card` 하나가 아이 카드들을 통째로 감쌌고, 그래서
+          **상자 안에 상자**가 되어 설정표처럼 읽혔다. 이제 **아이 한 명이 카드 하나**다.
+          목록 제목(「아이 목록」)도 같이 걷었다 — 위에 페이지 제목이 있고
+          **카드마다 이름이 있어** 카드가 되풀이되는 모양만으로 목록인 것이 읽힌다. */}
       {목록틀을보인다 && (
-        <div className="account-card children-list-frame">
-          <h2 className="account-section-title">{목록.제목}</h2>
-
+        <div className="children-list-section">
         {목록실패 !== null && <p data-목록실패 role="alert" className="account-feedback">{목록실패}</p>}
 
         {아이가있다 && (
@@ -269,13 +271,14 @@ export function ChildrenPanel() {
                 data-자녀
                 className="child-card"
               >
+                {/* **이름이 카드에서 가장 먼저 보이는 정보다.** 나이는 그 아래 한 단 작게 둔다.
+                    ⛔ 종전 「현이 · 만 11세」는 가운뎃점으로 둘을 같은 줄에 붙여 놔서
+                    **위계가 안 보였고**, 나이가 이름과 거의 같은 무게로 읽혔다
+                    (2026-09-21 사용자 지적). **아이콘·아바타는 새로 넣지 않는다** — 같은 지시다. */}
                 <div className="child-summary">
-                  <p className="child-identity">
-                    <strong className="child-name">{아이.nickname}</strong>
-                    <span aria-hidden="true"> · </span>
-                    <span className="child-age">
-                      {나이선택.find((n) => n.값 === 아이.age_band)?.글자}
-                    </span>
+                  <p className="child-name">{아이.nickname}</p>
+                  <p className="child-age">
+                    {나이선택.find((n) => n.값 === 아이.age_band)?.글자}
                   </p>
                 </div>
 
@@ -284,7 +287,9 @@ export function ChildrenPanel() {
                     **되돌릴 수 없는 실수가 이제 둘이고 장치가 다르다**(3.9) — 이건 버튼 옆
                     한 줄이고 아래 지우기는 창이다. **끊기는 것이 기기냐 책이냐**로 갈렸다. */}
                 <div className="child-access-actions">
-                  <h3 className="child-access-title">{재발급.제목}</h3>
+                  {/* ⛔ **제목(「접속 코드 관리」)을 걷었다** — 별도 관리 메뉴처럼 보였고
+                      아이마다 되풀이됐다. **아래 한 줄이 이미 그 몫을 한다**:
+                      무엇을 하는 버튼인지와 그 대가를 같이 말한다. */}
                   <p className="account-description">{재발급.경고}</p>
                   <button
                     type="button"
@@ -504,9 +509,10 @@ function DeleteChildDialog({
         <h2 id={제목id} className="account-section-title">{지우기.제목(아이.nickname)}</h2>
 
         <div className="flex flex-col gap-2">
-          {/* **무엇이 사라지는지 세어서 말한다** — 서버가 문장·그림·책·기록을 함께 지운다. */}
-          <p>{지우기.사라진다}</p>
-          <p className="font-semibold">{지우기.되돌릴수없다}</p>
+          {/* **무엇이 사라지는지 세어서 말한다** — 서버가 글·그림·책·기록을 함께 지운다.
+              **되돌릴 수 없다는 말이 같은 문장 안에 있다** (2026-09-21) — 종전에는 별도 줄이었는데
+              **세어서 말한 바로 그 문장에 붙어 있어야** 무엇을 못 되돌리는지가 붙는다. */}
+          <p className="font-semibold">{지우기.사라진다(아이.nickname)}</p>
           <p className="account-description">{지우기.기기도}</p>
         </div>
 
