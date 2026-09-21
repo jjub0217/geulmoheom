@@ -1,6 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import type { components } from "../src/api/types.gen";
+// **문장을 여기 베껴 적지 않는다.** 2026-09-20 에 문구가 바뀌었는데 이 파일만 옛말을 들고
+// 10건이 깨져 있었다 — 검사가 제품을 붙잡은 것이 아니라 **검사가 낡은 것**이었다.
+import { 버튼 } from "../src/app/copy";
+import { 모험문 } from "../src/app/chapter-door-copy";
 
 test.use({ serviceWorkers: "block" });
 
@@ -86,7 +90,7 @@ async function 첫화면안(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(화면.width);
   for (const 요소 of [
     page.locator(".scene-card"), 가이드(page), 나침반(page), 입력(page),
-    page.getByRole("button", { name: "보내기", exact: true }),
+    page.getByRole("button", { name: 버튼.그림으로보기, exact: true }),
   ]) {
     const 자리 = (await 요소.boundingBox())!;
     expect(자리.x).toBeGreaterThanOrEqual(0);
@@ -111,7 +115,7 @@ for (const 하던이야기 of [false, true]) {
     const 이동 = 문.locator("[data-모험문버튼]");
     const 이름 = page.locator("[data-탐험가이름]");
     await expect(문).toBeVisible();
-    await expect(이동).toHaveText(하던이야기 ? "계속하기" : "모험 떠나기");
+    await expect(이동).toHaveText(하던이야기 ? 모험문.하던이야기로 : 모험문.떠나기);
     await expect(이동).toHaveAttribute("href", "/chapter");
     await expect(문).toBeInViewport({ ratio: 1 });
     await expect(이름).toBeInViewport({ ratio: 1 });
@@ -280,7 +284,7 @@ test("글쓰기 차례가 된 뒤에는 입력과 되묻기에도 소개를 다�
       today: { cards_done: 0, cap: 5, locked: false },
     } satisfies components["schemas"]["AttemptScaffold"],
   }));
-  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await page.getByRole("button", { name: 버튼.그림으로보기, exact: true }).click();
   await expect(보이는대사(page)).toHaveText(되묻기);
   await expect(입력(page)).toHaveValue(쓴글);
   await expect(입력(page)).toBeEditable();
