@@ -265,7 +265,7 @@ test("320px에서도 새 배지 이름을 같은 크기로 읽고 결과·책·�
   const resultBadge = page.locator("main button[data-티어배지]:visible");
   await expect(resultBadge).toHaveText(names[1]);
   // 읽어주는 이름도 코드에서 조립한다 — 2026-09-20 에 쉼표가 들어갔는데 이 줄만 안 따라왔다
-  await expect(resultBadge).toHaveAccessibleName(`${names[1]} 배지, ${배지안내.제목}`);
+  await expect(resultBadge).toHaveAccessibleName(`${names[1]} 뱃지, ${배지안내.제목}`);
   await resultBadge.click();
   const dialog = await checkDialog(page);
   const dialogSamples = dialog.locator(".tier-badge-preview .tier-badge");
@@ -290,7 +290,7 @@ test("320px에서도 새 배지 이름을 같은 크기로 읽고 결과·책·�
   for (let index = 0; index < names.length; index += 1) {
     // 다른 책장은 접근성 트리에서 숨겨져 있다. 실제로 펼친 뒤 읽을 이름을 확인한다.
     await expect(bookBadges.nth(index)).toBeVisible();
-    await expect(bookBadges.nth(index)).toHaveAccessibleName(`${names[index]} 배지, ${배지안내.제목}`);
+    await expect(bookBadges.nth(index)).toHaveAccessibleName(`${names[index]} 뱃지, ${배지안내.제목}`);
     bookBadgeSizes.push((await bookBadges.nth(index).boundingBox())!);
     if (index < names.length - 1) await page.locator("[data-book-next]").click();
   }

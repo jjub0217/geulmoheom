@@ -82,7 +82,7 @@ export function TierBadge({ tier }: { tier: Tier }) {
           ref={button}
           type="button"
           data-티어배지
-          aria-label={`${티어이름[tier]} 배지, ${배지안내.제목}`}
+          aria-label={`${티어이름[tier]} 뱃지, ${배지안내.제목}`}
           aria-haspopup="dialog"
           aria-describedby={tooltipVisible ? tooltipId : undefined}
           // 세 배지 모두 같은 글자 크기·모양이다. 뜻은 아이가 눌렀을 때만 연다.
