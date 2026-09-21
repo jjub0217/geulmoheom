@@ -10,8 +10,14 @@
    카드 화면(`/`)의 `.game-stage` 에는 이 규칙이 없고 거기선 나가기가 화면 안이다.
    ⭐ 창을 채우는 일은 **껍데기(`.chapter-shell`)가 이미 한다** — `min-height: 100dvh` 가 거기 있고,
    무대가 `flex: 1` 로 남는 높이를 가져가면 **바닥글이 그 아래 제자리에 선다.** */
-.chapter-shell { display: flex; flex-direction: column; }
-.chapter-stage { flex: 1; padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
+.chapter-shell {
+  display: flex;
+  flex-direction: column;
+}
+.chapter-stage {
+  flex: 1;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
 .chapter-toolbar .book-link {
   padding: 0.5rem 1rem;
   border: 2px solid var(--color-brass);
@@ -61,7 +67,11 @@
      흐림이 「여기서 끝이 아니다」를 말하고, 막대가 얼마나 남았는지를 말한다. */
   overflow-y: auto;
   scrollbar-gutter: stable;
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.75rem), transparent 100%);
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 1.75rem),
+    transparent 100%
+  );
   outline-offset: -4px;
 }
 .chapter-stage .chapter-narrative {
@@ -71,9 +81,15 @@
   line-height: var(--leading-chapter);
   white-space: pre-wrap;
 }
-.chapter-story:empty { display: none; }
-.chapter-story:focus-visible { outline: 2px solid var(--color-brass); }
-.chapter-stage .chapter-reading:has(.chapter-story:empty) { grid-template-columns: minmax(0, 1fr); }
+.chapter-story:empty {
+  display: none;
+}
+.chapter-story:focus-visible {
+  outline: 2px solid var(--color-brass);
+}
+.chapter-stage .chapter-reading:has(.chapter-story:empty) {
+  grid-template-columns: minmax(0, 1fr);
+}
 .chapter-visual {
   display: grid;
   /* **가로로는 왼쪽에 붙인다** (2026-09-21 사용자 지적). 종전에는 가운데라 **삽화가 자기 칸
@@ -95,28 +111,48 @@
 
 /* 캐릭터·말풍선·나침반 크기는 game-stage.css의 공통 클래스를 따른다. */
 
-.chapter-world .chapter-companion-bubble { min-width: 0; }
+.chapter-world .chapter-companion-bubble {
+  min-width: 0;
+}
 .chapter-companion-line {
   max-height: min(9rem, 20svh);
   overflow-y: auto;
   outline-offset: 2px;
   white-space: pre-wrap;
 }
-.chapter-companion-line:focus-visible { outline: 2px solid var(--color-brass); }
-.chapter-companion-line p { margin: 0; font-size: inherit; line-height: inherit; opacity: 1; }
-.chapter-companion-line [data-읽는중] { font-family: var(--font-companion); }
-.chapter-console { animation: none; }
+.chapter-companion-line:focus-visible {
+  outline: 2px solid var(--color-brass);
+}
+.chapter-companion-line p {
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+  opacity: 1;
+}
+.chapter-companion-line [data-읽는중] {
+  font-family: var(--font-companion);
+}
+.chapter-console {
+  animation: none;
+}
 .chapter-writing-guide {
   width: min(100%, 46rem);
   margin: 0 0 0.75rem;
   color: var(--foreground);
   font-family: var(--font-reading);
   font-size: var(--type-reading-desktop);
-  line-height: var(--leading-chapter);
+  line-height: 1.3;
 }
-.chapter-controls > .attempt-input { min-width: 0; }
-.chapter-console .attempt-label { height: auto; }
-.chapter-send-notice { font-size: 1rem; line-height: 1.5; }
+.chapter-controls > .attempt-input {
+  min-width: 0;
+}
+.chapter-console .attempt-label {
+  height: auto;
+}
+.chapter-send-notice {
+  font-size: 1rem;
+  line-height: 1.5;
+}
 .chapter-ending-narrative {
   max-width: 46rem;
   margin: 0;
@@ -131,7 +167,10 @@
   overflow-wrap: anywhere;
 }
 
-.chapter-stage--status { justify-content: center; align-items: center; }
+.chapter-stage--status {
+  justify-content: center;
+  align-items: center;
+}
 .chapter-stage .chapter-status {
   margin: 0;
   padding: 0.75rem 1rem;
@@ -141,7 +180,11 @@
   font-size: 1.125rem;
 }
 
-.chapter-stage--done { display: grid; grid-template-rows: minmax(0, 1fr); overflow-y: auto; }
+.chapter-stage--done {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow-y: auto;
+}
 .chapter-ending {
   display: flex;
   flex-direction: column;
@@ -151,8 +194,12 @@
   width: min(100%, 52rem);
   margin: auto;
 }
-.chapter-ending .guide-figure { gap: 1.5rem; }
-.chapter-ending .guide-image { width: clamp(9rem, 25vw, 18rem); }
+.chapter-ending .guide-figure {
+  gap: 1.5rem;
+}
+.chapter-ending .guide-image {
+  width: clamp(9rem, 25vw, 18rem);
+}
 .chapter-ending .guide-line {
   padding: 1.5rem;
   border: 1px solid var(--color-brass);
@@ -174,21 +221,52 @@
 }
 
 @media (max-width: 700px) {
-  .chapter-stage { padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); }
-  .chapter-toolbar .book-link { min-height: 2.75rem; padding: 0.375rem 0.75rem; font-size: 1rem; }
-  .chapter-stage .chapter-reading { gap: 0.5rem; }
-  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); }
-  .chapter-stage .chapter-reading:has(.chapter-story:empty) { grid-template-columns: minmax(0, 1fr); }
+  .chapter-stage {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+  .chapter-toolbar .book-link {
+    min-height: 2.75rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+  }
+  .chapter-stage .chapter-reading {
+    gap: 0.5rem;
+  }
+  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+  }
+  .chapter-stage .chapter-reading:has(.chapter-story:empty) {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .chapter-stage .chapter-narrative,
-  .chapter-ending-narrative { font-size: var(--type-scene-mobile); }
-  .chapter-writing-guide { font-size: var(--type-reading-mobile); }
-  .chapter-writing-guide { margin-bottom: 0.5rem; }
-  .chapter-companion-line { max-height: 4.5rem; }
+  .chapter-ending-narrative {
+    font-size: var(--type-scene-mobile);
+  }
+  .chapter-writing-guide {
+    font-size: var(--type-reading-mobile);
+  }
+  .chapter-writing-guide {
+    margin-bottom: 0.5rem;
+  }
+  .chapter-companion-line {
+    max-height: 4.5rem;
+  }
   /* 본편은 한두 단어보다 다음 행동을 문장으로 쓰는 자리다. 17px·1.7 행간에서 세 줄을 볼 수 있게 한다. */
-  .chapter-console .writing-field { min-height: 7rem; height: 7rem; }
-  .chapter-ending .guide-figure { flex-direction: column; gap: 1rem; }
-  .chapter-ending .guide-image { width: min(12rem, 28svh); }
-  .chapter-ending .guide-line { padding: 1rem; text-align: center; }
+  .chapter-console .writing-field {
+    min-height: 7rem;
+    height: 7rem;
+  }
+  .chapter-ending .guide-figure {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .chapter-ending .guide-image {
+    width: min(12rem, 28svh);
+  }
+  .chapter-ending .guide-line {
+    padding: 1rem;
+    text-align: center;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -210,19 +288,23 @@
 @media (max-width: 700px) and (orientation: portrait) {
   .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
     grid-template-columns: minmax(0, 1fr);
-/* **0.7 : 1.3 은 재서 고른 값이다** (후보 넷을 쓸었다).
+    /* **0.7 : 1.3 은 재서 고른 값이다** (후보 넷을 쓸었다).
        묶음 높이가 고정이라 **삽화 행과 읽는 행은 서로의 것을 빼앗는다.**
        이 값이 **보이는 글자를 종전(2단)보다 줄이지 않으면서** 삽화를 가장 크게 남긴다. */
     grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr);
     gap: 0.5rem;
   }
   /* 삽화는 제 행 높이에 맞춘다. 가로 시작선은 그대로 왼쪽 — 「내 책」과 맞춰 둔 것이다. */
-  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) .chapter-visual {
+  .chapter-stage
+    .chapter-reading:has(.chapter-visual > .artwork-frame)
+    .chapter-visual {
     height: 100%;
   }
   /* 읽는 칸이 제 행을 다 쓰게 둔다. 바깥 묶음이 이미 높이를 물고 있으므로
      여기서 `max-height` 를 또 걸면 행보다 작아져 빈자리가 생긴다. */
-  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) .chapter-story {
+  .chapter-stage
+    .chapter-reading:has(.chapter-visual > .artwork-frame)
+    .chapter-story {
     max-height: none;
     height: 100%;
   }
@@ -257,7 +339,9 @@
 
    그래서 본편에서만 낮춘다. 카드 화면(`/`)은 건드리지 않는다 — 거기선 넘치지 않는다. */
 @media (orientation: landscape) and (max-height: 900px) {
-  .chapter-world .guide-figure { --companion-size: clamp(7rem, 18svh, 12rem); }
+  .chapter-world .guide-figure {
+    --companion-size: clamp(7rem, 18svh, 12rem);
+  }
 
   /* 읽는 칸을 22svh 로 낮춘다. 읽는 칸은 스크롤되고 **쓰는 칸은 안 된다** —
      둘 중 하나가 첫 화면을 벗어나야 한다면 스크롤되는 쪽이다.
@@ -273,25 +357,52 @@
   /* 나가기를 첫 화면 안으로 들이는 마지막 46px. 바닥 띠가 46px 짜리 버튼에 66px 을
      쓰고 있었고, 나침반이 동료 그림보다 커져 있었다 — 그림을 18svh 로 낮추면서 생긴
      역전이라 같이 맞춘다. */
-  .chapter-shell > .game-stage-footer { padding-block: 0.25rem max(0.375rem, env(safe-area-inset-bottom, 0px)); }
-  .chapter-world .game-compass { width: 6rem; height: 6rem; }
+  .chapter-shell > .game-stage-footer {
+    padding-block: 0.25rem max(0.375rem, env(safe-area-inset-bottom, 0px));
+  }
+  .chapter-world .game-compass {
+    width: 6rem;
+    height: 6rem;
+  }
 }
 
 @media (max-height: 550px) {
   /* 자판·가로 화면에서도 현재 이야기와 동료를 다시 읽을 수 있게 문서 스크롤을 허용한다. */
-  .chapter-shell { height: auto; min-height: 100dvh; }
-  .chapter-world { flex: none; min-height: 15rem; }
-  .chapter-world .chapter-companion { margin-inline: 0; }
-  .chapter-stage:has(.game-response:focus-within, .game-console [data-writing-started="true"]) .chapter-world {
+  .chapter-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .chapter-world {
+    flex: none;
+    min-height: 15rem;
+  }
+  .chapter-world .chapter-companion {
+    margin-inline: 0;
+  }
+  .chapter-stage:has(
+      .game-response:focus-within,
+      .game-console [data-writing-started="true"]
+    )
+    .chapter-world {
     min-height: 15rem;
     height: auto;
     flex: none;
     overflow: visible;
     padding: 3.5625rem 0.75rem 0.25rem;
   }
-  .chapter-stage:has(.game-response:focus-within, .game-console [data-writing-started="true"]) .chapter-world > * { visibility: visible; }
+  .chapter-stage:has(
+      .game-response:focus-within,
+      .game-console [data-writing-started="true"]
+    )
+    .chapter-world
+    > * {
+    visibility: visible;
+  }
 }
 
 @media (max-height: 550px) and (min-width: 701px) {
-  .chapter-stage .chapter-reading { flex: 1; width: auto; }
+  .chapter-stage .chapter-reading {
+    flex: 1;
+    width: auto;
+  }
 }
