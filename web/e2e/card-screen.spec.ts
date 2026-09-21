@@ -1888,6 +1888,37 @@ for (const cardId of ["t1", "t2", "t3"] as const) {
   });
 }
 
+/**
+ * **⛔ 튜토리얼 결과에는 「내 책 펼치기」가 없다** (2026-09-21 사용자 판정).
+ *
+ * **T1~T3 는 책에 안 쌓인다** — 석 장이 실리면 **아이 책의 첫 세 장이 연습**이 된다
+ * (`api/app/api/v1/attempts.py`). 그런데 **결과 화면의 이 버튼만 검사 없이 떠 있었고**,
+ * 아이가 누르면 **빈 책**에 닿았다. **화면 위쪽의 같은 버튼은 이미 가리고 있었다** —
+ * 한쪽만 고쳐 두면 **다음에 다시 어긋난다.**
+ *
+ * **⛔ 이 검사가 「책에 남는다」 문제를 다 덮지 않는다.** 가이드가 여전히
+ * **「이 장면은 네 책에 남아」**라고 말하고 그건 **백엔드 몫**이다
+ * (`api/app/guide_lines.py`). **버튼을 감추는 것은 절반이다.**
+ */
+for (const cardId of ["t1", "t2", "t3"] as const) {
+  test(`튜토리얼 결과에는 내 책으로 가는 버튼이 없다 — ${cardId} 는 책에 안 쌓인다`, async ({
+    page,
+  }) => {
+    await 결과버튼줄까지(page, cardId);
+
+    // **버튼 줄에는 와 있다** — 못 닿아서 없는 것과 구분한다.
+    await expect(page.locator("[data-다시써보기]")).toBeVisible();
+    await expect(page.getByRole("link", { name: 내책라벨 })).toHaveCount(0);
+  });
+}
+
+test("튜토리얼이 아닌 결과에는 내 책으로 가는 버튼이 있다", async ({ page }) => {
+  // **막는 것이 튜토리얼뿐인지 본다.** 아니면 위 검사는 「버튼이 아예 없다」도 통과한다.
+  await 결과버튼줄까지(page, "c01");
+
+  await expect(page.getByRole("link", { name: 내책라벨 })).toHaveAttribute("href", "/book");
+});
+
 test("T3 를 끝내면 닫는말이 가리키는 그 버튼이 있다", async ({ page }) => {
   await 결과버튼줄까지(page, "t3");
   await expect(page.locator("[data-튜토리얼안내]")).toHaveText(튜토리얼문구.닫는말);
