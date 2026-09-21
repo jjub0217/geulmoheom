@@ -674,6 +674,22 @@
   line-height: 1.8;
 }
 
+/* **쪽이 있는데 본편이 진행 중일 때의 곁말** (`문구.md` **1.13b** · 2026-09-22).
+   ⛔ **책보다 작고 여리다** — 책은 아이 창작물을 보는 곳이고 이건 옆에서 거드는 말이다.
+   **읽기를 끊지 않게 책 아래에 두고**, 인쇄에는 안 넣는다 — 종이에 남을 말이 아니다. */
+.book-in-progress-note {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+  text-align: center;
+}
+@media print {
+  .book-in-progress-note {
+    display: none;
+  }
+}
+
 @media screen and (min-width: 56rem) {
   .book-page {
     --book-leaf-height: clamp(30rem, calc(100svh - 16rem), 48rem);

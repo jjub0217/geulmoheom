@@ -24,7 +24,11 @@ type ChapterView =
 type TurnResult =
   paths["/api/v1/turns"]["post"]["responses"][200]["content"]["application/json"];
 
+import { 책펼치기라벨 as 내책라벨 } from "../src/components/book-link";
+import { 챕터구조안내 } from "../src/components/chapter-writing";
+
 const CURRENT = "**/api/v1/chapters/current";
+const BOOK = "**/api/v1/book";
 const TURNS = "**/api/v1/turns";
 
 test.use({ serviceWorkers: "block" });
@@ -561,3 +565,85 @@ for (const [width, height] of [[360, 640], [320, 568]] as const) {
     expect(await 말풍선.evaluate((el) => el.scrollTop)).toBe(0);
   });
 }
+
+/**
+ * ## ⛔ 본편을 쓰는 중에 「내 책 펼치기」가 빈 책으로 보냈다
+ *
+ * **본편은 완결해야 책 한 장이 된다** (A-7). 카드는 한 장 쓸 때마다 한 쪽이 되는데
+ * 본편은 **열 턴을 다 써야** 생긴다. 그런데 **첫 턴을 쓰고 삽화까지 받은 자리**에
+ * 이 버튼이 떠 있어서, 아이가 누르면 **빈 책**이었다.
+ *
+ * **⛔ 저장 규칙이 아니라 화면이 틀렸다** — 규칙은 그대로 두고 화면이 그 규칙을 말한다.
+ * 2026-09-22 사용자 지시.
+ */
+const 책 = (쪽수: number) => ({
+  book_id: "b1",
+  title: "책",
+  author: "탐험가",
+  visibility: "private",
+  pages: Array.from({ length: 쪽수 }, (_, i) => ({
+    page_no: i + 1,
+    source: "card",
+    source_id: `c0${i + 1}`,
+    tier: "legendary",
+    artwork_url: null,
+    text: "지어낸 문장",
+    achieved_at: "2026-09-08T01:00:00Z",
+  })),
+  counts: { basic: 0, rare: 0, legendary: 쪽수 },
+});
+
+test("책이 비었으면 본편 화면에 내 책으로 가는 버튼이 없다", async ({ page }) => {
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책(0) }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+
+  await page.goto("/chapter");
+  await expect(page.getByText(장면.narrative)).toBeVisible();
+
+  // **눌러도 빈 책이라 아예 안 그린다.**
+  await expect(page.getByRole("link", { name: 내책라벨 })).toHaveCount(0);
+
+  // **대신 무엇을 해야 담기는지 말한다.** 새 문장을 만들지 않고 `문구.md` 1.18b 를 쓴다.
+  await expect(page.locator("[data-chapter-structure-guide]")).toContainText(챕터구조안내[1]);
+});
+
+test("카드로 쌓은 쪽이 있으면 본편 중에도 내 책으로 갈 수 있다", async ({ page }) => {
+  // **막는 것이 「본편 중」이 아니라 「빈 책」인지 본다.** 아니면 위 검사는
+  // 「본편에서는 늘 없다」도 통과하고, **카드로 쌓은 책을 아이에게서 빼앗는다.**
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책(2) }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+
+  await page.goto("/chapter");
+  await expect(page.getByText(장면.narrative)).toBeVisible();
+  await expect(page.getByRole("link", { name: 내책라벨 })).toHaveAttribute("href", "/book");
+});
+
+test("못 닿아서 쪽수를 모를 때는 버튼을 남긴다 — 있는 책을 숨기지 않는다", async ({ page }) => {
+  // **통신 한 번 실패로 카드로 쌓아 둔 책을 못 보게 하면 잃는 것이 더 크다.**
+  await page.route(BOOK, (route) => route.abort());
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+
+  await page.goto("/chapter");
+  await expect(page.getByText(장면.narrative)).toBeVisible();
+  await expect(page.getByRole("link", { name: 내책라벨 })).toHaveAttribute("href", "/book");
+});
+
+test("완결 화면에는 버튼이 그대로 있다 — 들어올 때 센 쪽수로 가리지 않는다", async ({ page }) => {
+  // **쪽수는 화면에 들어올 때 한 번 센다.** 완결하면 그 순간 책 한 장이 저장되므로
+  // **들어올 때의 0 으로 완결 화면까지 가리면**, 아이는 방금 만든 자기 책으로 갈 길을 잃는다.
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책(0) }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+  await page.route(TURNS, (route) =>
+    route.fulfill({ status: 200, json: { ...다음턴, chapter_done: true } }),
+  );
+
+  await page.goto("/chapter");
+  await expect(page.getByText(장면.narrative)).toBeVisible();
+  // 들어온 자리에서는 가려져 있다.
+  await expect(page.getByRole("link", { name: 내책라벨 })).toHaveCount(0);
+
+  await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+
+  await expect(page.locator('.chapter-ending a[href="/book"]')).toBeVisible();
+});

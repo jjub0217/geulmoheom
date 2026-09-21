@@ -8,11 +8,12 @@ import { BookReader } from "@/components/book-reader";
 import { BookPrintButton, BookReturnLink } from "@/components/book-actions";
 import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { BookTitle } from "@/components/book-title";
+import { useChapterInProgress } from "@/components/book-progress";
 import { ApiError, NetworkError, apiGet, 역할이다르다, 인증이풀렸다 } from "@/lib/api";
 
 import { 버튼, 못닿음 } from "../copy";
 import { 상태표시 } from "../status-copy";
-import { 빈책, 지은이 } from "./copy";
+import { 빈책, 쓰는중안내, 지은이 } from "./copy";
 
 type Book = components["schemas"]["Book"];
 
@@ -39,6 +40,13 @@ export default function BookScreen() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  /**
+   * **지금 쓰는 본편이 있나** (2026-09-22 사용자 지시).
+   * **본편은 완결해야 책 한 장이 된다** — 그래서 본편을 쓰는 중에 책을 열면
+   * **방금 쓴 것이 없다.** 그 사실을 말해 주는 안내를 고르는 데만 쓴다.
+   * **⛔ 책을 그리는 것을 막지 않는다** — 이 값을 기다리느라 책이 늦게 뜨면 안 된다.
+   */
+  const 본편이도나 = useChapterInProgress();
 
   useEffect(() => {
     let alive = true;
@@ -109,14 +117,31 @@ export default function BookScreen() {
 
             {screen.book.pages.length === 0 ? (
               <div className="book-empty">
-                <p className="book-empty-line">
-                  {빈책.줄1}
-                  <br />
-                  {빈책.줄2}
-                </p>
+                {/* ⛔ **본편이 진행 중이면 다른 말을 한다** (2026-09-22 사용자 확정,
+                    `문구.md` **1.13**). **카드는 한 장 쓸 때마다 쪽이 생기는데 본편은
+                    완결해야 한 장이 생긴다** — 본편 아이에게 「하나씩 쌓여」는 사실이 아니고
+                    **자기가 방금 쓴 것이 어디 갔는지 못 찾게 만든다.**
+                    **카드만 쓴 아이에게는 종전 두 줄이 여전히 참이라 그대로 쓴다.** */}
+                {본편이도나 === "있음" ? (
+                  <p className="book-empty-line">{빈책.본편진행중}</p>
+                ) : (
+                  <p className="book-empty-line">
+                    {빈책.줄1}
+                    <br />
+                    {빈책.줄2}
+                  </p>
+                )}
               </div>
             ) : (
-              <BookReader pages={screen.book.pages} />
+              <>
+                <BookReader pages={screen.book.pages} />
+                {/* ⛔ **책 아래다** (`문구.md` **1.13b**). **책은 아이 창작물을 보는 곳**이고
+                    이 안내는 곁말이라 **글과 삽화를 가리거나 읽기를 끊지 않는 자리**에 둔다.
+                    쪽이 있고 본편이 진행 중일 때만 나온다. */}
+                {본편이도나 === "있음" && (
+                  <p data-쓰는중안내 className="book-in-progress-note">{쓰는중안내}</p>
+                )}
+              </>
             )}
 
             <footer className="book-actions print:hidden">

@@ -8,6 +8,7 @@ import { ArtworkFrame } from "@/components/artwork";
 import { AttemptInput } from "@/components/attempt-input";
 import { BookLink } from "@/components/book-link";
 import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession } from "@/components/book-journey";
+import { useBookPageCount } from "@/components/book-progress";
 import { LeaveButton } from "@/components/leave";
 import { ChapterCompanion, chapterErrorGuide, chapterGuide } from "@/components/chapter-companion";
 import { 챕터구조안내, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
@@ -114,6 +115,15 @@ export default function ChapterPage() {
    */
   const [이어쓰기신호, set이어쓰기신호] = useState(0);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  /**
+   * **책에 쌓인 것이 있나** (2026-09-22 사용자 지시).
+   * **본편은 완결해야 책 한 장이 된다** — 그때까지 책이 비어 있는데 「내 책 펼치기」가
+   * 떠 있어서 **아이가 누르면 빈 책**이었다. 실기기에서 실제로 났다.
+   * **「없음」일 때만 감춘다** — 못 닿은 것(`모름`)까지 감추면 **카드로 쌓아 둔 책을
+   * 통신 한 번 실패로 못 보게 된다.**
+   */
+  const 책 = useBookPageCount();
+  const 책이비었나 = 책 === "없음" || 책 === "로딩";
   const submitting = useRef(false);
   const 시작했다 = useRef(false);
   const 이야기칸 = useRef<HTMLDivElement>(null);
@@ -301,7 +311,7 @@ export default function ChapterPage() {
       situation={view.narrative ?? ""}
       cardId={view.chapterId}
       skipOpening={처음연출건너뜀}
-    ><BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중}>
+    ><BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중} bookHidden={책이비었나}>
       {/* 장면과 동료는 튜토리얼과 같은 숲 위에 남는다. */}
       <div className="game-stage__world chapter-world">
         <div className="chapter-reading">
@@ -335,7 +345,14 @@ export default function ChapterPage() {
             **읽는 묶음 236 · 동료 162 · 콘솔 318 · 바닥 60 = 860px 으로 창(844)보다 이미 컸다.**
             한 번 읽은 말을 열 번 되풀이하느라 **삽화가 53px 로 줄어 있었다.**
             ⭐ `첫안내` 는 첫 턴을 보내면 꺼지고 이어하기에도 남는다 — 이미 있던 상태다. */}
-        {첫안내 && (
+        {/* ⛔ **책이 비어 있는 동안에는 첫 턴 뒤에도 남긴다** (2026-09-22 사용자 지시).
+            **새 문장을 만들지 않았다** — 이 두 줄이 이미 「완성하면 책에 담겨」를 말한다.
+            사용자 지시가 **「같은 의미의 안내가 있으면 중복을 만들지 말고 기존 것을 더 잘
+            보이게 하라」**였다.
+            **⛔ 위 87px 근거를 무르는 것이 아니다.** 같은 조건에서 **「내 책 펼치기」가
+            사라지므로 툴바 한 줄이 비고**, 그 자리를 이 안내가 쓴다. 책에 쪽이 생기면
+            버튼이 돌아오고 이 안내는 다시 첫 턴에만 나온다. */}
+        {(첫안내 || 책이비었나) && (
           <div data-chapter-structure-guide className="chapter-writing-guide">
             {챕터구조안내.map((줄) => <p key={줄}>{줄}</p>)}
           </div>
@@ -373,11 +390,13 @@ export default function ChapterPage() {
 }
 
 /** 서사·응답·완결이 같은 숲에 머문다. 새 모험을 권하는 출구는 만들지 않는다. */
-function ChapterStage({ children, done = false, status = false, bookDisabled = false }: {
+function ChapterStage({ children, done = false, status = false, bookDisabled = false, bookHidden = false }: {
   children: ReactNode;
   done?: boolean;
   status?: boolean;
   bookDisabled?: boolean;
+  /** 책이 비어 있으면 「내 책 펼치기」를 아예 안 그린다 — 눌러도 빈 책이라서다. */
+  bookHidden?: boolean;
 }) {
   /* **이름은 "/" 와 같은 방법으로 받는다** — `GET /child/me`, 실패는 삼킨다.
      **이름을 모르는 것과 못 들어온 것은 다르다**(`app/page.tsx` 같은 자리). */
@@ -409,7 +428,12 @@ function ChapterStage({ children, done = false, status = false, bookDisabled = f
             </p>
           </header>
         )}
-        {!done && !status && (
+        {/* ⛔ **책이 비었으면 이 버튼을 안 그린다** (2026-09-22 사용자 지시).
+            **본편은 완결해야 책 한 장이 된다** — 첫 턴을 쓰고 삽화까지 받은 자리에서
+            이 버튼을 누르면 **빈 책**이었다. **저장 규칙이 아니라 화면이 틀린 것이다.**
+            **⛔ 쪽이 있으면 그대로 둔다** — 카드로 쌓은 책을 못 보게 하면 안 된다.
+            **완결 화면(`done`)에는 그대로 있다** — 그때는 책 한 장이 이미 저장돼 있다. */}
+        {!done && !status && !bookHidden && (
           <div className="game-stage__toolbar">
             <BookLink disabled={bookDisabled} />
           </div>

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { components, paths } from "../src/api/types.gen";
 // 문구는 박지 않는다 — `docs/문구.md` 1.13·1.16·1.17·2.4·2.5 가 SSOT 다.
-import { 빈책, 책이름 } from "../src/app/book/copy";
+import { 빈책, 쓰는중안내, 책이름 } from "../src/app/book/copy";
 import { 버튼, 못닿음 } from "../src/app/copy";
 import { 상태표시 } from "../src/app/status-copy";
 import { 모험복귀라벨, 책인쇄라벨 } from "../src/components/book-actions";
@@ -17,6 +17,7 @@ import { 가림안내 } from "../src/lib/pii";
 type Book = paths["/api/v1/book"]["get"]["responses"][200]["content"]["application/json"];
 
 const BOOK = "**/api/v1/book";
+const CURRENT = "**/api/v1/chapters/current";
 const 그림 = "/api/v1/artworks/w1/image";
 
 test.use({ serviceWorkers: "block" });
@@ -705,4 +706,82 @@ test("「책 인쇄하기」는 한 번만 표시하고, 인쇄한 종이에는 
   await expect(이름버튼.locator("svg")).toBeHidden();
   await expect(이름버튼).toHaveCSS("outline-style", "none");
   await expect(이름버튼.locator(".book-title-label")).toHaveCSS("text-decoration-line", "none");
+});
+
+
+/**
+ * ## ⛔ 본편을 쓰는 중에 책을 열면 「하나씩 쌓여」가 거짓이 된다
+ *
+ * **카드는 한 장 쓸 때마다 쪽이 생기는데 본편은 완결해야 한 장이 생긴다** (A-7).
+ * 본편 아이가 종전 두 줄을 읽으면 **자기가 방금 쓴 것이 어디 갔는지 못 찾는다.**
+ *
+ * **⭐ 실제로 났다** — 사용자가 본편 첫 글을 쓰고 **삽화까지 받은 뒤** 「내 책 펼치기」를
+ * 눌러 **빈 책**을 봤다. **저장 구조는 의도대로였다**(1턴/10턴 · 0쪽).
+ * `문구.md` **1.13**·**1.13b** · 2026-09-22 사용자 확정.
+ */
+const 하던모험 = {
+  chapter_id: "11111111-2222-3333-4444-555555555555",
+  chapter_key: "ch01",
+  turn: 2,
+  beat: "explore",
+  narrative: "지어낸 서사",
+  choices: [],
+  state: { hero: { hp: 3, items: [] }, location: "부두" },
+  turns_left: 8,
+};
+
+test("본편을 쓰는 중에 연 빈 책은 완성해야 한 장이 생긴다고 말한다", async ({ page }) => {
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책([], { author: "서윤" }) }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 하던모험 }));
+
+  await page.goto("/book");
+
+  await expect(page.getByText(빈책.본편진행중)).toBeVisible();
+  // **종전 두 줄은 본편에서 사실이 아니다** — 같이 뜨면 아이가 둘 중 뭘 믿을지 모른다.
+  await expect(page.getByText(빈책.줄1)).toHaveCount(0);
+
+  // **없는 것을 말하지 않는다** (1.13 규칙). 돌아갈 버튼은 그대로다.
+  const 화면 = await page.locator("main").innerText();
+  for (const 금지어 of ["아직", "없어"]) expect(화면).not.toContain(금지어);
+  await expect(page.getByRole("link", { name: 모험복귀라벨, exact: true })).toHaveCount(1);
+});
+
+test("카드만 쓴 아이의 빈 책은 종전 두 줄 그대로다", async ({ page }) => {
+  // **갈리는 조건이 「본편이 진행 중인가」인지 본다.** 아니면 위 검사는
+  // 「빈 책은 늘 새 문장」도 통과하고, **카드만 쓴 아이에게 엉뚱한 말을 한다.**
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책([], { author: "서윤" }) }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 404, json: { code: "NO_ACTIVE_CHAPTER" } }));
+
+  await page.goto("/book");
+
+  await expect(page.getByText(빈책.줄1)).toBeVisible();
+  await expect(page.getByText(빈책.줄2)).toBeVisible();
+  await expect(page.getByText(빈책.본편진행중)).toHaveCount(0);
+});
+
+test("쪽이 있고 본편이 진행 중이면 책 아래에서 한 줄로 알려 준다", async ({ page }) => {
+  const 책내용 = 책([페이지({ page_no: 1 })]);
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책내용 }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 하던모험 }));
+
+  await page.goto("/book");
+
+  // **책을 먼저 그린다.** 이 안내는 곁말이라 **글과 삽화를 가리거나 읽기를 끊지 않는다.**
+  await expect(page.getByText(책내용.pages[0].text)).toBeVisible();
+  const 안내 = page.locator("[data-쓰는중안내]");
+  await expect(안내).toHaveText(쓰는중안내);
+
+  // **책보다 아래에 있다** — 위에 끼면 아이가 자기 글을 보러 온 길을 막는다.
+  const 책끝 = await page.locator(".book-reader, .book-page").first().boundingBox();
+  const 안내자리 = await 안내.boundingBox();
+  expect(안내자리!.y).toBeGreaterThan(책끝!.y);
+});
+
+test("본편이 없으면 그 안내를 안 띄운다 — 읽는 화면에 없는 말을 얹지 않는다", async ({ page }) => {
+  await page.route(BOOK, (route) => route.fulfill({ status: 200, json: 책([페이지({ page_no: 1 })]) }));
+  await page.route(CURRENT, (route) => route.fulfill({ status: 404, json: { code: "NO_ACTIVE_CHAPTER" } }));
+
+  await page.goto("/book");
+
+  await expect(page.locator("[data-쓰는중안내]")).toHaveCount(0);
 });
