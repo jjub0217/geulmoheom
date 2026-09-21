@@ -351,8 +351,23 @@ export function ChildrenPanel() {
       >
         <div className="child-create-heading">
           <h2 className="account-section-title">{만들기.제목}</h2>
-          {/* 이름을 실제 이름과 별명 중 무엇으로 할지, 입력 전에 부모가 고를 수 있게 한다. */}
-          <p className="account-description">{만들기.안내}</p>
+          {/* 이름을 실제 이름과 별명 중 무엇으로 할지, 입력 전에 부모가 고를 수 있게 한다.
+
+              **문장마다 줄을 나눈다** (2026-09-21 사용자 지시) — 「…이름이에요.」 다음에서
+              끊긴다. ⛔ **문구는 한 문자열 그대로 `문구.md` 를 따른다** — 코드가 문장을
+              지어내거나 쪼개 갖고 있지 않고, **줄을 어디서 나눌지만 화면이 정한다.**
+              그래서 문서를 고치면 이 자리가 그대로 따라온다.
+
+              ⛔ **문장 사이 공백을 앞줄 끝에 남긴다.** 공백째로 버리면 화면에서는 줄이
+              나뉘어 똑같아 보이지만 **읽히는 글자가 「…이름이에요.실제…」로 붙어**
+              원문과 달라진다. 화면을 못 보는 부모에게도 그렇게 읽힌다. */}
+          <p className="account-description">
+            {만들기.안내.split(/(?<=\.\s)/).map((문장) => (
+              <span key={문장} className="description-line">
+                {문장}
+              </span>
+            ))}
+          </p>
         </div>
 
         <label className="account-field">

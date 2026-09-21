@@ -294,6 +294,15 @@
   overflow-wrap: anywhere;
 }
 
+/* **문장마다 한 줄을 차지한다** (2026-09-21 사용자 지시).
+   문구는 한 문자열 그대로이고 **줄을 나누는 것만 화면의 몫**이다 (`children.tsx`). */
+.account-description .description-line {
+  display: block;
+}
+.account-description .description-line:first-child {
+  line-height: 1;
+}
+
 .child-age {
   margin: 0;
   color: var(--muted);
