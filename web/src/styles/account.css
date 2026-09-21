@@ -271,7 +271,9 @@
    나이가 섹션 제목만 한 무게로 읽혔다. */
 .child-summary {
   display: flex;
-  align-items: center;
+  /* **밑줄을 맞춘다** (2026-09-21 사용자 지시). 종전 `center` 는 글자 크기가 서로 달라
+     **작은 쪽이 떠 보였다.** 위 `line-height: 1` 둘과 한 벌이다. */
+  align-items: flex-end;
   min-width: 0;
   /* flex-direction: column; */
   /* **이름과 나이 사이를 벌린다** (2026-09-21 사용자 지시). 종전 `0.125rem`(2px) 은
