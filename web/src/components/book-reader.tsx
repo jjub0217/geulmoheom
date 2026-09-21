@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { components } from "@/api/types.gen";
 import { BookCurl, type BookCurlSnapshot, type BookCurlTransition } from "@/components/book-curl";
-import { BookPageFrame } from "@/components/book-page";
+import { bookArtworkSource, BookPageFrame } from "@/components/book-page";
 
 type BookPage = components["schemas"]["BookPage"];
 
@@ -32,6 +32,18 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
   }), []);
   // 폭과 관계없이 같은 장면을 읽는다. 화면의 면 번호는 서버의 장면 번호와 구분한다.
   const currentIndex = Math.min(readingIndex, Math.max(0, pages.length - 1));
+  const numberedPages = useMemo(() => {
+    const numbered: { page: BookPage; startPageNumber: number; endPageNumber: number }[] = [];
+    for (const page of pages) {
+      const startPageNumber = (numbered.at(-1)?.endPageNumber ?? 0) + 1;
+      // 아직 굽는 대표 삽화도 완성되면 같은 면에 들어온다. 책을 연 순간의 URL 유무로
+      // 쪽 수가 바뀌면 읽던 위치가 흔들린다.
+      const hasArtwork = (page.artwork !== null && page.artwork !== undefined) || page.artwork_url !== null;
+      const endPageNumber = startPageNumber + (hasArtwork ? 1 : 0);
+      numbered.push({ page, startPageNumber, endPageNumber });
+    }
+    return numbered;
+  }, [pages]);
   const pagesId = useId();
   const pagesRef = useRef<HTMLDivElement>(null);
   const previousRef = useRef<HTMLButtonElement>(null);
@@ -91,14 +103,17 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
     const direction = index > currentIndex ? "next" : "previous";
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (matchMedia("(min-width: 56rem)").matches && !reducedMotion) {
-      const snapshot = (page: BookPage): BookCurlSnapshot => ({
+      const snapshot = (page: BookPage, pageIndex: number): BookCurlSnapshot => ({
         page,
-        artworkUrl: visualArtworkUrls[page.page_no] ?? page.artwork_url,
+        artworkUrl: visualArtworkUrls[page.page_no]
+          ?? (page.artwork_url === null ? null : bookArtworkSource(page.artwork_url)),
+        illustrationPageNumber: numberedPages[pageIndex].startPageNumber,
+        writingPageNumber: numberedPages[pageIndex].endPageNumber,
       });
       const nextCurl = {
         direction,
-        current: snapshot(pages[currentIndex]),
-        adjacent: snapshot(pages[index]),
+        current: snapshot(pages[currentIndex], currentIndex),
+        adjacent: snapshot(pages[index], index),
         targetIndex: index,
       } satisfies BookCurlTransition & { targetIndex: number };
       curlRef.current = nextCurl;
@@ -117,7 +132,7 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
       phaseRef.current = "idle";
       setPhase("idle");
     }, 200);
-  }, [currentIndex, finishDesktopCurl, pages, phase, visualArtworkUrls]);
+  }, [currentIndex, finishDesktopCurl, numberedPages, pages, phase, visualArtworkUrls]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -139,15 +154,6 @@ export function BookReader({ pages }: { pages: BookPage[] }) {
 
   if (pages.length === 0) return null;
 
-  const numberedPages: { page: BookPage; startPageNumber: number; endPageNumber: number }[] = [];
-  for (const page of pages) {
-    const startPageNumber = (numberedPages.at(-1)?.endPageNumber ?? 0) + 1;
-    // 아직 굽는 대표 삽화도 완성되면 같은 면에 들어온다. 책을 연 순간의 URL 유무로
-    // 쪽 수가 바뀌면 읽던 위치가 흔들린다.
-    const hasArtwork = (page.artwork !== null && page.artwork !== undefined) || page.artwork_url !== null;
-    const endPageNumber = startPageNumber + (hasArtwork ? 1 : 0);
-    numberedPages.push({ page, startPageNumber, endPageNumber });
-  }
   const { startPageNumber, endPageNumber } = numberedPages[currentIndex];
   const location = startPageNumber === endPageNumber
     ? `${startPageNumber}쪽`

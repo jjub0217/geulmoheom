@@ -232,7 +232,7 @@ test("여는 동안 무엇을 하고 있는지 말한다 — 「확인하는 중
   expect(상태표시.책펼치는중).not.toBe(상태표시.확인중);
 });
 
-test("책 화면은 정사각 판형을 유지하고 세로 삽화도 자르지 않는다", async ({ page }) => {
+test("책 화면은 정사각 판형을 유지하고 세로 삽화도 빈 여백 없이 채운다", async ({ page }) => {
   // 원본 비율과 판형이 다른 경우를 재야 정사각 면과 삽화 보존을 함께 확인할 수 있다.
   await page.route("**/api/v1/artworks/w1/image*", (route) =>
     route.fulfill({
@@ -254,10 +254,10 @@ test("책 화면은 정사각 판형을 유지하고 세로 삽화도 자르지 
     height: image.naturalHeight,
   }))).toEqual({ width: 784, height: 1353 });
 
-  // 2026-09-19 승인: 화면의 한쪽 면은 1:1, 원본은 contain으로 온전히 보존한다.
+  // 화면의 한쪽 면은 1:1이고, 세로 원본도 빈 여백 없이 책장을 채운다.
   const 액자 = (await 삽화.locator("..").boundingBox())!;
   expect(액자.width / 액자.height).toBeCloseTo(1, 2);
-  await expect(삽화).toHaveCSS("object-fit", "contain");
+  await expect(삽화).toHaveCSS("object-fit", "cover");
   await expect(삽화).not.toHaveAttribute("crossorigin", /.*/);
 });
 

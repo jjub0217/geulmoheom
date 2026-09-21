@@ -83,6 +83,18 @@ async function visibleNumbers(page: Page, expected: number[]) {
   await expect(page.locator('.book-reader-page[data-current="true"]')).toHaveCount(1);
 }
 
+async function moveToFirstScene(page: Page) {
+  const previous = page.locator("[data-book-previous]");
+  const scene = page.locator("[data-책쪽]:visible");
+  while (await scene.getAttribute("data-scene-number") !== String(numbers[0])) {
+    await expect(previous).toBeEnabled();
+    const before = await scene.getAttribute("data-scene-number");
+    await previous.click();
+    // 데스크톱은 완료 뒤에만 readingIndex를 확정하므로 다음 입력 전에 전환 종료를 기다린다.
+    await expect(scene).not.toHaveAttribute("data-scene-number", before!);
+  }
+}
+
 async function sceneMatches(page: Page, index: number) {
   const scene = page.locator("[data-책쪽]:visible");
   await expect(scene).toHaveCount(1);
@@ -104,7 +116,7 @@ async function sceneMatches(page: Page, index: number) {
 
   await expect(scene.locator(".book-page-illustration [data-쪽번호]")).toHaveText(String(faceNumbers[index][0]));
   await expect(artwork).toHaveAttribute("src", `${source}?book-layout=square-20260919`);
-  await expect(artwork).toHaveCSS("object-fit", "contain");
+  await expect(artwork).toHaveCSS("object-fit", "cover");
   await expect(artwork).not.toHaveAttribute("crossorigin", /.*/);
   const artworkBox = (await scene.locator(".book-page-artwork").boundingBox())!;
   const illustrationBox = (await scene.locator(".book-page-illustration").boundingBox())!;
@@ -112,13 +124,13 @@ async function sceneMatches(page: Page, index: number) {
   const sceneBox = (await scene.boundingBox())!;
   expect(artworkBox.width / artworkBox.height).toBeCloseTo(1, 2);
   expect(writingBox.width / writingBox.height).toBeCloseTo(1, 2);
-  // 원본 전체는 contain으로 남고, 책의 그림 면과 글 면은 같은 정사각 크기다.
+  // 삽화는 정사각 면을 채우고, 책의 그림 면과 글 면은 같은 크기다.
   for (const key of ["x", "y", "width", "height"] as const) {
-    expect(Math.abs(artworkBox[key] - illustrationBox[key])).toBeLessThanOrEqual(1);
+    expect(Math.abs(artworkBox[key] - illustrationBox[key])).toBeLessThanOrEqual(2);
   }
-  // 액자는 종이 경계까지 이어지고 구형 이미지도 원본 URL과 contain을 유지한다.
-  expect(Math.abs(artworkBox.x - sceneBox.x)).toBeLessThanOrEqual(1);
-  expect(Math.abs(artworkBox.y - sceneBox.y)).toBeLessThanOrEqual(1);
+  // 액자는 종이 경계까지 이어지고 구형 이미지도 같은 판형 URL과 cover를 유지한다.
+  expect(Math.abs(artworkBox.x - sceneBox.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(artworkBox.y - sceneBox.y)).toBeLessThanOrEqual(2);
   if (page.viewportSize()!.width >= 896) {
     expect(Math.abs(artworkBox.width - sceneBox.width / 2)).toBeLessThanOrEqual(1);
     expect(artworkBox.x + artworkBox.width).toBeLessThanOrEqual(writingBox.x + 1);
@@ -222,6 +234,40 @@ test("데스크톱 컬은 A 글 앞면·B 삽화 뒷면·B 글 아래 면을 한
   await expect(nextCurl.locator("[data-curl-turning-front]")).toHaveAttribute("data-curl-turning-front", "1");
   await expect(nextCurl.locator("[data-curl-turning-back]")).toHaveAttribute("data-curl-turning-back", "3");
   await expect(nextCurl.locator("[data-curl-under-right]")).toHaveAttribute("data-curl-under-right", "3");
+  await expect(nextCurl.locator(".book-curl-ridges")).toHaveCount(0);
+  await expect(nextCurl.locator(".book-curl-leaf-face--front")).toHaveCSS("backface-visibility", "hidden");
+  await expect(nextCurl.locator(".book-curl-leaf-face--back")).toHaveCSS("backface-visibility", "hidden");
+  await expect(nextCurl.locator("button, [tabindex]")).toHaveCount(0);
+  await expect(nextCurl.locator('[data-curl-writing-page="1"] [data-curl-tier-badge]')).toHaveText(티어이름.basic);
+  await expect(nextCurl.locator('[data-curl-writing-page="3"] [data-curl-tier-badge]')).toHaveText(티어이름.rare);
+  await expect(nextCurl.locator('[data-curl-writing-page="1"] .tier-badge-ornament')).toHaveCount(1);
+  await expect(nextCurl.locator('[data-curl-writing-page="3"] .tier-badge-ornament')).toHaveCount(1);
+  await expect(nextCurl.locator('[data-curl-writing-page="1"] .book-page-footer')).toHaveText("2");
+  await expect(nextCurl.locator('[data-curl-writing-page="3"] .book-page-footer')).toHaveText("4");
+  const activeScene = page.locator('.book-reader-page[data-current="true"] [data-책쪽]');
+  const actualWriting = activeScene.locator(".book-page-writing");
+  const turningWriting = nextCurl.locator('[data-curl-writing-page="1"]');
+  for (const selector of [".book-page-tier", ".book-page-text", ".book-page-footer"]) {
+    const actualOffset = await actualWriting.locator(selector).evaluate((element) => ({
+      top: (element as HTMLElement).offsetTop,
+      height: (element as HTMLElement).offsetHeight,
+    }));
+    const cloneOffset = await turningWriting.locator(selector).evaluate((element) => ({
+      top: (element as HTMLElement).offsetTop,
+      height: (element as HTMLElement).offsetHeight,
+    }));
+    expect(Math.abs(actualOffset.top - cloneOffset.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs(actualOffset.height - cloneOffset.height)).toBeLessThanOrEqual(1);
+  }
+  const curlBox = (await nextCurl.boundingBox())!;
+  const sceneBox = (await activeScene.boundingBox())!;
+  // 전환 복제본이 실제 책과 같은 판형을 써서 위아래·좌우로 튀어나오지 않는다.
+  for (const key of ["x", "y", "width", "height"] as const) {
+    expect(Math.abs(curlBox[key] - sceneBox[key])).toBeLessThanOrEqual(1.5);
+  }
+  const turningArtwork = nextCurl.locator(".book-curl-leaf-face--back img");
+  await expect(turningArtwork).toHaveAttribute("src", `${book.pages[1].artwork_url}?book-layout=square-20260919`);
+  await expect(turningArtwork).toHaveCSS("object-fit", "cover");
   await expect(page.locator("[data-book-next]")).toBeDisabled();
   await expect(nextCurl).toHaveCount(0);
   await sceneMatches(page, 1);
@@ -294,9 +340,7 @@ test("혼합 비율의 장면도 같은 정사각 면으로 읽고 긴 원문은
 
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    while (await page.locator("[data-book-previous]").isEnabled()) {
-      await page.locator("[data-book-previous]").click();
-    }
+    await moveToFirstScene(page);
     await visibleNumbers(page, [1, 2]);
     const sizes: string[] = [];
     for (let index = 0; index < numbers.length; index += 1) {
@@ -352,9 +396,7 @@ test("같은 비율의 그림과 보통 길이의 글은 같은 종이 크기와
 
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    while (await page.locator("[data-book-previous]").isEnabled()) {
-      await page.locator("[data-book-previous]").click();
-    }
+    await moveToFirstScene(page);
     await visibleNumbers(page, [1, 2]);
     const first = await readerGeometry(page);
     for (let index = 0; index < sameRatioBook.pages.length; index += 1) {

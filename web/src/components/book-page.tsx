@@ -11,7 +11,7 @@ import { 책폴링상한, useArtwork } from "@/lib/artwork";
 type BookPage = components["schemas"]["BookPage"];
 
 /** 같은 출처의 API 이미지만 다시 받는다. 외부 주소와 기존 query/서명은 변경하지 않는다. */
-function bookArtworkSource(url: string) {
+export function bookArtworkSource(url: string) {
   const imagePath = /^\/api\/v1\/artworks\/[a-zA-Z0-9-]+\/image$/;
   if (imagePath.test(url)) return `${url}?book-layout=square-20260919`;
   if (typeof window === "undefined" || /[?#]/.test(url)) return url;
@@ -36,14 +36,16 @@ function bookArtworkSource(url: string) {
  * 책은 **문장 자체를 두는 자리**다. 계약도 `highlights` 를 여기 안 준다.
  */
 export function BookPageFrame({ page, startPageNumber, onArtworkUrl }: { page: BookPage; startPageNumber: number; onArtworkUrl?: (pageNo: number, url: string | null) => void }) {
-  /** 화면 판형은 1:1이고, 실제 원본 비율은 전체 그림을 보존하는 인쇄에 사용한다. */
+  /** 화면 판형은 1:1이고, 실제 원본 비율은 인쇄 배치 계산에 사용한다. */
   const [비율, set비율] = useState(빈자리비율);
   const [다시확인, set다시확인] = useState(0);
   // 준비 중인 대표 삽화도 한 면을 유지한 채 실제 상태를 다시 확인한다.
   const 삽화상태 = useArtwork(page.artwork ?? null, 다시확인, 책폴링상한);
   const 삽화주소 = 삽화상태.kind === "떴다" ? 삽화상태.url : page.artwork_url;
+  const 화면삽화주소 = 삽화주소 === null ? null : bookArtworkSource(삽화주소);
   const 삽화면있음 = (page.artwork !== null && page.artwork !== undefined) || 삽화주소 !== null;
-  useEffect(() => { onArtworkUrl?.(page.page_no, 삽화주소); }, [onArtworkUrl, page.page_no, 삽화주소]);
+  // 전환 복제본에도 실제 책 면과 완전히 같은 URL을 넘긴다. 원본과 판형 버전을 섞지 않는다.
+  useEffect(() => { onArtworkUrl?.(page.page_no, 화면삽화주소); }, [onArtworkUrl, page.page_no, 화면삽화주소]);
   return (
     // **`data-책쪽` 은 인쇄가 쓴다** (`globals.css` `@media print`) —
     // 한 장면의 삽화와 원문을 함께 인쇄하기 위한 표식이다.
@@ -57,20 +59,20 @@ export function BookPageFrame({ page, startPageNumber, onArtworkUrl }: { page: B
           완료되면 이 자리에서 바로 실제 그림으로 바뀐다. */}
       {삽화면있음 && (
         <div className="book-page-illustration">
-          {/* 승인된 정사각 삽화는 면을 채운다. 구형 비율도 자르거나 늘이지 않는다. */}
+          {/* 정사각 책 면을 빈 여백 없이 채운다. 세로 원본은 늘이지 않고 가장자리만 자른다. */}
           <div className="book-page-artwork">
-            {삽화주소 !== null && (
+            {화면삽화주소 !== null && (
               <Image
               // 같은 출처 API 경로만 판형 버전으로 재검증한다. **`crossOrigin` 을 붙이지 않는다**
               // (`Stage0.md` 5절 ⚠) — 붙는 순간 쿠키가 안 실려 그림이 통째로 안 뜬다.
-              src={bookArtworkSource(삽화주소)}
+              src={화면삽화주소}
               // 그림의 내용은 같은 장면의 아이 문장이 말한다.
               alt=""
               fill
               // 화면에서 숨긴 쪽도 미리 받아 두어 쪽 넘김과 책 전체 인쇄에서 누락되지 않게 한다.
               loading="eager"
-              // 정사각 면 안에서 원본 전체를 보존한다. 바깥 모서리만 책 윤곽을 따른다.
-              className="object-contain"
+              // 세로 원본도 정사각 책 면을 빈 여백 없이 채운다. 넘김 복제본도 같은 crop을 쓴다.
+              className="object-cover"
               sizes="(min-width: 72rem) 32rem, (min-width: 56rem) 44vw, 90vw"
               onLoad={(e) => {
                 const img = e.currentTarget;

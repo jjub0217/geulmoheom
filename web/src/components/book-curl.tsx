@@ -1,17 +1,18 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- 780ms 동안만 보이는 aria-hidden 종이 복제본이다. */
 
-import type { CSSProperties } from "react";
-
 import type { components } from "@/api/types.gen";
 import { bookCurlFaces, type BookCurlDirection } from "@/components/book-curl-model";
 import { 티어이름 } from "@/components/tier-badge";
+import { TierBadgeCrest } from "@/components/tier-badge-crest";
 
 type BookPage = components["schemas"]["BookPage"];
 
 export type BookCurlSnapshot = {
   page: BookPage;
   artworkUrl: string | null;
+  illustrationPageNumber: number;
+  writingPageNumber: number;
 };
 
 export type BookCurlTransition = {
@@ -20,22 +21,36 @@ export type BookCurlTransition = {
   adjacent: BookCurlSnapshot;
 };
 
-const stripCount = 12;
-
 function CurlArtwork({ snapshot }: { snapshot: BookCurlSnapshot }) {
   const hasArtwork = snapshot.page.artwork !== null && snapshot.page.artwork !== undefined;
+  const hasArtworkFace = hasArtwork || snapshot.artworkUrl !== null || snapshot.page.artwork_url !== null;
   return (
     <div className="book-curl-art-face">
       {snapshot.artworkUrl ? <img src={snapshot.artworkUrl} alt="" /> : hasArtwork && <p>그림을 준비하고 있어.</p>}
+      {hasArtworkFace && (
+        <span className="book-page-number book-page-number--illustration">
+          {snapshot.illustrationPageNumber}
+        </span>
+      )}
     </div>
   );
 }
 
 function CurlWriting({ snapshot }: { snapshot: BookCurlSnapshot }) {
   return (
-    <div className="book-curl-writing-face">
-      <span className={`book-curl-badge tier-${snapshot.page.tier}`}>{티어이름[snapshot.page.tier]}</span>
-      <p>{snapshot.page.text}</p>
+    <div className="book-page-writing book-curl-writing-face" data-curl-writing-page={snapshot.page.page_no}>
+      <div className="book-page-tier">
+        <span
+          className={`tier-badge tier-badge-crest tier-${snapshot.page.tier}`}
+          data-curl-tier-badge
+        >
+          <TierBadgeCrest name={티어이름[snapshot.page.tier]} />
+        </span>
+      </div>
+      <p className="book-page-text">{snapshot.page.text}</p>
+      <footer className="book-page-footer">
+        <span className="book-page-number">{snapshot.writingPageNumber}</span>
+      </footer>
     </div>
   );
 }
@@ -54,23 +69,12 @@ function TurningLeaf({ direction, front, back }: {
     >
       <div className="book-curl-leaf-face book-curl-leaf-face--front">
         {frontIsWriting ? <CurlWriting snapshot={front} /> : <CurlArtwork snapshot={front} />}
-        <CurlRidges />
+        <div className="book-curl-sheen" />
       </div>
       <div className="book-curl-leaf-face book-curl-leaf-face--back">
         {frontIsWriting ? <CurlArtwork snapshot={back} /> : <CurlWriting snapshot={back} />}
-        <CurlRidges />
+        <div className="book-curl-sheen" />
       </div>
-    </div>
-  );
-}
-
-/** 실제 글·그림을 자르지 않고, 세로 진행차와 명암만으로 종이의 휨을 근사한다. */
-function CurlRidges() {
-  return (
-    <div className="book-curl-ridges">
-      {Array.from({ length: stripCount }, (_, index) => (
-        <i key={index} style={{ "--ridge-offset": `${index * 100 / stripCount}%`, "--ridge-delay": `${index * 6}ms` } as CSSProperties} />
-      ))}
     </div>
   );
 }
@@ -86,9 +90,6 @@ export function BookCurl({ transition }: { transition: BookCurlTransition | null
       className={`book-curl book-curl--${transition.direction}`}
       data-book-curl
       data-curl-direction={transition.direction}
-      style={{
-        "--curl-ridge-width": `${100 / stripCount}%`,
-      } as CSSProperties}
       aria-hidden="true"
     >
       {next ? (
