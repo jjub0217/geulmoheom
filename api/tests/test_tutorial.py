@@ -184,3 +184,51 @@ async def test_셋째를_쓰면_베이스라인이_한_번_남는다(client: Tes
     assert 몸["grades"] == ["G2", "G2", "G2"]
     assert 몸["char_lens"] == [len(문장)] * 3
     assert 문장 not in str(몸)
+
+
+# ── ⛔ 전설 대사가 책을 약속하지 않는다 (1.6 · 2026-09-21) ──────────────
+
+
+async def test_튜토리얼_전설_대사가_책을_약속하지_않는다(
+    client: TestClient, _켠다: None, _유료호출을_끊는다: dict
+):
+    """**아이가 읽는 화면이 거짓말을 하고 있었다** (프론트가 사용자 화면 사진으로 찾았다).
+
+    바로 위 `test_튜토리얼은_책에_안_쌓인다` 가 **책에 안 쌓이는 것**을 재고, 여기가
+    **그 사실을 말이 지키는지**를 잰다. **둘이 갈리면 화면이 거짓말을 한다.**
+    """
+    _유료호출을_끊는다["등급"] = "G3"
+
+    몸 = _쓴다(client, 튜토리얼카드들()[0])
+
+    assert 몸["tier"] == "legendary"
+    assert "책" not in 몸["guide"]["line"]
+
+
+async def test_본편_전설은_책을_그대로_말한다(client: TestClient, _유료호출을_끊는다: dict):
+    """**갈린 것은 튜토리얼 하나뿐이다.** 본편 글은 실제로 책에 쌓이므로 참이다 —
+    **이 검사가 없으면 「책」을 통째로 지워도 위 검사가 통과한다.**"""
+    _유료호출을_끊는다["등급"] = "G3"
+    card_id = client.get(다음카드).json()["card_id"]
+    assert card_id not in 튜토리얼카드들()
+
+    몸 = _쓴다(client, card_id)
+
+    assert 몸["tier"] == "legendary"
+    assert "책" in 몸["guide"]["line"]
+
+
+async def test_새로고침해도_튜토리얼_대사가_그대로다(
+    client: TestClient, _켠다: None, _유료호출을_끊는다: dict
+):
+    """**복구 경로가 대사를 다시 만든다** (`GET /attempts/{id}`). 그 자리가 튜토리얼을
+    안 보면 **아이가 새로고침한 순간 거짓말이 되돌아온다** — 프리테스트에서 아이가
+    실제로 하는 동작이다."""
+    _유료호출을_끊는다["등급"] = "G3"
+    몸 = _쓴다(client, 튜토리얼카드들()[0])
+
+    다시 = client.get(f"/api/v1/attempts/{몸['attempt_id']}")
+
+    assert 다시.status_code == 200, 다시.text
+    assert 다시.json()["guide"]["line"] == 몸["guide"]["line"]
+    assert "책" not in 다시.json()["guide"]["line"]

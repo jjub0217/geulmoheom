@@ -89,7 +89,9 @@ def _result() -> AttemptResult:
         attempt_id=fx.ATTEMPT_ID,
         tier="rare",
         highlights=하이라이트,
-        guide=_guide("rare", UUID(fx.ATTEMPT_ID), 하이라이트),
+        # **`rare` 라 튜토리얼 갈래를 안 탄다** — 갈리는 것은 전설 하나뿐이다(1.6).
+        # 목이 티어를 박아 두고 있어 여기서 튜토리얼인지 물을 값도 없다.
+        guide=_guide("rare", UUID(fx.ATTEMPT_ID), 하이라이트, 튜토리얼=False),
         artwork={
             "artwork_id": fx.ARTWORK_ID,
             "status": "pending",
@@ -161,7 +163,7 @@ _결과표정: dict[Tier, str] = {
 }
 
 
-def _guide(tier: Tier, 시도id: UUID, 하이라이트: list[Highlight]) -> Guide:
+def _guide(tier: Tier, 시도id: UUID, 하이라이트: list[Highlight], *, 튜토리얼: bool) -> Guide:
     """결과 대사 (`문구.md` 1.6). 티어별 다섯 중 하나를 **시도 id 로 고정해** 고른다.
 
     **새로고침해도 같은 말이 나와야 한다.** 무작위로 두면 아이가 결과 화면을 다시
@@ -172,7 +174,7 @@ def _guide(tier: Tier, 시도id: UUID, 하이라이트: list[Highlight]) -> Guid
     (PRD A0-3 MUST). 하이라이트가 없으면 `{말}` 없는 문장만 고른다.
     """
     말 = 하이라이트[0].text if 하이라이트 else None
-    return Guide(expression=_결과표정[tier], line=결과한줄(tier, 시도id, 말))
+    return Guide(expression=_결과표정[tier], line=결과한줄(tier, 시도id, 말, 튜토리얼=튜토리얼))
 
 
 @router.post("")
@@ -337,7 +339,7 @@ async def create_attempt(
         attempt_id=str(시도.id),
         tier=평가.tier,
         highlights=하이라이트,
-        guide=_guide(평가.tier, 시도.id, 하이라이트),
+        guide=_guide(평가.tier, 시도.id, 하이라이트, 튜토리얼=튜토리얼인가),
         # **`status` 를 박아 두지 않는다** (2026-09-09). 캐시 히트면 이 자리가 이미
         # `ready` 다 — 박아 두면 **이미 있는 그림을 두고 아이가 폴링을 돈다.**
         artwork=ArtworkRef(
@@ -528,7 +530,9 @@ async def get_attempt(
         attempt_id=str(시도.id),
         tier=티어,
         highlights=하이라이트,
-        guide=_guide(티어, 시도.id, 하이라이트),
+        # **여기서 다시 물어야 한다.** 이 경로는 대사를 다시 만드는데, 튜토리얼인지를
+        # 안 보면 **아이가 새로고침한 순간 「네 책에 남아」가 되돌아온다.**
+        guide=_guide(티어, 시도.id, 하이라이트, 튜토리얼=튜토리얼카드인가(시도.card_id)),
         artwork=await _삽화참조(session, 시도.id, request),
         today=TodayState(cards_done=3, cap=5, locked=False),
         can_retry=True,
