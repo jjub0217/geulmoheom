@@ -271,9 +271,12 @@
    나이가 섹션 제목만 한 무게로 읽혔다. */
 .child-summary {
   display: flex;
+  align-items: center;
   min-width: 0;
-  flex-direction: column;
-  gap: 0.125rem;
+  /* flex-direction: column; */
+  /* **이름과 나이 사이를 벌린다** (2026-09-21 사용자 지시). 종전 `0.125rem`(2px) 은
+     둘이 붙어 보여서 **「현이만 11세」처럼 한 낱말로 읽혔다.** */
+  gap: 10px;
 }
 
 .child-name {
@@ -281,6 +284,9 @@
   color: var(--foreground);
   font-size: 1.375rem;
   font-weight: 700;
+  /* **둘의 밑줄을 맞춘다** (2026-09-21 사용자 지시) — 이름과 나이가 글자 크기가 달라
+     각자의 줄 높이를 쓰면 **가운데 정렬인데도 밑이 어긋나 보인다.** */
+  line-height: 1;
   letter-spacing: -0.03em;
   /* 긴 이름이 카드를 밀지 않는다 — 별명은 학부모가 자유롭게 짓는 값이다. */
   overflow-wrap: anywhere;
@@ -290,7 +296,8 @@
   margin: 0;
   color: var(--muted);
   font-size: 0.9375rem;
-  line-height: 1.5;
+  /* **이름과 같은 값이다** (2026-09-21 사용자 지시) — 위 `.child-name` 참고. */
+  line-height: 1;
 }
 
 /* **가로선을 걷었다** (2026-09-21 사용자 지시).
