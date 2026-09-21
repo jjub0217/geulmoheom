@@ -441,6 +441,20 @@
   .chapter-writing-guide {
     margin-bottom: 0.25rem;
   }
+  /* 마지막 14px 은 동료에서 가져온다. ⛔ 삽화는 안 걷는다 — 33px 이라도
+     「썼더니 그림이 나왔다」가 제품의 약속이고, 그걸 지우는 건 값이 안 맞는다.
+     글도 그림도 버튼도 아닌 것 중에 남은 것이 래서판다 크기와 나침반이다. */
+  .chapter-world .guide-figure {
+    --companion-size: clamp(4rem, 11svh, 5.5rem);
+  }
+  .chapter-world .game-compass {
+    width: 3rem;
+    height: 3rem;
+  }
+  /* 말풍선은 스크롤된다 — 읽는 칸과 같은 이유로, 잘리는 게 아니라 이어진다. */
+  .chapter-companion-line {
+    max-height: 3.75rem;
+  }
 }
 
 @media (max-height: 550px) {
