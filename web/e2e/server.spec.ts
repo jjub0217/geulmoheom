@@ -65,7 +65,7 @@ test("가입부터 책까지 한 갈래가 진짜 서버를 지난다", async ({
   await page.getByRole("button", { name: 만들기.버튼 }).click();
 
   const 코드칸 = page.locator("[data-접속코드]");
-  await expect(코드칸).toContainText(접속코드.제목);
+  await expect(코드칸).toContainText(접속코드.제목(별명));
   // **평문 코드는 이 응답 한 번에만 실린다.** 서버는 해시만 저장한다 —
   // **그래서 여기서 읽어야 하고, 그 사실 자체가 이 갈래가 진짜 서버를 물었다는 증거**다.
   const 코드 = ((await 코드칸.innerText()).match(/\b\d{6}\b/) ?? [])[0];
@@ -167,7 +167,7 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   await page.getByRole("button", { name: 만들기.버튼 }).click();
 
   const 코드칸 = page.locator("[data-접속코드]");
-  await expect(코드칸).toContainText(접속코드.제목);
+  await expect(코드칸).toContainText(접속코드.제목(챕터별명));
   const 코드 = ((await 코드칸.innerText()).match(/\b\d{6}\b/) ?? [])[0];
   expect(코드, "접속 코드 6자리를 화면에서 못 읽었다").toMatch(/^\d{6}$/);
 

@@ -51,7 +51,8 @@ type AccessCode = components["schemas"]["AccessCode"];
  */
 
 /** 방금 발급된 평문 코드. **서버는 해시만 저장하므로 이 값은 다시 못 받는다.** */
-type 발급된코드 = { childId: string; code: string; expiresAt: string };
+/** `별명` 은 **화면 문구가 쓴다** — 아이가 여럿이면 「아이에게」로는 누구인지 안 말한다. */
+type 발급된코드 = { childId: string; 별명: string; code: string; expiresAt: string };
 
 /**
  * **로그인이 풀렸는가 — 풀렸으면 로그인 화면으로 보낸다** (`문구.md` **3.11**, 401 절 포함).
@@ -141,6 +142,7 @@ export function ChildrenPanel() {
       // **평문 코드는 이 응답 한 번에만 실린다.** 화면에서 놓치면 재발급뿐이다.
       set코드({
         childId: 만들어짐.child_id,
+        별명: 만들어짐.nickname,
         code: 만들어짐.access_code,
         expiresAt: 만들어짐.access_code_expires_at,
       });
@@ -170,7 +172,7 @@ export function ChildrenPanel() {
     }
   };
 
-  const 코드다시받기 = async (childId: string) => {
+  const 코드다시받기 = async (childId: string, 별명: string) => {
     set재발급중(childId);
     set재발급실패(null);
     try {
@@ -180,6 +182,7 @@ export function ChildrenPanel() {
       );
       set코드({
         childId,
+        별명,
         code: 새코드.access_code,
         expiresAt: 새코드.access_code_expires_at,
       });
@@ -294,7 +297,7 @@ export function ChildrenPanel() {
                   <button
                     type="button"
                     disabled={재발급중 === 아이.child_id}
-                    onClick={() => void 코드다시받기(아이.child_id)}
+                    onClick={() => void 코드다시받기(아이.child_id, 아이.nickname)}
                     className="pressable action-secondary self-start"
                   >
                     {재발급.버튼}
@@ -419,14 +422,35 @@ export function ChildrenPanel() {
  */
 function AccessCodePanel({ 코드 }: { 코드: 발급된코드 }) {
   return (
-    <div data-접속코드 className="access-code-panel">
-      <p className="access-code-title">{접속코드.제목}</p>
-      {/* 숫자는 **띄어 읽을 수 있게** 자간을 준다 — 학부모가 아이에게 불러준다. */}
-      <p className="access-code-value">{코드.code}</p>
+    // **`role="status"` 다** (2026-09-21). 새 코드는 **버튼을 누른 뒤 화면 중간에 조용히 생긴다** —
+    // 화면을 못 보는 부모에게는 **아무 일도 안 일어난 것과 같다.** 되묻는 창처럼 초점을
+    // 뺏지는 않는다(코드를 읽는 중일 수 있다) — **읽어 주기만 한다.**
+    <div data-접속코드 role="status" className="access-code-panel">
+      <p className="access-code-title">{접속코드.제목(코드.별명)}</p>
+
+      {/* **숫자는 화면에서만 셋씩 끊는다** (2026-09-21 사용자 지시).
+          ⛔ **값에 공백을 넣지 않는다** — 부모가 복사하거나 아이가 받아 적을 때
+          그 공백이 따라간다. 사이는 **여백이 벌리고 글자는 그대로 여섯 자**다.
+          `innerText` 도 「867301」 그대로라 **코드를 읽어 가는 검사가 안 깨진다.**
+          읽어 줄 때는 **한 자씩** 불러야 해서 `aria-label` 을 따로 준다 —
+          안 주면 「팔십육만 칠천삼백일」로 읽힌다. */}
+      <p className="access-code-value" aria-label={[...코드.code].join(" ")}>
+        <span aria-hidden="true">{코드.code.slice(0, 3)}</span>
+        <span aria-hidden="true" className="access-code-value-back">
+          {코드.code.slice(3)}
+        </span>
+      </p>
+
+      {/* **무엇을 하면 무슨 일이 일어나는지 먼저 말한다.** */}
+      <p className="access-code-instruction">{접속코드.쓰는법}</p>
+      {/* ⛔ **이 줄을 걷지 않는다** — 2026-09-15 에 사용자가 스크린샷으로 찾아 세운 자리다.
+          그때 여기 있던 문장이 **없어진 홈 화면 앱을 찾으라고 말하고 있었다**(`adr/0014`).
+          **같은 주소를 아이 기기에서 연다**는 사실을 부모가 먼저 알면, 아이가 엉뚱한 곳에서
+          코드를 쓰고 태우는 일이 안 생긴다. 위 `쓰는법` 과 같은 얘기의 뒷단이라 붙여 둔다. */}
+      <p className="access-code-instruction">{접속코드.같은주소}</p>
+
       {/* **본 그 순간에 말한다.** 나중에 다시 열어보려 하는 것이 실제 실패 모드다. */}
       <p className="access-code-validity">{접속코드.한번만}</p>
-      {/* 아이 화면(3.2)이 막아주지만 **먼저 알면 아이가 그 벽을 안 만난다.** */}
-      <p className="access-code-instruction">{접속코드.같은주소}</p>
     </div>
   );
 }
