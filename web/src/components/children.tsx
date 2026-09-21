@@ -428,17 +428,15 @@ function AccessCodePanel({ 코드 }: { 코드: 발급된코드 }) {
     <div data-접속코드 role="status" className="access-code-panel">
       <p className="access-code-title">{접속코드.제목(코드.별명)}</p>
 
-      {/* **숫자는 화면에서만 셋씩 끊는다** (2026-09-21 사용자 지시).
-          ⛔ **값에 공백을 넣지 않는다** — 부모가 복사하거나 아이가 받아 적을 때
-          그 공백이 따라간다. 사이는 **여백이 벌리고 글자는 그대로 여섯 자**다.
-          `innerText` 도 「867301」 그대로라 **코드를 읽어 가는 검사가 안 깨진다.**
+      {/* ⛔ **여섯 자를 붙여서 그대로 보여준다** (2026-09-21 사용자 지시).
+          한때 **앞뒤 세 자리씩 나눠 여백으로 벌렸는데 사용자가 요청한 적이 없어 되돌렸다.**
+          불러주기 쉬우라고 넣은 것이었지만 **확인된 필요가 아니라 추측이었다.**
+          ⛔ **다시 나누지 않는다** — 화면이 달라지는 것은 사용자가 정한다.
+
           읽어 줄 때는 **한 자씩** 불러야 해서 `aria-label` 을 따로 준다 —
           안 주면 「팔십육만 칠천삼백일」로 읽힌다. */}
       <p className="access-code-value" aria-label={[...코드.code].join(" ")}>
-        <span aria-hidden="true">{코드.code.slice(0, 3)}</span>
-        <span aria-hidden="true" className="access-code-value-back">
-          {코드.code.slice(3)}
-        </span>
+        {코드.code}
       </p>
 
       {/* **무엇을 하면 무슨 일이 일어나는지 먼저 말한다.**

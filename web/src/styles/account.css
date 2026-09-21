@@ -376,12 +376,6 @@
   white-space: nowrap;
 }
 
-/* **셋씩 끊는 것은 여백이 한다. 값에는 공백이 없다.**
-   `letter-spacing` 이 글자 뒤에 붙으므로 앞 묶음의 마지막 자간까지 셈해서 벌린다. */
-.access-code-value-back {
-  margin-left: 0.4em;
-}
-
 .access-code-title {
   margin: 0;
   color: var(--foreground);
