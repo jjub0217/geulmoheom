@@ -599,9 +599,15 @@ test("챕터 한 판과 카드 한 장이 같은 책에 나란히 쌓인다", as
   await page.goto("/book");
 
   // **둘 다 아이 원문 그대로** — 요약도 교정도 없다 (비전 2장).
-  await expect(page.getByText(카드문장)).toBeVisible();
+  //
+  // ⛔ `getByText` 로 찾지 않는다. 책장을 넘기는 동안 **넘김 연출이 종이 앞뒤 면을 그리는데**
+  // 거기에도 같은 문장이 들어간다 — 그건 연출에 필요한 복제본이고 `aria-hidden` 으로
+  // 가려져 있다. 그런데 `getByText` 는 그걸 가리지 않아서 **둘이 잡혀 죽는다.**
+  // 재려는 것은 **책장에 실린 문장**이고, 그 표식이 바로 아랫줄이 쓰는 `data-책문장` 이다.
+  const 책문장 = (문장: string) => page.locator("[data-책문장]").filter({ hasText: 문장 });
+  await expect(책문장(카드문장)).toBeVisible();
   await page.locator("[data-book-next]").click();
-  await expect(page.getByText(챕터문장)).toBeVisible();
+  await expect(책문장(챕터문장)).toBeVisible();
 
   // **쪽 수가 둘이다.** 챕터 장이 빠지거나 두 번 들어가면 여기서 걸린다.
   await expect(page.locator("[data-책문장]")).toHaveCount(2);
