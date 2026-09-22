@@ -924,6 +924,31 @@ test("한 턴이 글쓰기 → 결과 → 새장면 → 글쓰기로 돈다", as
   await expect(page.locator("[data-쓴문장]")).toHaveCount(0);
 });
 
+/**
+ * ## ⛔ 같은 서사를 두 번 타자기로 쓰지 않는다 (2026-09-22 실측으로 잡았다)
+ *
+ * 등장 연출의 열쇠에 **단계 이름을 그대로** 넣었더니, 아이가 **「다음 행동 쓰기」를 누른
+ * 순간 방금 읽은 그 서사가 처음부터 다시 쓰였다.** 127자 서사에 **5초**가 걸렸고
+ * 그동안 **래서판다가 투명했다** — 아이는 그 화면에서 글을 쓰려던 참이다.
+ *
+ * **⚠ 위 「한 턴이 …로 돈다」 검사는 이것을 못 잡는다.** 거기서 쓰는 `toBeVisible` 은
+ * **자동으로 다시 재서**, 5초 걸려 다 쓰이면 통과한다. **그래서 누른 직후 한 번만 잰다.**
+ */
+test("새 장면에서 글쓰기로 넘어갈 때 서사를 다시 쓰지 않는다", async ({ page }) => {
+  await 장면을띄운다(page);
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+  await 글을보낸다(page);
+  await 새장면까지(page);
+  await expect(page.locator("[data-scene-typed]")).toHaveText(다음턴.narrative!);
+
+  await page.locator("[data-다음행동]").click();
+
+  // **누른 직후다.** 다시 쓰기 시작했다면 이 순간 타자기 칸이 비어 있다.
+  expect(await page.locator("[data-scene-typed]").innerText()).toBe(다음턴.narrative);
+  // 래서판다도 그 자리에 이미 서 있다 — 서사를 쓰는 동안 숨기는 것이 이 연출이다.
+  await expect(page.locator(".chapter-companion")).not.toHaveAttribute("data-guide-phase", "narrative");
+});
+
 test("삽화가 준비 중이어도 다음 이야기로 넘어갈 수 있다", async ({ page }) => {
   // **새 서사는 이미 응답에 와 있다** — 삽화를 기다릴 이유가 없다 (사용자 확정).
   await 장면을띄운다(page);
