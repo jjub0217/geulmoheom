@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { paths } from "../src/api/types.gen";
 // 문구를 문자열로 박지 않는다 — `docs/문구.md` 1.18 이 SSOT 다.
-import { 결과라벨, 챕터다시쓰기라벨, 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
+import { 결과라벨, 그림문구, 챕터다시쓰기라벨, 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
 import { 못닿음 } from "../src/app/copy";
 
 /**
@@ -378,7 +378,11 @@ test("보내는 중에도 쓴 글을 유지하고 읽는 중임을 알린다", a
   await expect(page.locator("[data-읽는중]")).toHaveCount(0);
 });
 
-test("긴 이야기를 읽은 다음 응답은 첫 문장에 초점을 돌린다", async ({ page }) => {
+test("긴 이야기를 읽은 다음 응답은 첫 문장으로 돌아온다", async ({ page }) => {
+  // ⛔ **재는 대상이 바뀌었다** (2026-09-22). 종전에는 **읽는 칸이 따로 스크롤**돼서
+  // `scrollTop` 을 쟀는데, 그 내부 스크롤을 걷었다(사용자 확정 — 글이 다 펼쳐진다).
+  // **재야 하는 것은 그대로다** — 아래까지 읽고 글을 보낸 아이가 **새 이야기의 중간을
+  // 보면 안 된다.** 이제 그 일을 **페이지 스크롤**이 한다.
   await page.route(CURRENT, (route) => route.fulfill({
     status: 200,
     json: { ...장면, narrative: 긴서사.repeat(8), artwork: null },
@@ -387,12 +391,19 @@ test("긴 이야기를 읽은 다음 응답은 첫 문장에 초점을 돌린다
   await page.goto("/chapter");
   const 이야기 = page.locator(".chapter-story");
   await expect(이야기).toBeVisible();
-  await 이야기.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  expect(await 이야기.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  // 아래까지 읽은 아이를 흉내 낸다.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
   await 글을보낸다(page);
   await expect(page.getByText(다음턴.narrative!)).toBeVisible();
   await expect(이야기).toBeFocused();
-  expect(await 이야기.evaluate((element) => element.scrollTop)).toBe(0);
+
+  // **이야기 시작이 화면 안에 있다.** ⛔ 입력칸으로 데려가지 않는다 — 아이는 읽고 나서 내려온다.
+  const 시작 = await 이야기.boundingBox();
+  expect(시작!.y).toBeGreaterThanOrEqual(-1);
+  expect(시작!.y).toBeLessThan(await page.evaluate(() => window.innerHeight));
 });
 
 /**
@@ -713,4 +724,103 @@ test("글을 보낸 뒤 초점이 입력칸으로 가지 않는다 — 키보드
   // **삽화와 이어진 이야기를 덮는다.**
   const 초점 = await page.evaluate(() => document.activeElement?.id ?? "");
   expect(초점).not.toBe("attempt");
+});
+
+/**
+ * ## ⛔ 「모험 그림」 — 아이가 「내 글로 이 그림이 나왔다」고 오해했다
+ *
+ * **본편 삽화는 한 챕터에 두 번뿐**이고(1턴·9턴) 나머지 턴에는 **직전 그림이 남는다.**
+ * 그 그림이 **아이 문장 바로 옆**에 붙어 있어서 2턴부터도 자기 글로 나온 것으로 읽혔다.
+ * 사용자가 짚었고, **삽화를 제 영역으로 떼어 상태를 말하게** 했다 (2026-09-22).
+ *
+ * **⛔ 턴 번호로 안 가른다.** 서버가 새 그림 턴에만 `artwork` 를 싣고, 화면은 그 id 가
+ * 액자의 것과 같은지만 본다 — **뼈대가 바뀌어도 화면이 거짓말을 안 한다.**
+ */
+const 그림있는턴 = (id: string) => ({
+  ...다음턴,
+  artwork: { artwork_id: id, status: "ready", url: null },
+});
+
+async function 삽화판(page: Page, 삽화응답: Record<string, unknown>) {
+  await page.route(/\/api\/v1\/artworks\/.+/, (route) =>
+    route.fulfill({ status: 200, json: 삽화응답 }),
+  );
+  await page.route(CURRENT, (route) => route.fulfill({ status: 200, json: 장면 }));
+}
+
+async function 한턴쓴다(page: Page) {
+  await page.goto("/chapter");
+  await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+  await expect(page.locator("[data-쓴문장]")).toBeVisible();
+}
+
+test("이번 글로 새 그림이 왔으면 그렇게 말한다", async ({ page }) => {
+  await 삽화판(page, { artwork_id: "새것", status: "ready", url: "/x.svg", tier: "rare", fallback: false });
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 그림있는턴("새것") }));
+
+  await 한턴쓴다(page);
+  await expect(page.locator("[data-그림상태]")).toHaveText(그림문구.새로왔다);
+  // **제목이 「모험 그림」이다** — 「네가 쓴 글」에 딸린 그림이 아니라는 뜻이다.
+  await expect(page.locator(".chapter-visual")).toContainText(그림문구.제목);
+});
+
+test("앞 턴 그림이 남아 있는 것이면 그렇게 말한다 — 여기가 오해가 났던 자리다", async ({ page }) => {
+  await 삽화판(page, { artwork_id: "aaaa", status: "ready", url: "/x.svg", tier: "rare", fallback: false });
+  // **서버가 `artwork` 를 안 보낸다** — 그것이 「새 그림이 없다」의 실제 신호다.
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+
+  await 한턴쓴다(page);
+  await expect(page.locator("[data-그림상태]")).toHaveText(그림문구.앞에서만든것);
+  await expect(page.locator("[data-그림상태]")).not.toContainText(그림문구.새로왔다);
+});
+
+test("⛔ 기본 그림에는 아무 말도 하지 않는다", async ({ page }) => {
+  // 「새 그림이 완성됐어!」는 거짓이고(아이 문장으로 만든 것이 아니다),
+  // 「기본 그림이야」는 「fallback 을 아이에게 알리지 않는다」를 깬다 (W4 B-3 완료 조건).
+  await 삽화판(page, { artwork_id: "새것", status: "ready", url: "/x.svg", tier: "basic", fallback: true });
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 그림있는턴("새것") }));
+
+  await 한턴쓴다(page);
+  await expect(page.locator("[data-그림상태]")).toHaveCount(0);
+  // **그림 자체는 그대로 보인다** — 감추는 것은 말이지 그림이 아니다.
+  await expect(page.locator(".chapter-visual .artwork-frame")).toBeVisible();
+});
+
+test("읽는 순서가 내 글 → 이야기 → 그림 → 동료 → 다음 행동이다", async ({ page }) => {
+  await 삽화판(page, { artwork_id: "새것", status: "ready", url: "/x.svg", tier: "rare", fallback: false });
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 그림있는턴("새것") }));
+
+  await 한턴쓴다(page);
+  const y = async (칸: string) => {
+    const 상자 = await page.locator(칸).first().boundingBox();
+    return 상자!.y;
+  };
+  const 쓴글 = await y("[data-쓴문장]");
+  const 이야기 = await y(".chapter-narrative");
+  const 그림 = await y(".chapter-visual");
+  const 동료 = await y(".chapter-companion");
+  const 입력 = await y(".chapter-console");
+  expect(이야기).toBeGreaterThan(쓴글);
+  expect(그림).toBeGreaterThan(이야기);
+  expect(동료).toBeGreaterThan(그림);
+  expect(입력).toBeGreaterThan(동료);
+});
+
+test("긴 이야기가 작은 상자 안에서 따로 스크롤되지 않는다", async ({ page }) => {
+  // **서사는 `MVP_PRD.md` 규정으로 한 턴 150~300자**다. 종전에는 이 칸이 고정 높이라
+  // **어느 크기에서도 다 안 들어갔고**, 아이가 **다음 글을 쓰려고 읽어야 하는 글**을
+  // 작은 상자 안에서 따로 스크롤해야 했다 (2026-09-22 사용자 확정).
+  const 긴것 = "가".repeat(300);
+  await 삽화판(page, { artwork_id: "새것", status: "ready", url: "/x.svg", tier: "rare", fallback: false });
+  await page.route(TURNS, (route) =>
+    route.fulfill({ status: 200, json: { ...그림있는턴("새것"), narrative: 긴것 } }),
+  );
+
+  await 한턴쓴다(page);
+  await expect(page.locator(".chapter-narrative")).toHaveText(긴것);
+  const 잘렸나 = await page.locator(".chapter-story").evaluate(
+    (el) => el.scrollHeight > el.clientHeight + 1,
+  );
+  expect(잘렸나).toBe(false);
 });

@@ -25,77 +25,46 @@
   box-shadow: 0 3px 14px rgb(18 32 36 / 20%);
 }
 
-/* 긴 본편 글은 이야기 안에서 스크롤한다. 시작선·폭·종이는 공통 game-story를 따른다. */
-/* 높이는 그대로 둔다 (2026-09-20 사용자 판정 — 칸을 늘리지 않고 스크롤로 푼다).
-   ⛔ 늘리면 쓰는 칸이 첫 화면에서 밀린다 — W6 에서 아이 셋이 다 못 찾은 그 자리다. */
+/* ## ⛔ 고정 높이와 내부 스크롤을 걷었다 (2026-09-22 사용자 확정)
+   **종전 주석은 「높이는 그대로 둔다 — 늘리면 쓰는 칸이 첫 화면에서 밀린다. W6 에서
+   아이 셋이 다 못 찾은 그 자리다」였다.** 그 사고는 실제로 있었고 기록도 맞다.
+   **사용자가 그것을 알고 무른 것이다.**
+
+   근거 — **서사가 `MVP_PRD.md` 규정으로 한 턴 150~300자**인데, 이 칸이
+   **1280×800 에서 176px · 320×568 에서 114px** 이라 **어느 크기에서도 다 안 들어갔다.**
+   아이는 **다음 글을 쓰려고 그 이야기를 읽어야** 하는데, 작은 상자 안에서 따로
+   스크롤해야 마지막 문장에 닿았다.
+
+   ⛔ **사용자가 막은 것 넷** — 이야기를 다시 자르기 · 글자 크기나 줄간격을 지나치게
+   줄이기 · 고정 높이와 내부 스크롤을 다시 쓰기 · 이야기 일부를 접어 두기.
+   **입력창이 첫 화면 아래로 내려가는 것 자체는 문제가 아니다**(사용자 확정) —
+   아이는 **이야기를 먼저 읽고 나서** 다음 행동을 쓴다. 대신 **읽고 나서 다음 글쓰기
+   자리를 자연스럽게 찾을 수 있게** 간격과 제목이 그 일을 한다. */
 .chapter-stage .chapter-reading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 1.25rem;
+  display: block;
   width: min(100%, 75rem);
-  height: clamp(8rem, 28svh, 20rem);
   flex: none;
   min-width: 0;
-  min-height: 0;
   padding: 0;
-  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
 }
-.chapter-stage .chapter-reading:not(:has(.chapter-visual > .artwork-frame)) {
-  display: block;
-  height: auto;
-  max-height: clamp(8rem, 28svh, 20rem);
-}
-.chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
-  /* **삽화와 서사 사이를 좁히고 서사 칸을 넓힌다** (2026-09-21 사용자 요청).
-     간격을 줄이는 대신 **읽는 칸이 넓어져** 같은 글이 덜 접힌다 — 글자 크기를 안 건드리고
-     줄당 글자 수를 늘리는 쪽이다. 삽화는 제 비율을 지키므로 작아지지 않는다. */
-  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-  gap: 0.75rem;
-}
+/* ⛔ **내부 스크롤과 아래 끝 흐림을 걷었다** (2026-09-22 사용자 확정).
+   종전에는 **이 칸이 따로 스크롤**됐고, 그래서 둘이 붙어 있었다 — **늘 자리를 비워 두는
+   스크롤 막대**와 **아래 끝 흐림**이다. 둘 다 **「여기서 끝이 아니다」를 말하는 장치**였다.
+   ⭐ **이제 그 말을 할 필요가 없다** — 글이 다 펼쳐지고 **페이지 전체가 스크롤**한다.
+   ⚠ 흐림은 한 번 **마지막 줄을 통째로 먹은** 전력이 있다(2026-09-21 실측 —
+   360×640 에서 온전히 읽히는 줄이 넷 중 하나였다). **없애는 것이 그 위험도 같이 없앤다.** */
 .chapter-stage .chapter-story {
   align-self: start;
   width: 100%;
-  max-height: clamp(8rem, 28svh, 20rem);
-  min-height: 0;
-  /* ⛔ 스크롤은 원래 됐다. 안 보였을 뿐이다 (2026-09-20).
-     아이는 **마지막 줄이 반만 보이는 것**을 「더 있다」가 아니라 「잘렸다」로 읽는다.
-     그래서 둘을 준다 — **자리를 늘 비워 두는 스크롤 막대**와 **아래 끝 흐림**.
-     흐림이 「여기서 끝이 아니다」를 말하고, 막대가 얼마나 남았는지를 말한다. */
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  /* ⛔ 흐림이 28px 이었다. 그런데 **한 줄이 29~35px** 이다 (2026-09-21 실측).
-     「여기서 끝이 아니다」를 말하려던 장치가 **마지막 줄을 통째로 먹고 있었다** —
-     360×640 에서 온전히 읽히는 줄이 넷 중 **하나**였다.
-     ⭐ 바로 위 주석이 「마지막 줄이 반만 보이면 아이는 잘렸다로 읽는다」라고 적어 뒀는데,
-     그 모양을 만든 것이 이 흐림이었다. 한 줄보다 확실히 작게 잡는다. */
-  mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - 0.5rem),
-    transparent 100%
-  );
   outline-offset: -4px;
 }
 /* 막대는 늘 보이게 둔다. `scrollbar-gutter: stable` 은 **자리만 비우고 막대를 안 그린다** —
    겹침 막대를 쓰는 기기에서는 자리조차 0px 이다. 폭을 직접 주면 그리는 막대로 바뀐다.
    흐림이 「더 있다」를 말하고 막대가 **얼마나 남았는지**를 말한다. */
-.chapter-stage .chapter-story {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-brass) 60%, transparent) transparent;
-}
-.chapter-stage .chapter-story::-webkit-scrollbar {
-  width: 6px;
-}
-.chapter-stage .chapter-story::-webkit-scrollbar-track {
-  background: transparent;
-}
-.chapter-stage .chapter-story::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--color-brass) 60%, transparent);
-}
+
 .chapter-stage .chapter-narrative {
   margin: 0;
   font-family: var(--font-companion);
@@ -116,15 +85,16 @@
   display: grid;
   /* **가로로는 왼쪽에 붙인다** (2026-09-21 사용자 지적). 종전에는 가운데라 **삽화가 자기 칸
      안에서 떠 있었고**, 그래서 삽화 왼쪽 가장자리가 「내 책」과 안 맞았다 — 1280 에서 155px,
-     1024 에서 96px 어긋났다. 세로 가운데는 그대로다. */
-  place-items: center start;
+     1024 에서 96px 어긋났다. */
+  justify-items: start;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
-  container-type: size;
+  /* ⛔ **`height: 100%` 와 `container-type: size` 를 걷었다** (2026-09-22 실측).
+     둘 다 **이 영역이 읽는 묶음의 그리드 칸 안에 있을 때** 쓰던 것이다 — 칸이 높이를
+     주니 100% 가 뜻이 있었고, 그 높이를 `100cqh` 로 액자에 넘겼다.
+     **삽화를 그 밖으로 빼면서 높이를 줄 사람이 없어졌고**, 그래서 **영역이 0px 이 되어
+     액자가 사라졌다.** 이제 **내용이 높이를 정한다.** */
 }
 .chapter-visual .artwork-frame {
-  width: min(100%, calc(100cqh * var(--artwork-ratio)));
   max-width: 100%;
   margin: 0;
   border-radius: 0.875rem;
@@ -159,6 +129,44 @@
    **결과를 보는 것과 다음 글을 쓰는 것이 구분되지 않았다.**
    가르는 수단은 **여백과 글자 크기**다 — **제목과 테두리를 얹지 않는다.**
    사용자 지시가 「설정 페이지나 학습지처럼 보이게 만들지 말라」였다. */
+
+/* ## 모험 그림 (2026-09-22 사용자 지시)
+   ⛔ **아이 글 옆이 아니라 이야기 아래, 제 영역이다.** 본편 삽화는 한 챕터에 두 번만
+   만들어지고 나머지 턴에는 직전 그림이 남는데, **아이 문장 옆에 붙어 있어서**
+   **2턴부터도 「내가 방금 쓴 글로 나온 그림」**으로 읽혔다. */
+.chapter-stage .chapter-visual {
+  width: min(100%, 75rem);
+  margin-top: 0.75rem;
+}
+/* ⛔ **폭을 여기서 준다.** `ArtworkFrame` 은 **`aspect-ratio` 와 `max-width` 만** 두고
+   실제 폭은 **부모에게서 받는다**(`lib/artwork-frame.ts`). 종전에는 읽는 묶음의
+   **그리드 칸**이 그 폭을 줬는데, 삽화를 그 밖으로 뺐더니 **폭이 0 이 되어 액자가
+   0×0 으로 사라졌다** (2026-09-22 실측). 줄 사람이 없어졌으면 여기서 준다.
+   **높이 상한을 폭으로 환산한다** — 비율은 액자가 `--artwork-ratio` 로 알려 준다. */
+.chapter-stage .chapter-visual .artwork-frame {
+  --artwork-cap: clamp(9rem, 26svh, 18rem);
+  width: min(100%, calc(var(--artwork-cap) * var(--artwork-ratio, 1)));
+  /* 이야기와 왼쪽 시작선을 맞춘다 — 「내 책」과 맞춰 둔 그 선이다. */
+  margin-inline: 0;
+}
+/* 삽화 상태 한 줄. **새 그림일 때만 조금 또렷하다** — 나머지는 곁말이다.
+   ⛔ **이 자리는 종이 위가 아니라 숲 배경 위다** (2026-09-22 실측 — 글자가 배경에 묻혔다).
+   읽는 묶음은 `.game-story` 가 깔아 주는 종이 위에 있는데 **모험 그림 영역에는 그 종이가
+   없다.** 상자를 두르는 대신 **글자 자체를 읽히게** 한다 — 사용자 지시가
+   「제목과 테두리를 과도하게 추가하지 말라」였다. */
+.chapter-stage .chapter-visual .chapter-part-label,
+.chapter-stage .chapter-artwork-note {
+  color: var(--foreground);
+  text-shadow: 0 1px 3px rgb(255 251 243 / 90%), 0 0 10px rgb(255 251 243 / 70%);
+}
+.chapter-stage .chapter-artwork-note {
+  margin: 0.375rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.chapter-stage .chapter-artwork-note--새것 {
+  font-weight: 600;
+}
 
 /* ⛔ **작고 여리다.** 이건 읽을 글이 아니라 **어디부터 어디까지인지를 말하는 표시**다.
    아이 글·이야기보다 커지면 화면이 학습지가 된다.
@@ -295,15 +303,6 @@
     padding: 0.375rem 0.75rem;
     font-size: 1rem;
   }
-  .chapter-stage .chapter-reading {
-    gap: 0.5rem;
-  }
-  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
-    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
-  }
-  .chapter-stage .chapter-reading:has(.chapter-story:empty) {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .chapter-stage .chapter-narrative,
   .chapter-ending-narrative {
     font-size: var(--type-scene-mobile);
@@ -335,64 +334,7 @@
   }
 }
 
-/* ──────────────────────────────────────────────────────────────
-   좁고 긴 화면에서는 2단을 푼다 (2026-09-21 실측).
 
-   **줄당 글자가 원인이었다.** 삽화를 옆에 두면 읽는 칸이 화면 폭의 절반을 조금 넘고,
-   320px 에서 **한 줄에 8.1자**가 된다 — 낱말이 거의 매번 잘린다. 390 에서도 11.3자다.
-   비율을 0.5:1.5 까지 밀어도 10자를 못 넘어서, **단을 푸는 것 말고는 수가 없다.**
-
-   ⛔ **높이 예산은 그대로 쓴다.** `chapter-stage.css` 의 2026-09-20 사용자 판정
-   (「늘리면 쓰는 칸이 첫 화면에서 밀린다 — W6 에서 아이 셋이 다 못 찾은 그 자리」)이
-   여기에도 걸린다. 쌓으면 세로가 더 드는 것이 보통인데, **줄당 글자가 두 배가 되면
-   같은 글이 절반의 줄로 들어오므로** 칸을 안 늘리고도 읽히는 양이 유지된다.
-   그래서 묶음 높이는 건드리지 않고 **안에서만 나눈다.**
-
-   분기는 `result-stage.css` 의 결과 화면이 이미 고른 것과 같다 — 거기서도 같은 폭·방향에서
-   삽화를 글 위로 올린다. 가로로 누운 폰(`max-height: 550px`)은 가로가 넉넉하니 2단을 둔다.
-   ────────────────────────────────────────────────────────────── */
-@media (max-width: 700px) and (orientation: portrait) {
-  .chapter-stage .chapter-reading:has(.chapter-visual > .artwork-frame) {
-    grid-template-columns: minmax(0, 1fr);
-    /* **0.7 : 1.3 은 재서 고른 값이다** (후보 넷을 쓸었다).
-       묶음 높이가 고정이라 **삽화 행과 읽는 행은 서로의 것을 빼앗는다.**
-       이 값이 **보이는 글자를 종전(2단)보다 줄이지 않으면서** 삽화를 가장 크게 남긴다. */
-    grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr);
-    gap: 0.5rem;
-  }
-  /* 삽화는 제 행 높이에 맞춘다. 가로 시작선은 그대로 왼쪽 — 「내 책」과 맞춰 둔 것이다. */
-  .chapter-stage
-    .chapter-reading:has(.chapter-visual > .artwork-frame)
-    .chapter-visual {
-    height: 100%;
-  }
-  /* 읽는 칸이 제 행을 다 쓰게 둔다. 바깥 묶음이 이미 높이를 물고 있으므로
-     여기서 `max-height` 를 또 걸면 행보다 작아져 빈자리가 생긴다. */
-  .chapter-stage
-    .chapter-reading:has(.chapter-visual > .artwork-frame)
-    .chapter-story {
-    max-height: none;
-    height: 100%;
-  }
-}
-
-/* 쓰기 안내가 내려간 뒤에만 읽는 묶음이 자란다 (2026-09-21).
-
-   구조 안내 두 줄은 **첫 턴에만 뜨고**(`chapter/page.tsx`) 390×844 에서 **87px** 을 쓴다.
-   ⛔ **그 자리를 비우기 전에 묶음을 키우면 안 된다** — 첫 턴에서 쓰는 칸이 화면 밖으로
-   100px 밀리는 것을 실측했다. **안내가 있는 동안은 종전 예산 그대로 두고**,
-   안내가 사라진 두 번째 턴부터 그 높이를 **삽화 행**이 받는다.
-
-   그래서 삽화가 **2단이던 때보다 커지고**(390 에서 133px → 169px) 글은 단이 풀린 채로 남는다.
-   `:has()` 로 묶은 이유는 **두 값이 같은 원인에 매여 있기 때문**이다 — 안내가 다시 살아나면
-   칸도 따라 돌아가야 하고, 따로 적어 두면 한쪽만 고쳐진다. */
-@media (max-width: 700px) and (orientation: portrait) {
-  .chapter-stage:not(:has([data-chapter-structure-guide]))
-    .chapter-reading:has(.chapter-visual > .artwork-frame) {
-    grid-template-rows: clamp(5rem, 20svh, 13rem) minmax(0, 1fr);
-    height: clamp(11rem, 38svh, 26rem);
-  }
-}
 
 /* 누운 화면이 낮을 때 동료 크기를 창 높이에 맞춘다 (2026-09-21 실측).
 
@@ -414,11 +356,6 @@
      ⚠ 첫 턴은 쓰기 안내 61px 이 더 있어 1280×800 에서 나가기가 31px 밖에 남는다.
      더 줄이면 첫 화면에 보이는 글이 4줄에서 3줄이 되는데, **첫 턴이 아이가 이야기를
      처음 읽는 자리**라 그 맞바꿈은 하지 않았다. 판정이 말한 쓰는 칸은 들어와 있다. */
-  .chapter-stage .chapter-reading,
-  .chapter-stage .chapter-story {
-    height: clamp(7rem, 22svh, 16rem);
-    max-height: clamp(7rem, 22svh, 16rem);
-  }
 
   /* 나가기를 첫 화면 안으로 들이는 마지막 46px. 바닥 띠가 46px 짜리 버튼에 66px 을
      쓰고 있었고, 나침반이 동료 그림보다 커져 있었다 — 그림을 18svh 로 낮추면서 생긴
@@ -442,9 +379,6 @@
 
    읽는 칸부터 줄인다 — **읽는 칸은 스크롤되고 쓰는 칸은 안 된다.** */
 @media (orientation: portrait) and (max-height: 700px) {
-  .chapter-stage .chapter-reading {
-    height: clamp(6rem, 20svh, 12rem);
-  }
   .chapter-world .guide-figure {
     --companion-size: clamp(4.5rem, 14svh, 7rem);
   }
@@ -465,11 +399,6 @@
   .chapter-console .writing-field {
     min-height: 5.5rem;
     height: 5.5rem;
-  }
-  /* ⛔ 읽는 칸을 여기서 더 줄이지 않는다. 18svh 로 내려 봤더니 첫 화면에 보이는 글이
-     **한 줄**이 됐다. 버튼 9px 을 얻자고 이야기를 없애는 맞바꿈이라 되돌렸다. */
-  .chapter-stage .chapter-reading {
-    height: clamp(5.5rem, 20svh, 11rem);
   }
   /* 남는 곳은 테두리다 — 이름 띠 · 바닥 띠 · 콘솔 안쪽 여백. 글도 버튼도 아닌 자리다. */
   .chapter-shell .game-stage-header {

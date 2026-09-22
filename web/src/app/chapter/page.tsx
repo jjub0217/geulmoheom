@@ -11,7 +11,7 @@ import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession
 import { useBookPageCount } from "@/components/book-progress";
 import { LeaveButton } from "@/components/leave";
 import { ChapterCompanion, chapterErrorGuide, chapterGuide } from "@/components/chapter-companion";
-import { 결과라벨, 챕터구조안내, 챕터다시쓰기라벨, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
+import { 결과라벨, 그림문구, 챕터구조안내, 챕터다시쓰기라벨, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
 import { CompassIntroduction } from "@/components/compass-introduction";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
@@ -21,6 +21,7 @@ import { ApiError, apiGet, apiPost, 인증이풀렸다, 역할이다르다 } fro
 import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { useArtwork } from "@/lib/artwork";
 import { 액자에둘것 } from "@/lib/chapter-artwork";
+import { 그림이할말 } from "@/lib/chapter-artwork-state";
 import type { PiiKind } from "@/lib/pii";
 
 import { 버튼, 못닿음 } from "../copy";
@@ -146,6 +147,18 @@ export default function ChapterPage() {
     // 직전 서사를 끝까지 읽었더라도 새 응답은 첫 문장부터 읽는다.
     story.scrollTop = 0;
     story.focus({ preventScroll: true });
+    /**
+     * ⛔ **페이지를 그 자리로 올린다** (2026-09-22).
+     * 종전에는 **읽는 칸이 따로 스크롤**돼서 `scrollTop = 0` 한 줄이 「첫 문장으로」를
+     * 다 했다. **그 내부 스크롤을 걷으면서**(사용자 확정 — 글이 다 펼쳐진다)
+     * **아래까지 읽고 글을 보낸 아이가 새 이야기의 중간을 보게** 됐다.
+     *
+     * **⛔ 입력칸으로 스크롤하지 않는다** (사용자 지시). 올리는 곳은 **아이 글과
+     * 이야기가 시작되는 자리**다 — 아이는 그것을 읽고 나서 내려온다.
+     * **움직임을 안 쓴다**(`behavior` 기본값) — `prefers-reduced-motion` 을 쓰는 아이에게
+     * 부드러운 스크롤은 도움이 아니라 방해다.
+     */
+    story.scrollIntoView({ block: "start" });
   }, [screen]);
 
   useEffect(() => {
@@ -320,13 +333,15 @@ export default function ChapterPage() {
             한다 — **내가 쓴 것 → 그래서 벌어진 일**이고 그 순서가 곧 인과다.
             묘사어 표시(`highlights`)는 그대로 따라온다.
             **⛔ 첫 글 전에는 안 그린다** — 그때는 쓴 글이 없다. 빈 상자를 만들지 않는다. */}
+        {/* ## 읽는 순서가 곧 인과다 (2026-09-22 사용자 지시)
+            **네가 쓴 글 → 이야기의 다음 순간 → 모험 그림 → 래서판다 → 이제 어떻게 할까?**
+
+            ⛔ **삽화를 아이 글 옆에서 떼어 냈다.** 본편 삽화는 한 챕터에 **두 번**만
+            만들어지고(1턴·9턴) 나머지 턴에는 **직전 그림이 그대로 남는다.** 그 그림이
+            아이 문장 바로 옆에 붙어 있어서 **2턴부터도 「내가 방금 쓴 글로 나온 그림」**
+            으로 읽혔다. 사용자가 그것을 짚었다.
+            **이제 「모험에 남은 그림」으로 읽히는 자리**에 둔다. */}
         <div className="chapter-reading">
-          {/* 삽화가 있는 장면만 액자를 보인다. 빈 상자를 만들지 않는다. */}
-          {view.artwork && (
-            <div className="chapter-visual">
-              <ChapterArtwork 참조={view.artwork} 새그림={view.새삽화id === view.artwork.artwork_id} />
-            </div>
-          )}
           <div ref={이야기칸} className="game-story chapter-story" tabIndex={-1}>
             {/* **내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.** 읽는 순서가 곧 인과다.
                 **⛔ 둘을 여기서 꺼내지 않는다** (2026-09-22 실측). 밖으로 올렸더니
@@ -348,6 +363,12 @@ export default function ChapterPage() {
             {view.narrative && <SceneCard card={{ situation: view.narrative }} narrativeClassName="chapter-narrative" />}
           </div>
         </div>
+        {/* **모험 그림은 제 영역이다.** 삽화가 있는 장면만 보인다 — 빈 상자를 만들지 않는다. */}
+        {view.artwork && (
+          <div className="chapter-visual">
+            <ChapterArtwork 참조={view.artwork} 이번글로왔나={view.새삽화id === view.artwork.artwork_id} />
+          </div>
+        )}
         <ChapterCompanion
           guide={안내가이드}
           length={text.length}
@@ -373,7 +394,16 @@ export default function ChapterPage() {
             버튼이 돌아오고 이 안내는 다시 첫 턴에만 나온다. */}
         {(첫안내 || 책이비었나) && (
           <div data-chapter-structure-guide className="chapter-writing-guide">
-            {챕터구조안내.map((줄) => <p key={줄}>{줄}</p>)}
+            {/* ⛔ **첫 줄은 첫 글 전에만 말한다** (2026-09-22 사용자 지시 「중복 안내 정리」).
+                그 줄은 **「네가 쓴 대로 이야기가 이어져.」**인데, 글을 보낸 뒤에는
+                **래서판다가 바로 위에서 「네가 쓴 대로 이야기가 이어졌어.」라고 말한다.**
+                거의 같은 문장이 한 화면에 둘 서면 **아이가 어느 것을 읽어야 할지 모른다.**
+                ⭐ **둘째 줄은 남긴다** — 「중요한 순간은 그림으로 남고, 이야기를 완성하면
+                책에 담겨.」는 **어디서도 되풀이되지 않고**, 책이 비어 있는 동안
+                **왜 아직 책이 비었나**를 답하는 유일한 문장이다. */}
+            {챕터구조안내
+              .filter((줄, i) => i > 0 || view.쓴것 === null)
+              .map((줄) => <p key={줄}>{줄}</p>)}
           </div>
         )}
         <div className="game-response">
@@ -486,13 +516,35 @@ function ChapterStage({ children, done = false, status = false, bookDisabled = f
  * 「Cannot access refs during render」로 **일곱 줄을 한 번에** 뱉는다(2026-09-16 실측).
  * `web/CLAUDE.md` 의 한글 식별자 항목과 같은 자리다 — **규칙의 예외가 아니라 도구의 제약**이다.
  */
-function ChapterArtwork({ 참조, 새그림 }: { 참조: ArtworkRef; 새그림: boolean }) {
+function ChapterArtwork({ 참조, 이번글로왔나 }: { 참조: ArtworkRef; 이번글로왔나: boolean }) {
   const 상태 = useArtwork(참조);
+  /**
+   * **무엇을 말할지는 순수 함수가 정한다** (`lib/chapter-artwork-state.ts`).
+   * 여기서 조건을 엮으면 **네 갈래를 재려고 화면을 띄워야** 하고, 그러면 안 재게 된다.
+   */
+  const 할말 = 그림이할말(상태, 이번글로왔나);
   return <>
+    {/* ⛔ **제목은 「모험 그림」이다** — 「네가 쓴 글」에 딸린 그림이 아니라
+        **모험에 남은 그림**이라는 뜻이다 (`문구.md` 1.18d). */}
+    <p className="chapter-part-label">{그림문구.제목}</p>
     <ArtworkFrame
       상태={상태}
-      waitingContent={새그림 ? <p>중요한 순간이야! 네 글로 그림을 만들고 있어.</p> : undefined}
+      waitingContent={할말 === "만드는중" ? <p>{그림문구.만드는중}</p> : undefined}
     />
+    {/* ⛔ **네 갈래이고 그중 하나는 「아무 말도 안 함」이다** (2026-09-22 사용자 확정).
+        기본 삽화에는 아무 말도 안 한다 — **「새 그림이 완성됐어!」는 거짓**이고
+        **「기본 그림이야」는 「`fallback` 을 아이에게 알리지 않는다」**(대표 판정)를 깬다.
+        **⚠ 「새 그림이 완성됐어!」는 2026-09-21 에 한 번 내렸던 문장이다.** 그때 근거는
+        「그림이 오는 것 자체가 그 말이다」였고 **그때는 새 그림뿐이었다.** 지금은
+        **이전 그림과 갈라야 해서** 되살아났다 — 같은 문장이지만 하는 일이 다르다. */}
+    {할말 === "새로왔다" && (
+      <p data-그림상태 role="status" className="chapter-artwork-note chapter-artwork-note--새것">
+        {그림문구.새로왔다}
+      </p>
+    )}
+    {할말 === "앞에서만든것" && (
+      <p data-그림상태 className="chapter-artwork-note">{그림문구.앞에서만든것}</p>
+    )}
     {/* **「새로운 그림이 완성됐어!」를 내렸다** (2026-09-21 사용자 판정).
         **그림이 오는 것 자체가 그 말이다** — 「중요한 순간이야! 네 글로 그림을 만들고 있어.」가
         **액자 안에** 있다가 **그림으로 덮이므로**, 말이 그림으로 바뀌는 것으로 이미 닫힌다.
