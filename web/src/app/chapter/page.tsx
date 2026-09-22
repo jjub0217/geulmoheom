@@ -11,7 +11,7 @@ import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession
 import { useBookPageCount } from "@/components/book-progress";
 import { LeaveButton } from "@/components/leave";
 import { ChapterCompanion, chapterErrorGuide, chapterGuide } from "@/components/chapter-companion";
-import { 결과라벨, 그림문구, 챕터구조안내, 챕터다시쓰기라벨, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
+import { 결과라벨, 그림문구, 단계문구, 챕터구조안내, 챕터다시쓰기라벨, 챕터보내기라벨, 챕터보내는중라벨, 챕터쓰기라벨 } from "@/components/chapter-writing";
 import { CompassIntroduction } from "@/components/compass-introduction";
 import { GuideFigure } from "@/components/guide";
 import { SceneCard } from "@/components/scene-card";
@@ -108,6 +108,24 @@ export default function ChapterPage() {
   const [text, setText] = useAdventureState("/chapter", "text", "");
   const [sendError, setSendError] = useAdventureState<string | null>("/chapter", "sendError", null);
   const [첫안내, set첫안내] = useAdventureState("/chapter", "first", true);
+  /**
+   * ## 한 턴이 세 단계로 넘어간다 (2026-09-22 사용자 지시)
+   *
+   * **`글쓰기` → `결과` → `새장면` → 다시 `글쓰기`.** 종전에는 **아이 글·삽화·새 서사·
+   * 래서판다 반응·입력칸이 한 화면에 다 펼쳐져** 있어서, 아이가 **무엇을 보고 무엇을
+   * 해야 하는지**가 안 갈렸다.
+   *
+   * **⛔ 주소를 나누지 않는다** (사용자 지시). 같은 `/chapter` 안의 **화면 상태**다 —
+   * 서버의 챕터 진행도 책 저장도 이 값을 모른다.
+   *
+   * **⭐ 새로고침하면 `글쓰기` 로 돌아온다. 그것이 맞다** — 결과 단계를 복원하려면
+   * **아이가 쓴 글이 있어야 하는데 서버가 그것을 돌려주지 않는다.** 억지로 만들면
+   * **글을 다시 제출하거나 삽화를 다시 굽는 길**이 생긴다. 사용자가 그 점을 확인하고
+   * **「최근 장면 서사와 다음 글쓰기 단계가 보이는 안전한 상태로 복구」**로 확정했다.
+   * `useAdventureState` 는 **메모리에만 있어서** `/book` 왕복은 살아남고 새로고침에는
+   * 초기값으로 돌아간다 — 그 성질이 곧 이 규칙이다.
+   */
+  const [단계, set단계] = useAdventureState<"글쓰기" | "결과" | "새장면">("/chapter", "stage", "글쓰기");
   const [소개끝, set소개끝] = useAdventureState("/chapter", "introductionEnded", false);
   const [처음연출건너뜀, set처음연출건너뜀] = useState(restored && 소개끝);
   /**
@@ -237,6 +255,9 @@ export default function ChapterPage() {
       if (r.outcome === "result") {
         setText("");
         set첫안내(false);
+        // **결과 단계로 넘어간다.** ⛔ **되묻기(G0)·차단은 안 넘긴다** — 그때는 아이가
+        // **같은 턴을 다시 쓰는 중**이고, 글이 입력칸에 그대로 남아 있다.
+        set단계("결과");
       }
       // **되묻기는 이어 쓰라는 말이다** (`MVP_PRD.md` 4.4). 글은 그대로 두고
       // **커서만 맨 뒤로** 보낸다 — 칸을 비우면 「다시 써」를 동작으로 말하는 것이 된다.
@@ -321,63 +342,114 @@ export default function ChapterPage() {
        고정 높이에 모두 압축해 동료나 입력을 가리지 않는다. */
     <CompassIntroduction
       guide={안내가이드}
-      situation={view.narrative ?? ""}
-      cardId={view.chapterId}
+      /* ⛔ **결과 단계에는 서사를 안 넘긴다** (2026-09-22 실측으로 잡았다).
+         이 연출은 **서사를 한 글자씩 쓰는 동안 래서판다를 감춘다.** 결과 단계에서는
+         그 서사를 화면에서 뺐는데 연출은 그대로 돌아서, **래서판다가 투명한 채로
+         남았다**(불투명도 0). 결과 단계에 필요한 것은 **짧은 반응 한 마디**다.
+         **빈 문자열이면 쓸 글이 없어 연출이 즉시 끝나고 래서판다가 바로 선다.** */
+      situation={단계 === "결과" ? "" : view.narrative ?? ""}
+      /* ⭐ **단계를 열쇠에 넣어 단계마다 연출을 새로 돌린다.** 그래서 **새장면 단계에
+         들어서는 순간** 새 서사가 한 글자씩 쓰인다 — **아이가 「그다음 이야기 보기」를
+         누른 바로 그 자리**가 이 연출이 원래 노리던 순간이다. */
+      cardId={`${view.chapterId}:${단계}`}
       skipOpening={처음연출건너뜀}
     ><BookOrigin path="/chapter"><ChapterStage bookDisabled={보내는중} bookHidden={책이비었나}>
       {/* 장면과 동료는 튜토리얼과 같은 숲 위에 남는다. */}
-      <div className="game-stage__world chapter-world">
-        {/* ⛔ **아이 문장을 읽는 상자 밖으로 꺼냈다** (2026-09-22 사용자 지시).
-            종전에는 **자기 글과 이어진 이야기가 같은 상자 안에 붙어 있었고**, 그 상자가
-            스크롤돼서 **어디까지가 자기 글인지 구분이 안 됐다.** 읽는 순서를 눈에 보이게
-            한다 — **내가 쓴 것 → 그래서 벌어진 일**이고 그 순서가 곧 인과다.
-            묘사어 표시(`highlights`)는 그대로 따라온다.
-            **⛔ 첫 글 전에는 안 그린다** — 그때는 쓴 글이 없다. 빈 상자를 만들지 않는다. */}
-        {/* ## 읽는 순서가 곧 인과다 (2026-09-22 사용자 지시)
-            **네가 쓴 글 → 이야기의 다음 순간 → 모험 그림 → 래서판다 → 이제 어떻게 할까?**
+      <div className="game-stage__world chapter-world" data-단계={단계}>
+        {/* ⛔ **단계가 바뀐 것을 화면을 못 보는 아이에게도 알린다** (사용자 지시).
+            **`role="status"` 라 초점을 안 뺏는다** — 읽어 주는 기계가 이 줄을 스스로 읽는다.
+            **화면에는 안 보인다** — 보이는 것은 그 단계의 제목과 내용이 이미 말한다. */}
+        <p className="sr-only" role="status">
+          {단계 === "결과" ? 결과라벨.내글 : 단계 === "새장면" ? 결과라벨.이어진이야기 : 챕터쓰기라벨}
+        </p>
+        {/* ## 한 턴이 세 단계로 넘어간다 (2026-09-22 사용자 지시)
 
-            ⛔ **삽화를 아이 글 옆에서 떼어 냈다.** 본편 삽화는 한 챕터에 **두 번**만
-            만들어지고(1턴·9턴) 나머지 턴에는 **직전 그림이 그대로 남는다.** 그 그림이
-            아이 문장 바로 옆에 붙어 있어서 **2턴부터도 「내가 방금 쓴 글로 나온 그림」**
-            으로 읽혔다. 사용자가 그것을 짚었다.
-            **이제 「모험에 남은 그림」으로 읽히는 자리**에 둔다. */}
+            **결과** — 네가 쓴 글 · (이번 턴에 새 삽화가 있을 때만) 그 삽화 · 짧은 반응
+            **새장면** — 새로 벌어진 일이 화면의 중심
+            **글쓰기** — 대응할 장면 서사 · 이제 어떻게 할까? · 입력칸
+
+            ⛔ **새 삽화가 없는 턴에는 결과 단계에 이전 그림을 안 보인다.** 그 그림은
+            **이번 턴의 결과가 아니다** — 방금 쓴 글의 결과처럼 두면 2턴부터 아이가
+            「내 글로 이게 나왔다」로 읽는다. 그래서 「모험 그림」·「앞에서 만든 그림」
+            제목도 이 단계에서는 안 쓴다. */}
         <div className="chapter-reading">
           <div ref={이야기칸} className="game-story chapter-story" tabIndex={-1}>
-            {/* **내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.** 읽는 순서가 곧 인과다.
-                **⛔ 둘을 여기서 꺼내지 않는다** (2026-09-22 실측). 밖으로 올렸더니
-                **읽는 묶음 높이가 화면 크기 단계마다 따로 정해져 있어**, 360·320·1280 에서
-                **삽화가 눌리거나 보내기 버튼이 화면 밖**으로 나갔다. 기준선과 대조해서
-                **내가 만든 회귀**임을 확인하고 되돌렸다.
-                **⭐ 가르는 일은 자리가 아니라 표시가 한다** — 작은 글자 한 마디와 여백이다.
-                **라벨은 아이 문장이 있을 때만 단다** — 첫 화면에는 견줄 것이 없어
-                「이어진 이야기」가 무엇에 이어졌는지 말하지 못하고, 빈 표시가 된다. */}
-            {view.쓴것 && (
+            {단계 === "결과" && view.쓴것 && (
               <>
                 <p className="chapter-part-label">{결과라벨.내글}</p>
                 <WrittenLine text={view.쓴것.text} highlights={view.쓴것.highlights} />
               </>
             )}
-            {view.쓴것 && view.narrative && (
-              <p className="chapter-part-label chapter-part-label--이어진">{결과라벨.이어진이야기}</p>
+            {/* **새장면·글쓰기 단계의 중심**이다. ⛔ **작은 제목을 안 붙인다** —
+                사용자 지시가 **「개발 기능명처럼 보이는 제목을 반드시 붙이지 않아도 된다.
+                게임 속에서 새롭게 벌어진 일처럼 보이게 하라」**였다.
+                **글쓰기 단계에도 남는다** — 아이가 **무엇에 대응해 쓰는지** 봐야 한다. */}
+            {단계 !== "결과" && view.narrative && (
+              <SceneCard card={{ situation: view.narrative }} narrativeClassName="chapter-narrative" />
             )}
-            {view.narrative && <SceneCard card={{ situation: view.narrative }} narrativeClassName="chapter-narrative" />}
           </div>
         </div>
-        {/* **모험 그림은 제 영역이다.** 삽화가 있는 장면만 보인다 — 빈 상자를 만들지 않는다. */}
-        {view.artwork && (
+        {/* ⛔ **이번 턴에 새로 만든 삽화만, 결과 단계에만 보인다.**
+            첫 글 전에는 그 장면의 그림을 보인다 — 그건 **이전 턴의 결과가 아니라
+            아이가 지금 대응할 장면**이고, 아이가 그것을 보고 쓴다. */}
+        {view.artwork
+          && (단계 === "결과" ? view.새삽화id === view.artwork.artwork_id : view.쓴것 === null)
+          && (
           <div className="chapter-visual">
-            <ChapterArtwork 참조={view.artwork} 이번글로왔나={view.새삽화id === view.artwork.artwork_id} />
+            {/* ⛔ **결과 단계에서만 제목과 상태를 말한다.** 글쓰기 단계의 그림은
+                **아이가 지금 대응할 장면**이지 결과가 아니다 — 거기에 「모험 그림」이나
+                「앞에서 만든 그림」을 달면 **틀린 말**이 된다 (2026-09-22 실측으로 잡았다:
+                첫 글 전 화면에 「앞에서 만든 그림」이 떠 있었다). */}
+            <ChapterArtwork
+              참조={view.artwork}
+              이번글로왔나={view.새삽화id === view.artwork.artwork_id}
+              말한다={단계 === "결과"}
+            />
           </div>
         )}
-        <ChapterCompanion
-          guide={안내가이드}
-          length={text.length}
-          sending={보내는중}
-          messageRef={동료말칸}
-        />
+        {/* ⛔ **결과를 알리는 말풍선은 새장면 단계에서 정리된다** (사용자 지시).
+            글쓰기 단계에는 **글자 수에 반응하는 나침반**이 있어 그대로 둔다. */}
+        {단계 !== "새장면" && (
+          <ChapterCompanion
+            guide={안내가이드}
+            length={text.length}
+            sending={보내는중}
+            messageRef={동료말칸}
+          />
+        )}
+
+        {/* ⛔ **넘기는 것은 아이다.** 자동으로 안 넘어간다 (사용자 지시 — 「긴 자동 대기
+            시간을 만들지 않음」·「아이가 버튼을 눌러 다음 단계로 이동」).
+            **⛔ 삽화가 준비 중이어도 누를 수 있다** (사용자 확정). 새 서사는 **이미 응답에
+            와 있어서** 기다릴 이유가 없고, **삽화 작업은 그대로 이어진다.**
+            **늦게 완성돼도 결과 단계로 안 돌아간다** — 단계는 아이가 누른 것만 바꾼다. */}
+        {단계 === "결과" && (
+          <button
+            type="button"
+            data-그다음이야기
+            onClick={() => set단계("새장면")}
+            className="pressable action-primary chapter-stage-next"
+          >
+            {단계문구.그다음이야기}
+          </button>
+        )}
+        {단계 === "새장면" && (
+          <button
+            type="button"
+            data-다음행동
+            onClick={() => set단계("글쓰기")}
+            className="pressable action-primary chapter-stage-next"
+          >
+            {단계문구.다음행동}
+          </button>
+        )}
       </div>
 
-      {/* 글쓰기 영역은 동료와 분리하고, 튜토리얼의 공통 콘솔을 재사용한다. */}
+      {/* 글쓰기 영역은 동료와 분리하고, 튜토리얼의 공통 콘솔을 재사용한다.
+          ⛔ **글쓰기 단계에만 그린다** — 결과·새장면 단계에서 입력칸이 같이 서 있으면
+          **결과를 보는 것과 다음 글을 쓰는 것이 다시 안 갈린다.** 그것이 이번 변경의 이유다.
+          ⭐ **초안은 사라지지 않는다** — `text` 는 단계와 무관한 상태이고 `/book` 왕복도 넘는다. */}
+      {단계 === "글쓰기" && (
       <div ref={쓰는곳} className="game-console chapter-console">
         {/* **첫 턴에만 보인다** (2026-09-21 실측).
             이 두 줄은 **「네가 쓴 것이 어디로 가는지」를 알려주는 안내**이지 매 턴의 지시가 아니다.
@@ -439,6 +511,7 @@ export default function ChapterPage() {
           </div>
         </div>
       </div>
+      )}
     </ChapterStage></BookOrigin></CompassIntroduction>
   );
 }
@@ -516,8 +589,14 @@ function ChapterStage({ children, done = false, status = false, bookDisabled = f
  * 「Cannot access refs during render」로 **일곱 줄을 한 번에** 뱉는다(2026-09-16 실측).
  * `web/CLAUDE.md` 의 한글 식별자 항목과 같은 자리다 — **규칙의 예외가 아니라 도구의 제약**이다.
  */
-function ChapterArtwork({ 참조, 이번글로왔나 }: { 참조: ArtworkRef; 이번글로왔나: boolean }) {
-  const 상태 = useArtwork(참조);
+function ChapterArtwork({ 참조, 이번글로왔나, 말한다 }: {
+  참조: ArtworkRef;
+  이번글로왔나: boolean;
+  /** 제목과 상태 한 줄을 붙이나. **결과 단계에서만 참**이다. */
+  말한다: boolean;
+}) {
+  // **`ready` 로 온 것도 한 번 물어본다** — 기본 그림인지 알아야 말을 고를 수 있다.
+  const 상태 = useArtwork(참조, 0, undefined, 말한다);
   /**
    * **무엇을 말할지는 순수 함수가 정한다** (`lib/chapter-artwork-state.ts`).
    * 여기서 조건을 엮으면 **네 갈래를 재려고 화면을 띄워야** 하고, 그러면 안 재게 된다.
@@ -525,8 +604,8 @@ function ChapterArtwork({ 참조, 이번글로왔나 }: { 참조: ArtworkRef; �
   const 할말 = 그림이할말(상태, 이번글로왔나);
   return <>
     {/* ⛔ **제목은 「모험 그림」이다** — 「네가 쓴 글」에 딸린 그림이 아니라
-        **모험에 남은 그림**이라는 뜻이다 (`문구.md` 1.18d). */}
-    <p className="chapter-part-label">{그림문구.제목}</p>
+        **모험에 남은 그림**이라는 뜻이다 (`문구.md` 1.18c). */}
+    {말한다 && <p className="chapter-part-label">{그림문구.제목}</p>}
     <ArtworkFrame
       상태={상태}
       waitingContent={할말 === "만드는중" ? <p>{그림문구.만드는중}</p> : undefined}
@@ -537,12 +616,12 @@ function ChapterArtwork({ 참조, 이번글로왔나 }: { 참조: ArtworkRef; �
         **⚠ 「새 그림이 완성됐어!」는 2026-09-21 에 한 번 내렸던 문장이다.** 그때 근거는
         「그림이 오는 것 자체가 그 말이다」였고 **그때는 새 그림뿐이었다.** 지금은
         **이전 그림과 갈라야 해서** 되살아났다 — 같은 문장이지만 하는 일이 다르다. */}
-    {할말 === "새로왔다" && (
+    {말한다 && 할말 === "새로왔다" && (
       <p data-그림상태 role="status" className="chapter-artwork-note chapter-artwork-note--새것">
         {그림문구.새로왔다}
       </p>
     )}
-    {할말 === "앞에서만든것" && (
+    {말한다 && 할말 === "앞에서만든것" && (
       <p data-그림상태 className="chapter-artwork-note">{그림문구.앞에서만든것}</p>
     )}
     {/* **「새로운 그림이 완성됐어!」를 내렸다** (2026-09-21 사용자 판정).

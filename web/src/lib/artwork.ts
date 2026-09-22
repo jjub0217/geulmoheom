@@ -55,10 +55,48 @@ export function useArtwork(
   ref: ArtworkRef | null,
   재확인키 = 0,
   상한 = 폴링상한,
+  /**
+   * **이미 `ready` 로 온 것도 한 번 물어본다** (2026-09-22).
+   *
+   * ## ⛔ 왜 필요한가 — 기본 그림을 개인화 그림으로 말하고 있었다
+   *
+   * **`ArtworkRef` 에는 `fallback` 칸이 없다.** 그런데 서버가 **그림을 못 구울 때
+   * 기본 에셋으로 즉시 `ready`** 를 준다(`artwork_store.챕터삽화만들기` — `굽나=False`).
+   * 그러면 화면은 **기본 그림을 받아 놓고 개인화 그림으로 읽는다.**
+   *
+   * **본편 결과 단계가 그것을 말로 옮긴다** — 「새 그림이 완성됐어!」. 사용자가
+   * **「기본 삽화에는 완성 문구를 표시하지 말라」**로 못 박은 자리다.
+   *
+   * **⛔ 계약을 안 바꿨다.** 있는 엔드포인트(`GET /artworks/{id}`)를 **한 번** 더 부른다.
+   * **주소는 이미 왔으니 그림은 그 자리에서 보인다** — 늦어지는 것은 **말 한 줄**뿐이다.
+   *
+   * **기본값이 `false` 다** — 카드 화면은 이 값을 쓰지 않으므로 **부르지 않던 요청이
+   * 거기서 생기지 않는다.**
+   */
+  ready도확인 = false,
 ): 삽화상태 {
   const id = ref?.artwork_id ?? null;
   // **이미 `ready` 면 폴링을 시작하지 않는다.** 서버가 캐시에서 바로 줄 수 있다.
   const 바로온주소 = ref?.status === "ready" ? ref.url : null;
+  /** `ready` 로 온 것의 **기본 그림 여부**. 한 번 물어봐서 채운다. */
+  const [바로온것의기본여부, set바로온것의기본여부] = useState<{ id: string; fallback: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!ready도확인 || id === null || 바로온주소 === null) return;
+    let 살아있다 = true;
+    apiGet<Artwork>(`/artworks/${id}`)
+      .then((a) => {
+        if (살아있다) set바로온것의기본여부({ id, fallback: a.fallback });
+      })
+      .catch(() => {
+        // **못 물어봤으면 아무 말도 안 한다.** 모르는 것을 개인화로 몰지 않는다 —
+        // 「완성됐어!」가 거짓일 수 있는 쪽으로 기울면 그것이 더 나쁘다.
+        if (살아있다) set바로온것의기본여부({ id, fallback: true });
+      });
+    return () => {
+      살아있다 = false;
+    };
+  }, [ready도확인, id, 바로온주소]);
 
   /**
    * **`id` 를 값에 함께 담는다.** 카드가 바뀌면 이전 삽화의 결과가 잠깐 남는데,
@@ -107,7 +145,10 @@ export function useArtwork(
     };
   }, [id, 바로온주소, 재확인키, 상한]);
 
-  if (바로온주소 !== null) return { kind: "떴다", url: 바로온주소 };
+  if (바로온주소 !== null) {
+    const 기본 = 바로온것의기본여부?.id === id ? 바로온것의기본여부.fallback : undefined;
+    return { kind: "떴다", url: 바로온주소, fallback: 기본 };
+  }
   // **`id` 가 다르면 버린다** — 앞 장면 그림이 새 화면에 뜨는 것을 막는 자리다.
   if (id !== null && 결과?.id === id && 결과.재확인키 === 재확인키) return 결과.상태;
   return { kind: "기다림" };

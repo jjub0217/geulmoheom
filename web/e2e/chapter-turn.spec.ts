@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { paths } from "../src/api/types.gen";
 // 문구를 문자열로 박지 않는다 — `docs/문구.md` 1.18 이 SSOT 다.
-import { 결과라벨, 그림문구, 챕터다시쓰기라벨, 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
+import { 결과라벨, 그림문구, 단계문구, 챕터다시쓰기라벨, 챕터다음안내, 챕터동료소개, 챕터보내기라벨, 챕터쓰기라벨 } from "../src/components/chapter-writing";
 import { 못닿음 } from "../src/app/copy";
 
 /**
@@ -161,8 +161,25 @@ test("시작할 때 서버가 준 동료 대사를 그대로 한 번만 보여�
 });
 
 async function 글을보낸다(page: Page, 문장 = "밧줄 매듭을 손끝으로 천천히 풀어 본다.") {
-  await page.getByRole("textbox", { name: 챕터쓰기라벨 }).fill(문장);
+  await page.getByRole("textbox").first().fill(문장);
   await page.getByRole("button", { name: 챕터보내기라벨 }).click();
+}
+
+/**
+ * **결과 단계를 지나 새 장면까지 간다** (2026-09-22 — 단계 전환이 들어온 뒤).
+ *
+ * ⛔ **한 턴이 세 단계**가 됐다 — `글쓰기 → 결과 → 새장면 → 글쓰기`. 아이가 **버튼을
+ * 눌러야** 넘어간다(사용자 지시 — 자동 대기를 만들지 않는다). 그래서 **글을 보낸
+ * 직후에는 새 서사가 화면에 없다.** 새 서사를 재는 검사는 이 도우미를 지나야 한다.
+ */
+async function 새장면까지(page: Page) {
+  await page.locator("[data-그다음이야기]").click();
+}
+
+/** 새 장면을 보고 **다음 글쓰기 칸까지** 간다. */
+async function 다음글쓰기까지(page: Page) {
+  await 새장면까지(page);
+  await page.locator("[data-다음행동]").click();
 }
 
 test("직접 써서 턴이 넘어간다", async ({ page }) => {
@@ -178,8 +195,13 @@ test("직접 써서 턴이 넘어간다", async ({ page }) => {
   await page.getByRole("textbox").fill(문장);
   await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
-  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  // **결과 단계가 먼저다** — 아이 글과 짧은 반응이 여기 있다.
+  await expect(page.locator("[data-쓴문장]")).toContainText(문장);
   await expect(page.locator(".chapter-companion-line").getByText(챕터다음안내)).toBeVisible();
+
+  // **새 서사는 아이가 버튼을 눌러야 나온다.**
+  await 새장면까지(page);
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
 
   expect(보낸것).toEqual({ chapter_id: 장면.chapter_id, text: 문장 });
 });
@@ -261,10 +283,19 @@ test("되묻기도 아이 글을 지우지 않는다 — 고쳐 쓰라는 말이
 });
 
 /**
- * **⛔ 액자를 비우지 않는다** — 핵심 씬이 1턴·9턴 둘뿐이라 **여덟 턴은 `artwork` 가 없다.**
- * 비우면 **여덟 턴 중 일곱에서 보상이 사라진다.**
+ * ## ⛔ 2026-09-22 에 뒤집혔다 — 사용자 지시
+ *
+ * **종전 규칙은 「액자를 비우지 않는다」**였다. 핵심 씬이 1턴·9턴 둘뿐이라 여덟 턴은
+ * 새 그림이 없고, 비우면 **여덟 턴 중 일곱에서 보상이 사라진다**는 것이 근거였다.
+ *
+ * **사용자가 그 반대를 골랐다.** 남겨 두니 **아이가 「내가 방금 쓴 글로 이 그림이
+ * 나왔다」로 읽었다** — 실제로는 몇 턴 전 그림이다. 지시 그대로 옮기면
+ * **「이전 삽화는 현재 턴의 결과가 아니므로 현재 결과 화면에서 제외합니다」**다.
+ *
+ * ⚠ **잃는 것을 적어 둔다** — 그림이 보이는 자리가 **1턴·9턴의 결과 단계와 첫 입장**으로
+ * 줄었다. 「썼더니 그림이 나왔다」가 **덜 자주 보인다.** 사용자가 그것을 알고 정했다.
  */
-test("새 그림이 안 와도 액자가 안 비워진다", async ({ page }) => {
+test("새 그림이 없는 턴에는 앞 그림을 결과에 다시 안 보인다", async ({ page }) => {
   const 그림있는장면: ChapterView = {
     ...장면,
     artwork: { artwork_id: "aw-1", status: "ready", url: "/i/aw-1.png" },
@@ -278,10 +309,16 @@ test("새 그림이 안 와도 액자가 안 비워진다", async ({ page }) => 
   // 다음 턴에는 **새 그림이 없다** (`artwork: null`).
   await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
   await 글을보낸다(page);
-  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(page.locator("[data-쓴문장]")).toBeVisible();
 
-  // **직전 그림이 그대로 걸려 있다.**
-  await expect(액자).toBeVisible();
+  // **결과 단계에 앞 그림이 없다.** 그 그림은 이번 턴의 결과가 아니다.
+  await expect(액자).toHaveCount(0);
+  await expect(page.locator("[data-그림상태]")).toHaveCount(0);
+
+  // 새 장면·다음 글쓰기 단계에도 안 돌아온다.
+  await 다음글쓰기까지(page);
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(액자).toHaveCount(0);
 });
 
 test("완결하면 가이드가 말하고 「이어서 더 하기」가 없다", async ({ page }) => {
@@ -374,8 +411,11 @@ test("보내는 중에도 쓴 글을 유지하고 읽는 중임을 알린다", a
   await expect(page.getByRole("textbox")).toHaveAttribute("readonly", "");
   await expect(page.locator(".writing-actions button")).toBeDisabled();
   응답한다();
-  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  // **결과 단계가 먼저다.** 새 서사는 아이가 버튼을 눌러야 나온다 (2026-09-22).
+  await expect(page.locator("[data-쓴문장]")).toContainText(문장);
   await expect(page.locator("[data-읽는중]")).toHaveCount(0);
+  await 새장면까지(page);
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
 });
 
 test("긴 이야기를 읽은 다음 응답은 첫 문장으로 돌아온다", async ({ page }) => {
@@ -397,13 +437,15 @@ test("긴 이야기를 읽은 다음 응답은 첫 문장으로 돌아온다", a
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
   await 글을보낸다(page);
+  await 새장면까지(page);
   await expect(page.getByText(다음턴.narrative!)).toBeVisible();
-  await expect(이야기).toBeFocused();
-
-  // **이야기 시작이 화면 안에 있다.** ⛔ 입력칸으로 데려가지 않는다 — 아이는 읽고 나서 내려온다.
+  // ⛔ **초점은 결과 단계에서 이미 이야기 칸으로 갔다** (새 응답이 온 그 순간).
+  // 단계를 넘긴 것은 **아이가 버튼을 누른 것**이라 초점이 그 버튼에 있다 —
+  // **빼앗지 않는 것이 맞다**(사용자 지시 「포커스가 사라지지 않음」).
+  // 재야 하는 것은 **새 이야기의 첫 문장이 화면 안에 있는가**다.
   const 시작 = await 이야기.boundingBox();
-  expect(시작!.y).toBeGreaterThanOrEqual(-1);
   expect(시작!.y).toBeLessThan(await page.evaluate(() => window.innerHeight));
+
 });
 
 /**
@@ -677,19 +719,21 @@ test("글을 보내면 내 글과 이어진 이야기를 표시로 가른다", a
   await page.goto("/chapter");
   // **첫 글 전에는 표시가 없다** — 견줄 것이 없어 「이어진 이야기」가 무엇에 이어졌는지
   // 말하지 못하고, 빈 표시가 된다.
-  await expect(page.getByText(결과라벨.내글)).toHaveCount(0);
+  await expect(page.locator(".chapter-part-label").getByText(결과라벨.내글)).toHaveCount(0);
   await expect(page.getByText(결과라벨.이어진이야기)).toHaveCount(0);
 
   await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
   await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
-  await expect(page.getByText(결과라벨.내글)).toBeVisible();
-  await expect(page.getByText(결과라벨.이어진이야기)).toBeVisible();
+  // ⛔ **2026-09-22 에 가르는 수단이 바뀌었다** — 표시가 아니라 **단계**다.
+  // 결과 단계에는 **아이 글만** 있고 새 서사가 없다. 그래서 둘을 견줄 일이 없어졌다.
+  await expect(page.locator(".chapter-part-label").getByText(결과라벨.내글)).toBeVisible();
+  await expect(page.getByText(다음턴.narrative!)).toHaveCount(0);
 
-  // **읽는 순서가 곧 인과다** — 내가 쓴 것이 먼저, 그래서 벌어진 일이 다음이다.
-  const 내글 = await page.getByText(결과라벨.내글).boundingBox();
-  const 이어진 = await page.getByText(결과라벨.이어진이야기).boundingBox();
-  expect(이어진!.y).toBeGreaterThan(내글!.y);
+  // 새 장면 단계로 넘어가면 **아이 글이 물러나고 새 서사가 중심**이다.
+  await 새장면까지(page);
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(page.locator("[data-쓴문장]")).toHaveCount(0);
 });
 
 test("두 번째 글부터 입력 영역이 같은 질문을 되풀이하지 않는다", async ({ page }) => {
@@ -703,8 +747,13 @@ test("두 번째 글부터 입력 영역이 같은 질문을 되풀이하지 않
   await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
   await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
-  // **래서판다가 바로 위에서 「네가 쓴 대로 이야기가 이어졌어.」라고 말한다.**
-  // 그 아래에서 같은 질문을 또 하면 처음 보는 화면과 구분이 안 된다.
+  // **결과·새장면 단계에는 입력칸이 없다** (2026-09-22). 결과를 보는 것과 다음 글을
+  // 쓰는 것을 가르는 것이 이 단계 전환의 목적이다.
+  await expect(page.locator("#attempt")).toHaveCount(0);
+
+  await 다음글쓰기까지(page);
+  // **래서판다가 「네가 쓴 대로 이야기가 이어졌어.」라고 말한 뒤**라, 같은 질문을 또
+  // 하면 처음 보는 화면과 구분이 안 된다.
   await expect(page.getByRole("textbox", { name: 챕터다시쓰기라벨 })).toBeVisible();
   await expect(page.getByRole("textbox", { name: 챕터쓰기라벨 })).toHaveCount(0);
 });
@@ -718,12 +767,16 @@ test("글을 보낸 뒤 초점이 입력칸으로 가지 않는다 — 키보드
   await page.goto("/chapter");
   await page.locator("#attempt").fill("밧줄 매듭을 하나씩 풀어 본다");
   await page.getByRole("button", { name: 챕터보내기라벨 }).click();
-  await expect(page.getByText(결과라벨.내글)).toBeVisible();
+  await expect(page.locator(".chapter-part-label").getByText(결과라벨.내글)).toBeVisible();
 
   // **읽을 것으로 먼저 간다.** 입력칸으로 가면 모바일에서 키보드가 올라와
-  // **삽화와 이어진 이야기를 덮는다.**
-  const 초점 = await page.evaluate(() => document.activeElement?.id ?? "");
-  expect(초점).not.toBe("attempt");
+  // **삽화와 이야기를 덮는다.**
+  expect(await page.evaluate(() => document.activeElement?.id ?? "")).not.toBe("attempt");
+
+  // ⛔ **단계를 넘겨 입력칸이 새로 생겨도 초점을 안 준다** (2026-09-22 사용자 지시).
+  await 다음글쓰기까지(page);
+  await expect(page.locator("#attempt")).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.id ?? "")).not.toBe("attempt");
 });
 
 /**
@@ -771,8 +824,11 @@ test("앞 턴 그림이 남아 있는 것이면 그렇게 말한다 — 여기�
   await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
 
   await 한턴쓴다(page);
-  await expect(page.locator("[data-그림상태]")).toHaveText(그림문구.앞에서만든것);
-  await expect(page.locator("[data-그림상태]")).not.toContainText(그림문구.새로왔다);
+  // ⛔ **2026-09-22 에 바뀌었다** — 「앞에서 만든 그림」이라고 **말하지 않고 아예 안 보인다.**
+  // 그 그림은 **이번 턴의 결과가 아니다**(사용자 지시). 말로 표시하는 것으로는
+  // **아이 글 아래 놓인 그림이 결과처럼 읽히는 것**을 못 막았다.
+  await expect(page.locator(".chapter-visual")).toHaveCount(0);
+  await expect(page.locator("[data-그림상태]")).toHaveCount(0);
 });
 
 test("⛔ 기본 그림에는 아무 말도 하지 않는다", async ({ page }) => {
@@ -792,19 +848,21 @@ test("읽는 순서가 내 글 → 이야기 → 그림 → 동료 → 다음 �
   await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 그림있는턴("새것") }));
 
   await 한턴쓴다(page);
-  const y = async (칸: string) => {
-    const 상자 = await page.locator(칸).first().boundingBox();
-    return 상자!.y;
-  };
+  const y = async (칸: string) => (await page.locator(칸).first().boundingBox())!.y;
+
+  // **결과 단계** — 네가 쓴 글 → 모험 그림 → 짧은 반응 → 그다음 이야기 보기.
   const 쓴글 = await y("[data-쓴문장]");
-  const 이야기 = await y(".chapter-narrative");
-  const 그림 = await y(".chapter-visual");
-  const 동료 = await y(".chapter-companion");
-  const 입력 = await y(".chapter-console");
-  expect(이야기).toBeGreaterThan(쓴글);
-  expect(그림).toBeGreaterThan(이야기);
-  expect(동료).toBeGreaterThan(그림);
-  expect(입력).toBeGreaterThan(동료);
+  expect(await y(".chapter-visual")).toBeGreaterThan(쓴글);
+  expect(await y(".chapter-companion")).toBeGreaterThan(await y(".chapter-visual"));
+  expect(await y("[data-그다음이야기]")).toBeGreaterThan(await y(".chapter-companion"));
+
+  // **새 장면 단계** — 서사가 중심이고 그 아래 다음 버튼뿐이다.
+  await 새장면까지(page);
+  expect(await y("[data-다음행동]")).toBeGreaterThan(await y(".chapter-narrative"));
+
+  // **글쓰기 단계** — 대응할 서사가 남고 그 아래 입력칸이다.
+  await page.locator("[data-다음행동]").click();
+  expect(await y(".chapter-console")).toBeGreaterThan(await y(".chapter-narrative"));
 });
 
 test("긴 이야기가 작은 상자 안에서 따로 스크롤되지 않는다", async ({ page }) => {
@@ -818,9 +876,87 @@ test("긴 이야기가 작은 상자 안에서 따로 스크롤되지 않는다"
   );
 
   await 한턴쓴다(page);
+  await 새장면까지(page);
   await expect(page.locator(".chapter-narrative")).toHaveText(긴것);
   const 잘렸나 = await page.locator(".chapter-story").evaluate(
     (el) => el.scrollHeight > el.clientHeight + 1,
   );
   expect(잘렸나).toBe(false);
+});
+
+/**
+ * ## 한 턴이 세 단계로 넘어간다 (2026-09-22 사용자 지시)
+ *
+ * 종전에는 **아이 글·새 삽화·새 서사·래서판다 반응·입력칸이 한 화면에 다 펼쳐져** 있어서
+ * **결과를 보는 것과 다음 글을 쓰는 것이 안 갈렸다.**
+ *
+ * **⛔ 주소를 나누지 않는다** — 같은 `/chapter` 안의 화면 상태다.
+ */
+test("한 턴이 글쓰기 → 결과 → 새장면 → 글쓰기로 돈다", async ({ page }) => {
+  await 장면을띄운다(page);
+  await page.route(TURNS, (route) => route.fulfill({ status: 200, json: 다음턴 }));
+
+  // A 글쓰기 — 대응할 장면과 입력칸.
+  await expect(page.getByText(장면.narrative)).toBeVisible();
+  await expect(page.locator("#attempt")).toBeVisible();
+
+  await 글을보낸다(page);
+
+  // B 결과 — 아이 글이 중심이고 **새 서사도 입력칸도 없다.**
+  await expect(page.locator("[data-쓴문장]")).toBeVisible();
+  await expect(page.getByText(다음턴.narrative!)).toHaveCount(0);
+  await expect(page.locator("#attempt")).toHaveCount(0);
+  await expect(page.locator("[data-그다음이야기]")).toHaveText(단계문구.그다음이야기);
+
+  await page.locator("[data-그다음이야기]").click();
+
+  // C 새장면 — 새 서사가 중심이고 **아이 글·래서판다 반응은 정리된다.**
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(page.locator("[data-쓴문장]")).toHaveCount(0);
+  await expect(page.locator(".chapter-companion")).toHaveCount(0);
+  await expect(page.locator("[data-다음행동]")).toHaveText(단계문구.다음행동);
+
+  await page.locator("[data-다음행동]").click();
+
+  // A' 글쓰기 — **서사는 남는다.** 아이가 무엇에 대응해 쓰는지 봐야 한다.
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+  await expect(page.locator("#attempt")).toBeVisible();
+  await expect(page.locator("[data-쓴문장]")).toHaveCount(0);
+});
+
+test("삽화가 준비 중이어도 다음 이야기로 넘어갈 수 있다", async ({ page }) => {
+  // **새 서사는 이미 응답에 와 있다** — 삽화를 기다릴 이유가 없다 (사용자 확정).
+  await 장면을띄운다(page);
+  await page.route(/\/api\/v1\/artworks\/.+/, (route) =>
+    route.fulfill({ status: 200, json: { artwork_id: "새것", status: "pending", url: null, tier: "rare", fallback: false } }),
+  );
+  await page.route(TURNS, (route) => route.fulfill({
+    status: 200,
+    json: { ...다음턴, artwork: { artwork_id: "새것", status: "pending", url: null } },
+  }));
+
+  await 글을보낸다(page);
+  await expect(page.locator("[data-대기대사]")).toHaveText(그림문구.만드는중);
+  await page.locator("[data-그다음이야기]").click();
+  await expect(page.getByText(다음턴.narrative!)).toBeVisible();
+});
+
+test("되묻기는 결과 단계로 안 넘어간다 — 같은 턴을 다시 쓰는 중이다", async ({ page }) => {
+  await 장면을띄운다(page);
+  await page.route(TURNS, (route) => route.fulfill({
+    status: 200,
+    json: {
+      ...차단,
+      outcome: "scaffold",
+      reason: null,
+      scaffold: "그 밧줄은 어떤 모양이야?",
+      guide: { expression: "compass_dim", line: "그 밧줄은 어떤 모양이야?" },
+    },
+  }));
+
+  await 글을보낸다(page);
+
+  // **입력칸이 그대로 있고 글도 남아 있다.** 「다시 써」가 아니라 「이어 써」다.
+  await expect(page.locator("#attempt")).toBeVisible();
+  await expect(page.locator("[data-그다음이야기]")).toHaveCount(0);
 });
