@@ -106,7 +106,36 @@ export function ChildrenPanel() {
   const [재발급중, set재발급중] = useState<string | null>(null);
   const [재발급실패, set재발급실패] = useState<string | null>(null);
 
-  const 목록불러오기 = () =>
+  /**
+   * **같은 복귀 사건에 요청을 하나만 보낸다** (2026-09-23 사용자 지시).
+   *
+   * **⛔ 새 장치를 만들지 않았다** — `useRef` 하나다. 아이 화면의 `loadOnce` 는
+   * **세대(generation)까지 관리하는 물건**이라 여기서는 과하다. 여기서 막을 것은
+   * **「한 번 돌아왔는데 요청이 둘」** 하나다.
+   *
+   * **⭐ 다음 복귀는 막지 않는다** — 요청이 끝나면 비운다. 재검증은 **복귀할 때마다**
+   * 일어나야 하고, 그것이 이 기능의 전부다.
+   */
+  const 확인중 = useRef<Promise<void> | null>(null);
+  /**
+   * **인증을 다시 확인하는 동안인가** (2026-09-23 사용자 지시).
+   *
+   * ⛔ **목록을 지웠다 다시 그리지 않는다** — 탭을 바꿨다 돌아올 때마다 화면이 깜빡인다.
+   * **대신 만질 수 없게 한다** — 사용자 지시가 **「조작 가능한 상태로 보여주지 말 것」**이다.
+   * 되돌릴 수 없는 삭제와 아이 기기를 끊는 재발급, 둘 다 잠근다.
+   */
+  const [재확인중, set재확인중] = useState(false);
+
+  const 목록불러오기 = () => {
+    if (확인중.current !== null) return 확인중.current;
+    set재확인중(true);
+    const 진행 = 목록을실제로부른다();
+    확인중.current = 진행;
+    void 진행.finally(() => { 확인중.current = null; set재확인중(false); });
+    return 진행;
+  };
+
+  const 목록을실제로부른다 = () =>
     apiGet<ParentMe>("/parents/me")
       .then((me) => {
         setChildren(me.children);
@@ -115,6 +144,17 @@ export function ChildrenPanel() {
       .catch((e: unknown) => {
         // **형식 갖춘 거절은 `code` 로 고르고**(`문구.md` 3.8), **못 닿은 것만 3.5** 다.
         // **다만 401·403 은 문장이 아니라 화면 이동이다** — 로그인이 풀린 것이다 (3.11).
+        //
+        // ⛔ **보내기 전에 이전 목록을 지운다** (2026-09-23 사용자 지시).
+        // 화면 이동은 **즉시가 아니다** — 그 사이에 **옛 목록과 삭제 버튼이 그대로**
+        // 남아 있으면 아이가 지워질 것처럼 보이는 버튼을 부모가 누른다.
+        // **`null` 은 「아직 모른다」**이고, 그 상태에서는 아래가 목록 틀을 안 그린다.
+        if (인증이풀렸다(e) || 역할이다르다(e)) {
+          setChildren(null);
+          set지울아이(null);
+          set코드(null);
+          set지웠다(null);
+        }
         if (로그인이풀렸다(e, (곳) => router.replace(곳))) return;
         if (e instanceof ApiError) {
           set목록실패(학부모오류문구(e.code));
@@ -128,9 +168,41 @@ export function ChildrenPanel() {
       });
 
   useEffect(() => {
-    // 한 번만 부른다. 이후 갱신은 만들기가 끝난 자리에서 직접 부른다.
+    // 처음 한 번. 이후 갱신은 만들기가 끝난 자리에서 직접 부른다.
     void 목록불러오기();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 한 번만 부른다. 아래 갱신은 만들기가 직접 부른다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 위 한 번과 아래 복귀가 전부다.
+  }, []);
+
+  /**
+   * **화면이 다시 살아날 때마다 부모 인증을 다시 확인한다** (2026-09-23 사용자 지시).
+   *
+   * ## ⛔ 왜 필요한가 — 마운트 한 번으로는 못 잡는다
+   *
+   * **아이가 같은 기기로 들어오면 서버가 보호자 쿠키를 지운다** (`adr/0014` 결정 3).
+   * **그 정책은 그대로 둔다.** 문제는 **열려 있던 학부모 화면이 그것을 모른다**는 것이다.
+   *
+   * **뒤로 가기가 문서를 새로 만들면**(`pageshow` 의 `persisted` 가 거짓) 이 부품이 다시
+   * 마운트돼 위 효과가 한 번 더 돌고, 그 길은 이미 맞게 동작한다(2026-09-23 실측).
+   * **그런데 브라우저가 bfcache 로 되살리면**(`persisted` 가 참) **마운트가 아예 안 일어나고**
+   * 옛 목록과 삭제 버튼이 **살아 있는 화면처럼** 남는다.
+   *
+   * ## 왜 `pageshow` 인가
+   *
+   * **두 경우 모두에서 발사되는 유일한 사건**이다 — 새 문서든 되살린 문서든 한 번씩 온다.
+   * `visibilitychange` 는 **탭을 바꿨다 돌아오는 것**을 덮는다. 둘 다 건다.
+   *
+   * **⛔ `focus` 는 안 쓴다** — 창 안에서 요소 사이를 옮겨도 발사돼 **요청이 는다.**
+   */
+  useEffect(() => {
+    const 다시확인 = () => { void 목록불러오기(); };
+    const 보일때만 = () => { if (document.visibilityState === "visible") 다시확인(); };
+    window.addEventListener("pageshow", 다시확인);
+    document.addEventListener("visibilitychange", 보일때만);
+    return () => {
+      window.removeEventListener("pageshow", 다시확인);
+      document.removeEventListener("visibilitychange", 보일때만);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 붙였다 떼는 것은 한 번이다.
   }, []);
 
   const 추가하기 = async () => {
@@ -296,7 +368,7 @@ export function ChildrenPanel() {
                   <p className="account-description">{재발급.경고}</p>
                   <button
                     type="button"
-                    disabled={재발급중 === 아이.child_id}
+                    disabled={재발급중 === 아이.child_id || 재확인중}
                     onClick={() => void 코드다시받기(아이.child_id, 아이.nickname)}
                     className="pressable action-secondary self-start"
                   >
@@ -318,6 +390,7 @@ export function ChildrenPanel() {
                   <button
                     type="button"
                     data-지우기
+                    disabled={재확인중}
                     onClick={() => {
                       // 지난번 「지웠어요」가 남아 있으면 지운다 — 다음 아이를 지우려는데
                       // 앞 아이의 완료 문장이 떠 있으면 **무엇이 방금 일어난 것인지 갈린다.**

@@ -589,3 +589,164 @@ test("첫 화면에 자녀 목록과 아이 추가로 가는 길이 있다", asy
     expect(Math.round(자리.y + 자리.height), `${이름}이 첫 화면 밖이다`).toBeLessThanOrEqual(640);
   }
 });
+
+/**
+ * **화면이 다시 살아날 때 부모 인증을 다시 확인한다** (2026-09-23 사용자 지시).
+ *
+ * ## ⛔ 마운트 한 번으로는 못 잡는다
+ *
+ * **아이가 같은 기기로 들어오면 서버가 보호자 쿠키를 지운다** (`adr/0014` 결정 3).
+ * 뒤로 가기가 **문서를 새로 만들면** 이 부품이 다시 마운트돼 확인이 한 번 더 돌지만,
+ * 브라우저가 **bfcache 로 되살리면 마운트가 아예 안 일어난다** — 그때 옛 목록과
+ * 삭제 버튼이 **살아 있는 화면처럼** 남는다. 2026-09-23 에 사용자가 그 자리를 겪었다.
+ *
+ * **`pageshow` 는 두 경우 모두에서 발사된다** — 그래서 여기를 재는 것이 곧 그 구멍을 재는 것이다.
+ */
+test("되살아난 화면은 부모 인증을 다시 확인하고, 풀렸으면 목록을 걷는다", async ({ page }) => {
+  await 관리화면(page, [아이]);
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toBeVisible();
+
+  // **아이가 들어와서 부모 쿠키가 지워진 상태**로 갈아끼운다.
+  await page.route(ME, (route) =>
+    route.fulfill({
+      status: 403,
+      body: JSON.stringify({ error: { code: "FORBIDDEN_ROLE", message: "여기는 지금 들어갈 수 없어요" } }),
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  // **마운트를 다시 일으키지 않는다** — bfcache 복원이 그렇다.
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+
+  await expect(page).toHaveURL(new RegExp(`${아이입장으로보낼곳.split("?")[1]}$`));
+  // **옛 목록이 남지 않는다** — 되돌릴 수 없는 버튼이 살아 있는 채로 남으면 안 된다.
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toHaveCount(0);
+  for (const 줄 of 로그인.아이가들어왔다) {
+    await expect(page.getByText(줄)).toBeVisible();
+  }
+});
+
+/**
+ * **한 번의 복귀에 확인 요청도 한 번이다** (2026-09-23 사용자 지시).
+ *
+ * **⛔ 재검증 자체를 막지 않는다** — 다음 복귀에는 다시 확인해야 한다. 막는 것은
+ * **같은 복귀에 요청이 여럿 나가는 것** 하나다.
+ */
+test("복귀 사건이 연달아 와도 확인 요청은 하나다 — 다음 복귀에는 다시 확인한다", async ({ page }) => {
+  let 부른수 = 0;
+  await page.route(ME, (route) => {
+    부른수 += 1;
+    return route.fulfill({ status: 200, json: 가입됨([아이]) });
+  });
+  await page.goto("/parents/signup");
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toBeVisible();
+
+  부른수 = 0;
+  await page.evaluate(() => {
+    for (let i = 0; i < 3; i += 1) dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await expect.poll(() => 부른수).toBe(1);
+
+  // **앞 확인이 끝날 때까지 기다린다.** 「끝났다」의 신호는 **버튼이 다시 눌린다**는 것이다
+  // (확인하는 동안에는 잠근다 — 아래 검사가 그 자리를 따로 잰다).
+  // ⛔ **기다리지 않으면 이 검사가 제품이 아니라 시점을 잰다** — 2026-09-23 에 태블릿에서만
+  // 빨간불이 났고, 모바일에서는 우연히 통과했다.
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toBeEnabled();
+
+  // 앞 확인이 끝난 뒤의 **다른 복귀**는 다시 확인한다.
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await expect.poll(() => 부른수).toBe(2);
+});
+
+/**
+ * **확인이 끝나기 전에는 되돌릴 수 없는 것을 못 누른다** (2026-09-23 사용자 지시).
+ *
+ * **목록을 지웠다 다시 그리지 않는다** — 탭을 오갈 때마다 화면이 깜빡인다.
+ * **대신 만질 수 없게 한다.** 잠그는 것은 **삭제**와 **재발급** 둘이다 — 하나는 아이
+ * 데이터가 사라지고 하나는 아이 기기가 끊긴다.
+ */
+test("인증을 다시 확인하는 동안에는 지우기와 재발급을 못 누른다", async ({ page }) => {
+  await 관리화면(page, [아이]);
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toBeEnabled();
+
+  let 풀기!: () => void;
+  const 붙잡기 = new Promise<void>((resolve) => { 풀기 = resolve; });
+  await page.route(ME, async (route) => {
+    await 붙잡기;
+    return route.fulfill({ status: 200, json: 가입됨([아이]) });
+  });
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toBeDisabled();
+  await expect(page.getByRole("button", { name: 재발급.버튼 })).toBeDisabled();
+
+  풀기();
+  await expect(page.getByRole("button", { name: 지우기.버튼 })).toBeEnabled();
+});
+
+/**
+ * **창을 연 뒤에 풀리는 자리** (2026-09-23 사용자 지시).
+ *
+ * ## ⛔ 열기 전 확인으로는 못 잡는다
+ *
+ * `지우기전에확인` 은 **창을 열기 전에** `/parents/me` 를 묻는다(위 「되돌릴 수 없는 창은
+ * 열기 전에 묻는다」). **그런데 그 확인과 실제 삭제 사이에 시간이 있다** — 부모가
+ * 마음을 정하는 동안 **토큰이 만료되거나 아이가 같은 기기로 들어올 수 있다.**
+ *
+ * **그때 401·403 을 받는 것은 `DELETE` 자신이다.** 위 검사들은 그 자리를 안 재고 있었다 —
+ * 하나는 **404** 를 재고, 하나는 **`DELETE` 가 아예 안 나가는 것**을 잰다.
+ *
+ * ⛔ **가장 위험한 착각을 막는다** — **안 지워졌는데 지워진 것처럼 보이는 것.**
+ */
+test("창을 연 뒤 DELETE 가 401 이면 지운 척하지 않고 로그인으로 보낸다", async ({ page }) => {
+  let 보낸수 = 0;
+  // **열기 전 확인은 성공한다** — 그래야 창이 열리고, 그다음이 이 검사의 자리다.
+  await 관리화면(page, [아이]);
+  await page.route(자녀하나(아이.child_id), (route) => {
+    보낸수 += 1;
+    return route.fulfill({
+      status: 401,
+      body: JSON.stringify({ error: { code: "UNAUTHORIZED", message: "다시 한 번 들어와 주세요" } }),
+      headers: { "content-type": "application/json" },
+    });
+  });
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+  await expect(확인창(page)).toBeVisible();
+  await page.locator("[data-지운다]").click();
+
+  await page.waitForURL("**/parents/login");
+  expect(보낸수).toBe(1);
+  // **지웠다고 말하지 않는다.**
+  expect(await page.locator("body").innerText()).not.toContain(지우기.지웠다(아이.nickname));
+  // **401 은 시간이 지나 풀린 것**이라 기본 안내다 — 아무 데서나 아이 탓을 하지 않는다.
+  await expect(page.locator("[data-안내]")).toHaveText([로그인.안내]);
+  expect(new URL(page.url()).searchParams.has("child_entered")).toBe(false);
+});
+
+/**
+ * **위와 같은 자리인데 원인이 아이다** (2026-09-23 사용자 지시).
+ *
+ * **403 은 「다른 역할의 쿠키가 있다」는 뜻**이라 추측이 아니다 — **아이가 이 기기로
+ * 들어왔다**는 것이 서버 응답 자체로 확정된다 (`lib/parent-kicked.ts`).
+ */
+test("창을 연 뒤 DELETE 가 403 이면 아이 때문이라고 말하며 로그인으로 보낸다", async ({ page }) => {
+  let 보낸수 = 0;
+  await 관리화면(page, [아이]);
+  await page.route(자녀하나(아이.child_id), (route) => {
+    보낸수 += 1;
+    return route.fulfill({
+      status: 403,
+      body: JSON.stringify({ error: { code: "FORBIDDEN_ROLE", message: "여기는 지금 들어갈 수 없어요" } }),
+      headers: { "content-type": "application/json" },
+    });
+  });
+
+  await page.locator("[data-자녀]").first().locator("[data-지우기]").click();
+  await expect(확인창(page)).toBeVisible();
+  await page.locator("[data-지운다]").click();
+
+  await page.waitForURL(`**${아이입장으로보낼곳}`);
+  expect(보낸수).toBe(1);
+  expect(await page.locator("body").innerText()).not.toContain(지우기.지웠다(아이.nickname));
+  await expect(page.locator("[data-안내]")).toHaveText(로그인.아이가들어왔다);
+});
