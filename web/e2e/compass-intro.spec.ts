@@ -143,8 +143,16 @@ async function 첫화면안(page: Page) {
   }
 }
 
+/**
+ * **⛔ 가장 좁은 폭을 같이 잰다** (2026-09-27 신설). 종전에는 설정이 주는 두 크기
+ * (1280×800 · 390×844)만 봤는데, **좁은 화면에서 문이 머리 띠 아래 줄로 내려가는 규칙**은
+ * `max-width: 700px` 에 걸려 있고 **그 안에서도 320 이 가장 빡빡하다.**
+ * `card-screen.spec.ts` 가 세운 방식 그대로다 — **가장 좁은 것이 통과하면 나머지가 따라온다.**
+ */
 for (const 하던이야기 of [false, true]) {
-  test(`모험 입구는 상황 소개부터 왼쪽 위에 있고 이름과 겹치지 않는다 — ${하던이야기 ? "하던 이야기" : "새 이야기"}`, async ({ page }) => {
+  for (const 좁게 of [false, true]) {
+  test(`모험 입구는 상황 소개부터 왼쪽 위에 있고 이름과 겹치지 않는다 — ${하던이야기 ? "하던 이야기" : "새 이야기"}${좁게 ? " · 320×568" : ""}`, async ({ page }) => {
+    if (좁게) await page.setViewportSize({ width: 320, height: 568 });
     await page.route("**/api/v1/chapters/current", (route) => route.fulfill(
       하던이야기
         ? { status: 200, json: { chapter_id: "intro-chapter" } }
@@ -171,7 +179,30 @@ for (const 하던이야기 of [false, true]) {
     expect(문자리.x).toBeGreaterThanOrEqual(0);
     expect(문자리.x).toBeLessThan(화면.width * 0.2);
     expect(문자리.y).toBeLessThan(화면.height * 0.2);
-    expect(문자리.x + 문자리.width).toBeLessThanOrEqual(이름자리.x);
+
+    // ## ⛔ 겹치는지를 가로만으로 재지 않는다 (2026-09-27 CI 가 잡았다)
+    //
+    // **종전 단언은 `문 오른끝 ≤ 이름 왼끝` 이었다.** 그건 **둘이 같은 줄에 설 때만** 맞는
+    // 말인데, **2026-09-23 에 좁은 화면에서 문이 머리 띠 아래 줄로 내려갔다**
+    // (`game-stage.css` 의 `max-width: 700px` — 문 y 56~114 · 띠 y 8~52).
+    // **줄이 갈렸으므로 가로가 겹쳐도 화면에서는 안 겹친다.**
+    //
+    // **그런데 그 단언이 390 에서만 26px 차로 겨우 통과하고 있었다.** macOS 에서 잰 값이고,
+    // **CI(리눅스)에서는 한글 글자가 넓어 문 오른끝 172 · 이름 왼끝 162 로 뒤집혔다.**
+    // 실제로 재 보면 **360 에서 -3.8px · 320 에서 -43.4px** 이라 macOS 에서도 이미 음수다 —
+    // **그 크기가 이 검사에 없어서 안 드러났을 뿐**이다.
+    //
+    // ⭐ **이름이 말하는 것을 그대로 잰다 — 「겹치지 않는다」.** 가로와 세로가 **둘 다**
+    // 겹칠 때만 화면에서 겹친 것이고, 그것이 결함이다. **약해지지 않는다** — 넓은 화면에서
+    // 둘이 같은 줄에 설 때는 세로가 늘 겹치므로 **가로 단언이 그대로 살아난다.**
+    const 가로겹침 = Math.min(문자리.x + 문자리.width, 이름자리.x + 이름자리.width)
+      - Math.max(문자리.x, 이름자리.x);
+    const 세로겹침 = Math.min(문자리.y + 문자리.height, 이름자리.y + 이름자리.height)
+      - Math.max(문자리.y, 이름자리.y);
+    expect(
+      가로겹침 > 0 && 세로겹침 > 0,
+      `모험 입구와 이름이 ${가로겹침.toFixed(1)}×${세로겹침.toFixed(1)}px 겹친다`,
+    ).toBe(false);
 
     await page.clock.runFor(150);
     await expect(무대(page)).toHaveAttribute("data-introduction-phase", "narrative");
@@ -181,6 +212,7 @@ for (const 하던이야기 of [false, true]) {
     await expect(문).toBeVisible();
     await 첫화면안(page);
   });
+  }
 }
 
 for (const [width, height] of [[360, 640], [1280, 800]] as const) {

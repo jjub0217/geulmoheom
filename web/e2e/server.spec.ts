@@ -1,10 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { 빈책, 내책라벨 } from "../src/app/book/copy";
 import { 버튼 } from "../src/app/copy";
 import { 코드입력 } from "../src/app/child/auth/copy";
 import { 만들기, 접속코드 } from "../src/components/children-copy";
 import { 폼 } from "../src/app/parents/signup/copy";
+// **본편 보내기 글자는 카드와 다르다** — 카드는 「내 이야기를 그림으로 보기」이고
+// 본편은 「이야기 이어가기」다. 이 파일이 카드 것을 본편에도 쓰고 있었다 (2026-09-27 고침).
+import { 챕터보내기라벨 } from "../src/components/chapter-writing";
 
 /**
  * **브라우저가 진짜 api 를 무는 단 하나의 갈래** (`주차계획/W6.md` 프론트 6번).
@@ -143,6 +146,28 @@ test("가입부터 책까지 한 갈래가 진짜 서버를 지난다", async ({
 const 챕터별명 = "푸른나침반";
 const 챕터문장 = "낡은 밧줄의 매듭을 하나씩 만져 보며 어느 쪽이 새것인지 살핀다";
 
+/**
+ * **한 턴이 두 단계다 — 보내면 결과가 먼저 서고, 아이가 눌러야 다음 글쓰기가 열린다**
+ * (`d5d8a78` · 2026-09-22 사용자 지시).
+ *
+ * **⛔ 그래서 보낸 직후에는 입력칸이 아예 없다.** 이 파일이 09-19 에서 멈춰 있어
+ * **「보내고 나면 칸이 빈다」**를 그대로 쟀고, CI 에서 그 자리가 막혔다.
+ *
+ * **잣대는 그대로다** — 칸이 비는 것은 여전히 **진행했다**는 뜻이고(되묻기·차단은 아이 글을
+ * 남긴다), 여기서는 **단계를 넘긴 뒤에** 그것을 본다.
+ *
+ * **⛔ 단계를 넘기는 것은 제출이 아니다** — 버튼을 눌러도 `POST /turns` 가 늘면 안 된다.
+ * `book-journey.spec.ts` 의 같은 이름 도우미가 그 수까지 세는데, **여기서는 안 센다** —
+ * 이 파일은 응답을 가로채지 않는 것이 원칙이라 **요청 수를 쥐고 있지 않다.**
+ */
+async function 다음글쓰기까지(page: Page) {
+  // ① 결과 — 아이가 쓴 글이 중심이고 입력칸은 없다.
+  await expect(page.locator("[data-쓴문장]")).toBeVisible({ timeout: 90_000 });
+  // ② 글쓰기 — 누르면 바로 넘어가고, 새 서사가 다 쓰이면 칸이 열린다.
+  await page.locator("[data-그다음이야기]").click();
+  await expect(page.locator("main textarea")).toHaveValue("", { timeout: 90_000 });
+}
+
 test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어하기·선택지", async ({ page }) => {
   const 오류: string[] = [];
   page.on("pageerror", (e) => 오류.push(`[pageerror] ${e.message}`));
@@ -190,7 +215,7 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   // ── ③ 직접 써서 턴이 넘어간다 (A-3) ────────────────────────────────
   const 입력창 = page.locator("main textarea");
   await 입력창.fill(챕터문장);
-  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
 
   // **⛔ 「서사가 바뀌었다」를 잣대로 쓰지 않는다.**
   // ① **가짜 앞단은 매번 같은 서사를 준다** — 고정 픽스처라 영영 안 바뀐다
@@ -200,7 +225,7 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   // **잣대는 입력창이다.** 화면이 칸을 비우는 것은 **`outcome === "result"` 일 때뿐**이고
   // (되묻기·차단은 아이 글을 남긴다 — `Stage0.md` 148행), 그래서 **빈 칸 = 턴이 갔다**이다.
   // 턴 수·등급은 화면에 없다 — **숫자로 안 그리는 것이 규칙**이라 셀 수 없다.
-  await expect(입력창).toHaveValue("", { timeout: 90_000 });
+  await 다음글쓰기까지(page);
 
   // ── ④ 새로고침해도 이야기를 안 잃는다 (A-2) ────────────────────────
   //
@@ -229,14 +254,14 @@ test("챕터 한 판이 진짜 서버를 지난다 — GM·자유 묘사·이어
   const 다음응답대기 = page.waitForResponse((r) =>
     r.url().includes("/api/v1/turns") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: 버튼.그림으로보기 }).click();
+  await page.getByRole("button", { name: 챕터보내기라벨 }).click();
   const 다음응답 = await 다음응답대기;
   const 보낸몸 = 다음응답.request().postDataJSON();
   expect(Object.keys(보낸몸).sort()).toEqual(["chapter_id", "text"]);
   expect(보낸몸.text === 챕터문장).toBe(true);
   expect(다음응답.status()).toBe(200);
   expect((await 다음응답.json()).outcome).toBe("result");
-  await expect(입력창).toHaveValue("", { timeout: 90_000 });
+  await 다음글쓰기까지(page);
 
   // **⛔ 차단 갈래는 여기서 안 잰다 — 못 재는 것이지 안 중요해서가 아니다.**
   //
