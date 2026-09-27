@@ -15,7 +15,39 @@
   --foreground: var(--color-scarf-deep);
   --muted: color-mix(in srgb, var(--color-scarf-deep) 85%, var(--color-markings));
   --surface: color-mix(in srgb, var(--color-markings) 82%, white);
+  /**
+   * **장면 서사가 깔고 앉는 종이색** (2026-09-24 사용자 지시 · 1단계 「읽는 판」).
+   *
+   * ## ⛔ 왜 `--surface` 를 안 쓰나
+   *
+   * **장면 서사·래서판다 말풍선·글쓰기 패널 셋이 모두 `--surface`** 였다. 배경이
+   * 한 글자도 다르지 않아 **셋을 가르는 것이 말풍선 꼬리 하나뿐**이었다(실측).
+   * **아이가 무엇을 읽고 어디에 쓰는지를 모양으로 구분하지 못한다.**
+   *
+   * ⛔ **`--surface` 값을 바꾸지 않는다** — 그러면 말풍선·아이 글·다른 패널이 같이 움직인다.
+   * **읽는 판에만 주는 이름**을 따로 둔다.
+   *
+   * ## 값을 고른 근거
+   *
+   * **팔레트 두 색만 섞는다** — 크림 아이보리에 조끼 가죽 갈색 5%.
+   * 결과는 `#F1E3D3` 이고 **본문(`--color-scarf-deep`)과 명도 대비 7.21:1** 이다
+   * (사용자가 정한 하한 7:1). 조끼를 더 섞으면 따뜻해지지만 **8% 에서 6.96:1 로 하한을
+   * 깨서** 거기서 멈췄다.
+   *
+   * ⛔ **여기가 `--surface` 바로 옆인 것이 중요하다** — 이 무대는 숲 배경이 밝아
+   * 팔레트를 밝은 쪽으로 못 박는 자리다(위 주석). 같은 자리에 둬야 **어두운 화면
+   * 설정에서도 이 색이 남색으로 뒤집히지 않는다.**
+   */
+  --scene-paper: color-mix(in srgb, var(--color-markings) 95%, var(--color-vest));
   --surface-raised: color-mix(in srgb, var(--color-markings) 28%, white);
+  /* ⛔ **이 줄이 없어서 어두운 화면에서 글자가 안 보였다** (2026-09-22 실측).
+     이 무대는 **숲 배경이 밝아 팔레트를 밝은 쪽으로 못 박는다** — 위아래 토큰이 그 일이다.
+     그런데 `--surface-muted` 만 빠져 있어서, 어두운 화면 설정에서는 이 토큰만
+     **globals.css 의 어두운 값**(남색)으로 남았다. 액자 바탕이 그것을 쓰고 **글자는
+     위에서 못 박은 남색**이라, **삽화 준비 중 문구의 명도 대비가 1.63** 이었다
+     (밝은 화면에서는 8.3). **남색 사각형 위에 남색 글씨**였다.
+     ⭐ **한 줄이 빠진 것이지 규칙이 틀린 것이 아니다.** 나머지 토큰과 같은 계열로 채운다. */
+  --surface-muted: color-mix(in srgb, var(--color-markings) 60%, white);
   --border: color-mix(in srgb, var(--color-vest) 25%, transparent);
   --border-strong: color-mix(in srgb, var(--color-vest) 45%, transparent);
   --accent: var(--color-vest);
@@ -27,9 +59,28 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+  /* ⛔ **남는 세로를 한쪽으로 몰지 않는다** (2026-09-24 사용자 지시 · 실측으로 잡았다).
+     종전에는 **쓰는 칸에 `margin-bottom: auto`** 를 줘서 남는 세로를 **통째로 패널 아래**로
+     보냈다. 2048×1152 에서 그 값이 **본편 343.66px · 튜토리얼 506.73px** 이었고,
+     그것이 곧 **「글쓰기 영역 아래의 큰 빈 공간」**이자 **「내용이 위에 몰린 것」**이었다.
+     ⭐ **읽는 묶음과 쓰는 칸을 한 덩어리로 두고 그 덩어리를 세로 가운데**에 놓는다 —
+     남는 세로가 **위아래로 똑같이** 나뉘므로 한쪽에만 큰 빈 공간이 생기지 않는다.
+     ⛔ **`safe` 가 빠지면 안 된다.** 내용이 창보다 길어지면 가운데 맞춤은 **위쪽을
+     화면 밖으로 밀어내고 그 부분에 영영 닿지 못한다.** `safe` 는 넘칠 때 위 맞춤으로
+     돌아간다.
+     ⛔ **화면 크기마다 다른 값을 쓰지 않는다** — 이 한 줄이 모든 크기에 같게 걸린다. */
+  justify-content: safe center;
   width: 100%;
   min-height: 0;
   margin: 0;
+  /* ## ⛔ 가운데 맞춤은 상자를 맞추지 아이 눈을 안 맞춘다 (2026-09-23 실측으로 잡았다)
+     위 `safe center` 는 **상자 묶음**을 가운데 둔다 — 2048×1152 에서 위아래가
+     **254.2 대 254.2** 로 소수점까지 같았다. 그런데 **아이 눈에 처음 걸리는 장면 글**은
+     그보다 아래에서 시작한다. 무대의 위 안쪽 여백(떠 있는 이름 띠 자리)이 그 사이에
+     있어서다. 여백을 84 → 68px 로 줄여도 **68px 이 그대로 남는다.**
+     ⭐ **아래를 같은 만큼 비우면 가운데 맞춤이 그 차이를 흡수한다** — 묶음이 위로
+     34px 올라가고 **보이는 위아래가 같아진다.**
+     ⛔ **세로가 빠듯한 화면에는 안 건다** — 거기서는 이 여백이 곧 넘침이다. */
   padding: 0;
   overflow: clip;
   color: var(--foreground);
@@ -39,7 +90,14 @@
   position: absolute;
   z-index: -1;
   inset: 0;
-  background: linear-gradient(180deg, rgb(10 24 25 / 30%), transparent 30%, transparent 65%, rgb(10 24 25 / 35%));
+  /* ⛔ **덮는 어둡기를 올렸다** (2026-09-22 사용자 확정 — 제안 (가)).
+     종전 `30% → 투명 → 투명 → 35%` 는 **가운데가 완전히 투명**이라, 넓은 화면에서
+     **숲 배경이 화면의 주인**처럼 보였다. 지금 이야기는 **마을 광장·분수·가게**에서
+     벌어지는데 화면 대부분이 깊은 숲길이다.
+     ⚠ **장소가 어긋나는 것 자체는 그대로 남는다** — 이건 **콘텐츠를 앞으로 꺼내는 것**이지
+     배경을 맞추는 것이 아니다. 새 이미지도 안 만들고 `kraft-paper` 로도 안 바꿨다.
+     ⭐ **가운데를 완전히 비우지 않는다**(38%) — 글과 캐릭터가 그 위에 선다. */
+  background: linear-gradient(180deg, rgb(10 24 25 / 52%), rgb(10 24 25 / 38%) 28%, rgb(10 24 25 / 38%) 62%, rgb(10 24 25 / 58%));
   pointer-events: none;
   content: "";
 }
@@ -49,6 +107,10 @@
   top: calc(1rem + env(safe-area-inset-top, 0px));
   display: flex;
   align-items: center;
+  /* ⛔ **이름과 버튼을 붙여 두지 않는다** (2026-09-23 사용자 지시).
+     간격이 0 이라 **둘이 하나의 나뉜 버튼처럼** 보였는데, 왼쪽은 **누가 쓰고 있는지
+     알려 주는 정보**이고 오른쪽은 **누르면 나가는 버튼**이다. 하는 일이 다르다. */
+  gap: 0.5rem;
 }
 .game-stage-header { right: max(var(--game-inline-inset), env(safe-area-inset-right, 0px)); min-height: 2.75rem; }
 .game-stage-footer {
@@ -78,35 +140,90 @@
   box-shadow: 0 3px 14px rgb(18 32 36 / 28%);
   font-weight: 700;
 }
-/* 읽히기는 해야 한다 — 숲 배경 위라 바탕 없이는 글자가 묻힌다.
-   **누를 수 있어 보이는 것 셋만 걷는다**: 두꺼운 테두리 · 그림자 · 굵은 글씨. */
-.game-stage-header p {
+/* ⛔ **상단으로 올라온 「모험 나가기」가 배경에 묻혔다** (2026-09-22 실측 · 대비 **1.45**).
+   `action-quiet` 는 **종이 위에서 한 칸 물러서려고** 만든 것인데, 여기는 **숲 배경 위**라
+   물러설 바탕이 없었다.
+   ⭐ **이름과 같은 받침을 깐다** — 둘이 **한 상단 영역**으로 읽히고, 대비도 이름과 같아진다.
+   ⛔ **진행 버튼보다 세지 않다** — 테두리가 얇고(1px) 글씨도 굵지 않으며 채운 색도 아니다.
+   진행 버튼은 스카프 블루로 **채워져** 있다. */
+/* ⛔ **`>` 가 꼭 필요하다** (2026-09-23 실측으로 잡았다).
+   `LeaveButton` 은 **버튼과 확인 창(`<dialog>`)을 함께** 그린다. 2026-09-22 에 그 버튼을
+   상단으로 옮기면서 **확인 창도 이 영역 안으로 들어왔고**, 아래 두 규칙이
+   **창 안쪽 문단과 버튼까지** 물들였다. 그래서 확인 창에서
+   ① 안내 문장이 **한 줄로 눌려 말줄임표로 잘렸고**(`white-space: nowrap`)
+   ② 문장이 **입력칸처럼 생긴 상자**로 보였고(배경·둥근 모서리)
+   ③ 「계속하기」와 「나가기」가 **똑같이** 보였다(둘 다 이 배경을 받아 강약이 사라졌다).
+   ⭐ **상단 영역의 바로 아래 자식에만** 건다. */
+.game-stage-header > button {
   border: 1px solid color-mix(in srgb, var(--color-brass) 45%, transparent);
   border-radius: 0.625rem;
+  padding: 0.375rem 0.75rem;
   background: color-mix(in srgb, var(--color-markings) 78%, transparent);
   color: var(--color-scarf-deep);
   font-weight: 500;
+  /* **누를 수 있다는 것이 보여야 한다** (2026-09-23 사용자 지시). */
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
-.game-stage-header p {
-  max-width: min(20rem, calc(100vw - 3rem));
+.game-stage-header > button:hover {
+  border-color: var(--color-brass);
+  background: var(--color-markings);
+}
+.game-stage-header > button:focus-visible {
+  outline: 3px solid var(--color-scarf-deep);
+  outline-offset: 2px;
+}
+/* 읽히기는 해야 한다 — 숲 배경 위라 바탕 없이는 글자가 묻힌다.
+   **누를 수 있어 보이는 것 셋만 걷는다**: 두꺼운 테두리 · 그림자 · 굵은 글씨. */
+/* 이름은 **정보 배지**다 — 읽히되 눌러 보고 싶지 않아야 한다.
+   **누를 수 있어 보이는 것 셋을 걷는다**: 두꺼운 테두리 · 그림자 · 굵은 글씨.
+   ⛔ 위와 같은 이유로 `>` 를 쓴다 — 확인 창 안쪽 문단은 **본문**이지 배지가 아니다. */
+.game-stage-header > p {
+  /* **버튼과 높이를 맞춘다** (2026-09-23 사용자 지시 · 실측 47px 대 44px). */
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  max-width: min(20rem, calc(100vw - 9rem));
+  border: 1px solid color-mix(in srgb, var(--color-brass) 45%, transparent);
+  border-radius: 0.625rem;
+  /* 긴 이름이 와도 버튼을 밀어내지 않는다 — 넘치는 만큼만 말줄임표로 줄인다. */
   overflow: hidden;
+  /* 위아래 여백을 걷고 **최소 높이로만** 맞춘다 — 글자 크기가 달라도 버튼과 같은 높이다. */
+  padding: 0 1.125rem;
+  background: color-mix(in srgb, var(--color-markings) 78%, transparent);
+  color: var(--color-scarf-deep);
+  font-size: 1.25rem;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 0.5rem 1.125rem;
-  font-size: 1.25rem;
 }
 .game-stage-footer > button { min-height: 2.75rem; padding: 0.5rem 1.25rem; font-size: 1.0625rem; }
 .game-stage__world {
   --stage-gutter: 1.5rem;
   position: relative;
   display: flex;
-  flex: 1;
+  /* ⛔ **남는 세로를 여기서 먹지 않는다** (2026-09-24). `flex: 1` 이면 읽는 묶음이
+     남는 세로를 통째로 가져가고, **형제인 쓰는 칸이 화면 바닥에 못 박힌다.**
+     내용 높이로 두면 **무대가 묶음 전체를 가운데**에 놓을 수 있다. */
+  flex: 0 1 auto;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  /* ⛔ **`space-between` 을 쓰지 않는다** — 남는 세로를 요소 사이에 나눠 넣어
+     장면 글·래서판다·쓰는 칸이 **따로 떠 있는 것처럼** 보였다. 사이 간격은 `gap`
+     하나가 정하고, 남는 세로는 무대가 위아래로 나눈다. */
+  justify-content: flex-start;
+  /* 화면이 커질수록 조금만 넓어진다 — 특정 폭에서 값이 튀지 않게 이음매 없이 잇는다. */
+  gap: clamp(0.75rem, 1.6vh, 1.25rem);
   min-height: 0;
-  padding: 5.25rem 1.5rem 0.5rem;
+  /* ## ⛔ 위 여백은 「떠 있는 것들이 쓰는 만큼」이다 (2026-09-23 실측으로 잡았다)
+     머리글(이름·나가기)과 도구 띠는 **둘 다 `position: absolute` 로 1rem 에 떠 있고
+     높이가 2.75rem** 이라 **아래 끝이 3.75rem(60px)** 이다. 그런데 이 여백이 5.25rem
+     (84px)이었다 — **24px 이 아무도 안 쓰는 자리**였다.
+     ⛔ **그 24px 이 「위아래 여백이 같은데 위가 더 커 보인다」의 정체였다.** 상자 기준으로는
+     위아래가 소수점까지 같은데(2048 에서 254.2 대 254.2), **아이 눈에 처음 걸리는
+     장면 글은 350.2** 에서 시작했다. **차이가 정확히 이 여백만큼**이다.
+     ⭐ **떠 있는 것 아래로 0.5rem 만 띄운다** — 4.25rem. 더 줄이면 이름 띠에 글이 가린다. */
+  padding: 4.25rem 1.5rem 0.5rem;
 }
 .game-stage__toolbar {
   position: absolute;
@@ -137,11 +254,24 @@
   box-shadow: 0 2px 10px rgb(18 32 36 / 14%);
 }
 /* 본편으로 들어가는 입구는 대사 연출과 분리해 왼쪽 위에서 항상 찾을 수 있다. */
+/* ⛔ **모험 문도 본문 띠 안에 세운다** (2026-09-23 실측).
+   종전에는 **화면 맨 왼쪽 가장자리** 기준이라, 2048×1152 에서 문이 24px 에 서고
+   본문은 464px 에서 시작했다 — **440px 어긋났다.** 1280 에서도 56px 이었다.
+   ⭐ 머리글·바닥글과 **같은 띠**를 쓴다. 작은 화면에서는 띠가 곧 화면 폭이라 그대로다. */
 .game-stage__toolbar:has(.chapter-door) {
-  left: max(var(--game-inline-inset), env(safe-area-inset-left, 0px));
-  max-width: calc(100% - 15rem);
-  transform: none;
+  left: 50%;
+  right: auto;
+  width: min(
+    100% - 2 * max(var(--game-inline-inset), env(safe-area-inset-left, 0px)),
+    70rem
+  );
+  max-width: none;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: flex-start;
+  pointer-events: none;
 }
+.game-stage__toolbar:has(.chapter-door) > * { pointer-events: auto; }
 .game-stage__toolbar:has(> .book-link) {
   left: max(var(--game-inline-inset), env(safe-area-inset-left, 0px));
   max-width: calc(100% - 9rem);
@@ -157,9 +287,15 @@
   left: 50%;
   right: auto;
   transform: translateX(-50%);
+  /* ⛔ **75rem 이 아니라 70rem 이다** (2026-09-23 실측으로 잡았다).
+     이 줄의 원래 뜻은 **「머리글을 본문과 같은 세로선에 맞춘다」**였는데,
+     **본문이 그 뒤에 75rem → 70rem 으로 줄면서 약속이 다시 깨졌다** —
+     1280·2048 에서 **좌우 각 40px** 씩 밖에 있었다. 주석은 그대로인데 값만 갈린 것이고,
+     이 파일이 같은 사고를 한 번 적어 두고도 또 밟았다.
+     ⭐ **값을 `.game-story` 와 같은 식으로 쓴다.** */
   width: min(
     100% - 2 * max(var(--game-inline-inset), env(safe-area-inset-left, 0px)),
-    75rem
+    70rem
   );
   max-width: none;
 }
@@ -169,7 +305,7 @@
 .game-stage-footer {
   width: min(
     100% - 2 * max(var(--game-inline-inset), env(safe-area-inset-left, 0px)),
-    75rem
+    70rem
   );
   margin-inline: auto;
   padding-inline: 0;
@@ -224,14 +360,37 @@
 }
 
 /* 상황문은 입력 양식에서 분리한다. 쓰는 동안에도 무대 위에 남는 이야기다. */
+/* ## ⛔ 장면 서사는 말풍선이 아니라 「읽는 판」이다 (2026-09-24 사용자 지시 · 1단계)
+ *
+ * **종전에는 셋이 같은 옷을 입고 있었다** — 장면 서사·래서판다 말풍선·글쓰기 패널이
+ * 모두 **배경 `#F8EEE1` · 테두리 2px · 둥근 모서리 · 그림자**였다(2048×1152 실측).
+ * 그래서 **아이가 무엇을 읽는 곳이고 누가 말하는 것이고 어디에 쓰는 것인지**를
+ * 모양만으로 못 갈랐다.
+ *
+ * ⭐ **셋에게 서로 다른 수단을 준다.** 읽는 판은 **면**, 말풍선은 **윤곽과 꼬리**,
+ * 쓰는 칸은 **테두리와 상태**다. 여기는 그중 **면**이다 —
+ * **테두리와 그림자를 걷고 색만 남긴다.**
+ *
+ * ⛔ **이번에 바꾸는 것은 시각적 역할뿐이다** — 폭·높이·안쪽 여백·자리·글자는 그대로다.
+ * 설계안이 안쪽 여백을 `20px 28px` 로 늘리자고 했지만 **사용자가 이번에는 유지**로 정했다:
+ * **표면 변화와 배치 변화를 한 번에 섞으면 무엇이 원인인지 못 가른다.**
+ *
+ * ⛔ **꼬리를 만들지 않고 hover·focus 도 주지 않는다** — 읽는 것이지 누르는 것이 아니다. */
 .game-story {
   flex: none;
-  width: min(100%, 75rem);
-  border: 2px solid var(--color-brass);
-  border-radius: 1.125rem;
+  /* ⛔ **쓰는 칸과 같은 폭이어야 한다** (2026-09-24 사용자 지시 · 「공통 기준선」).
+     종전 75rem 은 쓰는 칸(70rem)보다 **양쪽으로 40px 씩 넓어**, 읽는 자리와 쓰는 자리의
+     **왼쪽 시작선이 서로 어긋나** 있었다. 값은 `.game-console` 과 같은 식이다. */
+  width: min(100%, 70rem);
+  /* ⛔ **테두리를 지우지 않고 색만 투명으로 둔다** (2026-09-24 사용자 지시 · 실측).
+     `border` 를 통째로 걷었더니 **바깥 높이가 4px 줄고 안쪽 내용 폭이 4px 늘었다** —
+     이번 단계는 **시각적 역할만** 바꾸기로 한 자리인데 **배치가 따라 움직였다.**
+     ⭐ **2px 자리는 남기고 색만 없앤다.** 배경은 기본값(`border-box`)이라 **그 2px 까지
+     같이 칠해져** 면이 끊기지 않고, **폭·높이·내용 폭·줄 수가 변경 전과 같아진다.** */
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
   padding: 1rem 1.5rem;
-  background: var(--surface);
-  box-shadow: 0 8px 28px rgb(18 32 36 / 25%), inset 0 0 0 4px rgb(255 255 255 / 45%);
+  background: var(--scene-paper);
 }
 .game-story .scene-card {
   display: block;
@@ -285,15 +444,30 @@
 }
 
 .game-stage__world .guide-figure {
-  --companion-size: clamp(12rem, 33svh, 30rem);
+  /* ⛔ **캐릭터 크기는 여기 한 곳에서 정한다** (2026-09-23 실측으로 잡았다).
+     종전에는 기본값이 `clamp(12rem, 33svh, 30rem)` 이고 **높이 1050 이상**과 **폭 1600 이상**이
+     각각 따로 덮었다. 조건이 겹치지 않는 틈(예: 1600×1000)이 생겨 **화면을 넓히거나
+     높이면 크기가 계단처럼 튀었다** — 실측으로 **403px → 184px** 과 **160px → 330px** 둘.
+     ⭐ **높이만 본다.** 캐릭터는 원래 `svh` 로 정해져 있어 **폭과 상관이 없었는데**,
+     폭으로 덮은 규칙이 계단을 만들었다.
+     ⛔ **작은 화면 규칙은 그대로다** — 아래 `max-width: 700px` 과 `max-height: 550px` 은
+     각자 더 작은 값을 주고, `guide.tsx` 가 적어 둔 하한 64px 을 지킨다. */
+  --companion-size: clamp(10rem, 16svh, 12rem);
   position: relative;
   display: grid;
   grid-template-columns: var(--companion-size) minmax(0, 36rem);
   grid-template-rows: auto auto;
   align-items: center;
   column-gap: 0.5rem;
-  width: min(100%, calc(var(--companion-size) + 36.5rem));
-  margin-block: auto;
+  /* ⛔ **장면 글·쓰는 칸과 같은 폭이다** (2026-09-24 사용자 지시 · 「공통 기준선」).
+     종전에는 폭이 `캐릭터 + 36.5rem` 이라 셋 중 혼자 좁았고, 아래 걷어낸 왼쪽 당김과
+     겹쳐 **래서판다만 왼쪽에 따로 서 있었다.** 2048×1152 실측으로 장면 글과 쓰는 칸의
+     가로 중심은 1024px 인데 **래서판다만 787px** 이었다 — 그것이 시선이 갈지자로
+     움직인 이유다. */
+  width: min(100%, 70rem);
+  /* ⛔ **`auto` 를 쓰지 않는다** — 위아래로 남는 세로를 빨아들여 래서판다만 혼자 떨어져
+     있었다. 사이 간격은 무대의 `gap` 하나가 정한다. */
+  margin-block: 0;
   padding-block: 0.5rem;
   opacity: 1;
   transform: translateY(0);
@@ -304,13 +478,13 @@
   opacity: 0;
   transform: translateY(0.75rem);
 }
-@media (min-height: 551px) {
-  .game-stage__world .guide-figure {
-    align-self: flex-start;
-    /* 투명 여백을 빼고 보이는 캐릭터의 왼쪽을 상황문 박스 시작선에 맞춘다. */
-    margin-left: max(calc(-1 * var(--stage-gutter)), calc(max(0px, (100% - 75rem) / 2) - var(--companion-size) * 0.116));
-  }
-}
+/* ⛔ **래서판다를 왼쪽으로 당기던 규칙을 걷었다** (2026-09-24 사용자 지시).
+   종전에는 `align-self: flex-start` 에 계산된 `margin-left` 를 더해, 그림의 투명 여백을
+   뺀 **보이는 왼쪽 끝**을 장면 글 상자에 맞췄다. 뜻은 맞았지만 결과가 **래서판다 묶음
+   전체를 왼쪽으로 378px 옮기는 것**이었고, 음수 여백을 하한으로 쓰고 있었다.
+   ⭐ 이제 셋이 **같은 폭의 같은 상자**를 쓰므로 당길 것이 없다 — 왼쪽 시작선이 저절로
+   같아진다. 그림 안쪽 투명 여백만큼(캐릭터 크기의 11.6%) 남는 차이는 그대로 둔다.
+   사용자가 금지한 **음수 여백**을 되살리지 않기 위해서다. */
 .game-stage__world .guide-image {
   grid-column: 1;
   grid-row: 1 / 3;
@@ -421,17 +595,77 @@
   background: var(--surface-raised);
   box-shadow: inset 0 2px 5px rgb(143 92 62 / 5%);
 }
-.game-console .writing-field { min-height: 5rem; height: 5rem; padding: 0.75rem 1rem; font-family: var(--font-reading); font-size: var(--type-reading-desktop); line-height: var(--leading-child-writing); }
+/* ⛔ **쓰는 칸은 「세 줄」이 기준이다** (2026-09-24 사용자 지시 · 실측으로 잡았다).
+   종전 `5rem`(80px)은 1280×800 에서 글자 18px · 줄간격 1.7 을 만나 **보이는 줄이 1.83**
+   이었다 — **두 줄도 안 됐다.** 본편은 **다음 행동을 문장으로 쓰는 자리**인데, 아이가
+   둘째 줄을 쓰기 시작하면 **첫 줄이 위로 밀려 자기가 쓴 글이 안 보인다.**
+   ⭐ **고정 px 을 다시 고르지 않고 줄 수로 적는다.** 글자 크기나 줄간격이 바뀌어도
+   세 줄이 그대로 세 줄이고, 화면마다 다른 임시 값을 두지 않아도 된다.
+   `1.5rem` 은 위아래 안쪽 여백(0.75rem 씩)이다. */
+.game-console .writing-field { --쓰는줄수: 3; min-height: calc(var(--쓰는줄수) * var(--leading-child-writing) * 1em + 1.5rem); height: calc(var(--쓰는줄수) * var(--leading-child-writing) * 1em + 1.5rem); padding: 0.75rem 1rem; font-family: var(--font-reading); font-size: var(--type-reading-desktop); line-height: var(--leading-child-writing); }
 .game-console .writing-actions { padding: 0 0.625rem 0.625rem; }
 .game-console .writing-actions .action-primary { min-width: 7rem; border-radius: 0.625rem; padding-block: 0.5rem; }
 .game-console [data-읽는중], .game-console [data-보내기못닿음] { font-size: 1rem; }
 
+@media (min-height: 700px) {
+  /* 무대 위 여백과 같은 만큼 아래를 비운다 (위 `padding` 주석). */
+  .game-stage { padding-bottom: 4.25rem; }
+}
+@media (min-height: 700px) and (max-width: 700px) {
+  .game-stage { padding-bottom: 3.5rem; }
+}
+
 @media (min-width: 1100px) and (min-height: 1050px) {
-  .game-stage__world { padding-top: 6rem; }
-  .game-stage__world .guide-figure { --companion-size: min(35svh, 32rem); }
+  /* 떠 있는 것들의 크기는 화면이 커져도 그대로다 — 여기서 더 비울 이유가 없다. */
+  .game-stage__world { padding-top: 4.5rem; }
+  .game-stage { padding-bottom: 4.5rem; }
+  /* 캐릭터 크기는 기본 규칙이 정한다 — 여기서 다시 키우면 계단이 생긴다 (2026-09-23). */
   .game-stage__world .guide-line { font-size: var(--type-companion-desktop); }
   .game-compass { width: 8.5rem; height: 8.5rem; }
   .game-console .writing-field { min-height: 8rem; height: 8rem; }
+}
+/* ## ⛔ 넓은 화면에서 래서판다가 화면 가운데를 차지하지 않게 한다 (2026-09-22 사용자 지시)
+   2048×1152 에서 **그림만 403px** 이었고, **상황문이 끝난 자리(173px)와 쓰는 칸(900px) 사이**
+   한가운데에 홀로 서 있었다. 둘째·셋째 튜토리얼에서는 **나침반 소개가 끝났는데도** 같은
+   크기라, 아이가 볼 것(상황문·쓰는 칸)보다 캐릭터가 컸다.
+   ⭐ **본편과 같은 값으로 맞춘다** (`chapter-stage.css` 281행) — 같은 캐릭터가 화면마다
+   다른 크기면 아이에게 다른 존재로 보인다.
+   ⛔ **배치는 여기서 정하지 않는다** (2026-09-24). 세로 배치는 화면 크기와 상관없이
+   위쪽 공통 규칙 하나가 정한다 — 이 블록에는 **글자 크기만** 남는다. */
+/* ⛔ **여기 있던 세로 배치 규칙 넷을 걷었다** (2026-09-24 사용자 지시).
+   `justify-content: flex-start` · `guide-figure { margin-block: 0 }` ·
+   `world { flex: 0 1 auto }` · `game-console { margin-bottom: auto }` 넷이다.
+   **넷 다 위쪽 공통 규칙으로 올라갔다** — 넓은 화면에서만 배치가 달라지면 창을 키울 때
+   구조가 통째로 바뀌고, 그것이 **2048 에서만 아래가 507px 비는** 원인이었다.
+   ⭐ 남기는 것은 **글자 크기**뿐이다. 그건 배치가 아니라 읽기 편한 크기의 문제다. */
+@media (min-width: 1600px) {
+  /* 상황문과 쓰는 칸을 같은 비율로 올린다 — 읽고 쓰는 것이 캐릭터보다 커야 한다. */
+  .game-stage__world .game-story {
+    font-size: clamp(1.375rem, 1.15vw, 1.75rem);
+  }
+  /* ## ⛔ 남는 세로를 읽는 판이 먹는다 (2026-09-23 사용자 확정)
+     2048×1152 에서 장면 글 상자가 **77px** 이었다. 한 줄짜리 서사가 오면 판이
+     **글자만큼만** 서고, 남는 세로는 **위아래로 나뉘어 버려졌다** — 내용이 화면
+     면적의 26% 만 차지했다.
+     ⭐ **최소 높이를 주고 글을 그 안에서 세로 가운데**에 둔다. 서사가 길면 지금처럼
+     내용만큼 자란다. **글자 크기는 위에서 이미 정했고 여기서 더 안 건드린다.** */
+  .game-stage__world .game-story {
+    display: flex;
+    align-items: center;
+    min-height: 11rem;
+  }
+  /* ## ⛔ 말풍선이 오른쪽 끝까지 쓴다 (2026-09-23 사용자 확정)
+     기본값은 `minmax(0, 36rem)` 이라 2048×1152 에서 말풍선 오른쪽에 **351.7px** 이
+     비어 있었다. 장면 글과 쓰는 칸은 70rem 을 꽉 쓰는데 **가운데 줄만 짧아서**,
+     세 판이 같은 폭이라는 「공통 기준선」이 눈에는 안 보였다.
+     ⚠ 좁은 화면에서는 안 건다 — 거기서는 36rem 이 이미 화면보다 넓다. */
+  .game-stage__world .guide-figure {
+    grid-template-columns: var(--companion-size) minmax(0, 1fr);
+  }
+  .game-console .writing-field {
+    min-height: 7rem;
+    font-size: 1.25rem;
+  }
 }
 @media (max-width: 700px) {
   .game-shell { --game-inline-inset: 0.75rem; }
@@ -439,13 +673,42 @@
   .game-stage-header p { max-width: 9rem; font-size: 1.125rem; }
   .game-stage-footer { padding-top: 0.375rem; padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); }
   .game-stage-header p, .game-stage-footer > button { padding-inline: 0.75rem; border-radius: 0.625rem; }
-  .game-stage__world { --stage-gutter: 0.75rem; gap: 0.5rem; padding: 4rem 0.75rem 0.25rem; }
+  /* 작은 화면에서는 떠 있는 것들이 0.5rem 에 서고 아래 끝이 3.25rem(52px)이다. */
+  .game-stage__world { --stage-gutter: 0.75rem; gap: 0.5rem; padding: 3.5rem 0.75rem 0.25rem; }
   .game-stage__toolbar { top: calc(0.5rem + env(safe-area-inset-top, 0px)); left: 0.75rem; transform: none; width: max-content; max-width: calc(100% - 11rem); }
-  .game-stage__toolbar:has(.chapter-door) { max-width: calc(100% - 11rem); }
+  /* ## ⛔ 작은 화면에서는 문을 머리 띠 아래 줄로 내린다 (2026-09-23 실측으로 잡았다)
+     문을 무대 밖으로 꺼내 흐르지 않게 만들면서 **머리 띠와 같은 줄(8px)** 에 올렸는데,
+     **좁은 화면에서는 그 줄에 셋이 안 들어간다** — 문 12~156 · 이름 144~201 · 나가기 209~308.
+     실측 겹침: **320px 에서 12.2px**, 긴 별명이면 **90.1px**, 390px 에서도 **20.5px**.
+     **문이 위에 그려져 이름을 가린다** — 그 이름은 `문구.md` 2.6 이
+     **「확인하라고 둔 표식」**으로 맨 위에 세운 것이다.
+     ⛔ **종전에는 이 문제가 없었다** — 문이 무대 안에 있어 **세로로 한 칸 아래**였기 때문이다.
+     그 대신 무대를 따라 흘러내렸다. **둘 다 피하려면 자리를 명시해야 한다.**
+     ⭐ **머리 띠 아래(3.5rem)로 내린다.** 흐르지 않고 겹치지도 않는다.
+     ⚠ **값을 치른다** — 무대 위 여백이 그만큼 커진다(아래 규칙). */
+  .game-stage__toolbar:has(.chapter-door) {
+    top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
+  /* 문이 선 자리만큼 무대를 내린다. **문이 없을 때는 안 걸린다.** */
+  .game-stage:has(.chapter-door) .game-stage__world {
+    padding-top: 6.5rem;
+  }
+  /* ⛔ **작은 화면에서는 가운데 맞춤을 끈다** (2026-09-23 실측으로 잡았다).
+     넓은 화면에서 문을 본문 띠에 맞추려고 `left: 50%` + 가운데 당김을 줬는데,
+     이 블록의 `max-width: calc(100% - 11rem)` 와 만나 **390 에서 문이 88px 로 밀렸다** —
+     본문은 12px 에서 시작하니 **전보다 더 어긋났다.**
+     ⭐ 작은 화면에서는 **띠가 곧 화면 폭**이라 왼쪽에 붙이는 것이 곧 띠에 맞추는 것이다. */
+  .game-stage__toolbar:has(.chapter-door) {
+    left: max(var(--game-inline-inset), env(safe-area-inset-left, 0px));
+    width: max-content;
+    max-width: calc(100% - 11rem);
+    transform: none;
+  }
   .game-stage .chapter-door { flex-wrap: nowrap; gap: 0.5rem; padding: 0.375rem 0.375rem 0.375rem 0.625rem; }
   .game-stage .chapter-door p { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .game-stage .chapter-door .action-primary { padding: 0.375rem 0.625rem; }
-  .game-story { padding: 0.75rem 0.875rem; border-radius: 0.875rem; }
+  /* 모서리만 위 「읽는 판」과 같은 값으로 — **여백은 그대로다** (2026-09-24). */
+  .game-story { padding: 0.75rem 0.875rem; border-radius: 0.5rem; }
   .game-story .scene-narrative { font-size: var(--type-scene-mobile); line-height: var(--leading-scene); }
   .game-stage__world .guide-figure { --companion-size: clamp(6.5rem, 17svh, 9rem); grid-template-columns: var(--companion-size) minmax(0, 1fr); column-gap: 0.25rem; padding-block: 0.25rem; }
   .game-stage__world .guide-image { grid-row: 1 / 3; }
@@ -453,10 +716,23 @@
   .game-stage__world .guide-dialogue { padding: 0.5rem 0.625rem; }
   .game-stage__world .guide-line::before { left: -0.5rem; width: 0.75rem; height: 0.75rem; }
   .game-compass { grid-column: 2; grid-row: 2; width: 4.5rem; height: 4.5rem; margin: -0.375rem 0 0 calc(var(--companion-size) * -0.2); }
-  .game-console { width: calc(100% - 1rem); margin: 0 auto; padding: 0.625rem 0.875rem; border-radius: 1rem; }
+  /* ⛔ **읽는 묶음과 같은 시작선에 세운다** (2026-09-24 사용자 지시 · 「공통 기준선」).
+     종전 `100% - 1rem` 은 390×844 에서 왼쪽 시작선이 **8px** 였는데, 장면 글과 래서판다는
+     무대 안쪽 여백(0.75rem) 때문에 **12px** 였다. 4px 차이라도 **경계선이 둘**로 보인다. */
+  .game-console { width: calc(100% - 1.5rem); margin: 0 auto; padding: 0.625rem 0.875rem; border-radius: 1rem; }
   .game-response__content, .game-console .attempt-input { gap: 0.375rem; }
   .game-console .attempt-label label { font-size: 1rem; }
-  .game-console .writing-field { min-height: 3.5rem; height: 3.5rem; padding: 0.625rem 0.75rem; font-size: var(--type-reading-mobile); line-height: var(--leading-child-writing); }
+  /* ⛔ **모바일 입력 높이는 여기 한 곳이 정한다** (2026-09-24 사용자 지시 · 실측).
+     `.game-console` 은 **튜토리얼과 본편 패널에 모두** 붙는다(본편은 `chapter-console` 을
+     덧붙일 뿐이다). 그래서 이 한 줄이 두 화면의 주인이 된다.
+     ⛔ **종전 `3.5rem`(56px)은 한 줄 남짓만 보였다** — 안쪽 36px 에 17px·29px 행간이라
+     **1.2줄**이고, 세 줄짜리 글을 넣으면 넘쳤다. 같은 글이 본편(112px·3.2줄)에서는
+     안 넘쳤다. **아이가 자기가 쓴 것을 되읽지 못하는 것**이 문제였다.
+     ⭐ **본편이 쓰던 값(7rem)으로 맞춘다** — 그 값에는 근거가 적혀 있었다:
+     **「본편은 한두 단어보다 다음 행동을 문장으로 쓰는 자리다. 17px·1.7 행간에서
+     세 줄을 볼 수 있게 한다.」** 튜토리얼도 같은 일을 하는 자리라 같은 값을 쓴다.
+     ⛔ **글자 크기·행간·안쪽 여백은 안 건드렸다** — 바뀐 것은 높이 둘뿐이다. */
+  .game-console .writing-field { min-height: 7rem; height: 7rem; padding: 0.625rem 0.75rem; font-size: var(--type-reading-mobile); line-height: var(--leading-child-writing); }
   .game-console .writing-actions { padding: 0 0.5rem 0.5rem; }
   .game-console .writing-actions .action-primary { min-width: 6rem; min-height: 2.75rem; }
 }
@@ -488,4 +764,20 @@
 @media (prefers-reduced-motion: reduce) {
   .game-stage__world .guide-figure, .game-console { transition: none; animation: none; transform: none; }
   .scene-dialogue-typed::after, .guide-caret::after { display: none !important; animation: none !important; }
+}
+
+/* ## ⛔ 글자가 찍히는 동안에만 「눌러도 된다」를 생김새로 말한다 (2026-09-23 사용자 확정 · ⑥ㄴ)
+   **문장을 더하지 않고 푼다.** 건너뛰는 기능은 이미 있었고(장면 글·말풍선이
+   `role="button"`), 없던 것은 **아이가 그것을 아는 길**이다.
+   ① 커서 — **마우스 기기에만** 먹는다
+   ② 읽는 판의 테두리가 그동안만 보인다 — **2px 자리는 원래 있고 색만 투명**이었다
+      (`.game-story` 주석). 자리를 안 차지하므로 **켜고 꺼도 배치가 안 움직인다.**
+      **터치 기기에서 유일하게 먹는 단서**다
+   ⛔ **깜빡이거나 움직이지 않는다** — 기다리는 동안 움직이는 것을 두면 아이가 그것을 본다.
+   ⚠ `prefers-reduced-motion` 에서는 연출 자체가 없어 이 표식도 안 붙는다. 맞는 동작이다. */
+.game-stage__world[data-건너뛸수있나] {
+  cursor: pointer;
+}
+.game-stage__world[data-건너뛸수있나] .game-story {
+  border-color: color-mix(in srgb, var(--color-brass) 70%, transparent);
 }

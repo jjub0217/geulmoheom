@@ -22,7 +22,15 @@ const 대사읽을시간 = 800;
 const 나침반멈춤시간 = 200;
 /** 등장·이동·도착 반짝임을 모두 담는 시간. */
 const 나침반연출시간 = 1_200;
-const 움직임줄인나침반시간 = 220;
+/**
+ * ⛔ **움직임을 줄이면 이 위의 시간들을 하나도 안 쓴다** (2026-09-23 사용자 지시).
+ * 종전에는 움직임을 줄여도 **단계마다 기다렸다** — 서사 뒤 600ms, 나침반 앞뒤로 600+200+220ms,
+ * 말풍선 뒤 800ms. 첫 튜토리얼에서 **2,420ms**, 본편에서 **1,400ms** 였다(계산·실측 일치).
+ * **글자 효과만 끄고 기다림은 그대로 둔 것**이라, 움직임에 예민한 아이가 얻는 것이 없었다.
+ * ⭐ **순서는 그대로 지킨다** — 서사 → 래서판다·말풍선 → 입력칸. 다만 각 단계는
+ * **다음 렌더로만** 넘어간다. 읽어 주는 기계가 순서대로 읽을 수 있고, 아이는 안 기다린다.
+ */
+const 움직임줄인대기 = 0;
 
 type Phase = "narrative" | "prefix" | "pause" | "compass" | "rest" | "complete";
 type Introduction = {
@@ -39,8 +47,8 @@ type Introduction = {
    * **연출이 어떻게 끝났나.** `phase` 만으로는 **「보고 끝낸 것」과 「건너뛴 것」이 구분되지 않는다** —
    * 둘 다 `complete` 다.
    *
-   * **⛔ 이 값이 필요한 이유는 검사가 아니라 사실이다.** 나침반 단계는 움직임을 줄인 환경에서
-   * **220ms 한 번**이라, 지나가고 나면 **돌았는지 아닌지를 아무도 알 수 없었다.**
+   * **⛔ 이 값이 필요한 이유는 검사가 아니라 사실이다.** 나침반 단계는 **지나가고 나면
+   * 돌았는지 아닌지를 아무도 알 수 없다** — 움직임을 줄이면 그 단계 자체를 건너뛴다.
    * 눈에 보이는 것은 하나도 더하지 않고 **사실만 남긴다** (2026-09-21 사용자 지시).
    */
   연출완료: 완료종류;
@@ -116,6 +124,8 @@ export function CompassIntroduction({
       cancelTimer();
       timer.current = setTimeout(() => { if (alive) callback(); }, delay);
     };
+    /** 읽을 틈을 주는 대기. **움직임을 줄이면 0 이다** — 단계는 남고 기다림만 없어진다. */
+    const 대기 = (ms: number) => (motion.matches ? 움직임줄인대기 : ms);
     const show = (next: Phase) => {
       phase = next;
       setState({ encounter, identity, phase, narrativeCount, count, 연출완료: "아직" });
@@ -127,13 +137,15 @@ export function CompassIntroduction({
     const beginRest = () => {
       if (motion.matches) count = letters.length;
       show("rest");
-      if (count >= letters.length) schedule(complete, 대사읽을시간);
+      if (count >= letters.length) schedule(complete, 대기(대사읽을시간));
       else schedule(advanceGuide, 대사글자간격);
     };
     const beginCompass = () => {
       count = pauseAt;
       show("compass");
-      schedule(beginRest, motion.matches ? 움직임줄인나침반시간 : 나침반연출시간);
+      // **여기는 움직임을 줄이지 않은 길에서만 온다** — 줄이면 `beginGuide` 와
+      // `motionChanged` 가 둘 다 `beginRest` 로 바로 간다.
+      schedule(beginRest, 나침반연출시간);
     };
     const pointCompass = () => {
       count = pauseAt;
@@ -157,10 +169,16 @@ export function CompassIntroduction({
         beginRest();
         return;
       }
-      count = motion.matches ? pauseAt : 0;
+      // ⛔ **움직임을 줄이면 `prefix` 를 안 거친다.** 그 단계는 **말풍선의 앞부분만**
+      // 보여 주는 자리인데, 사용자가 정한 순서는 **「완성된 말풍선」**이다.
+      // 나침반은 `phase !== "narrative"` 면 보이므로(`game-console.tsx`) 여기서 잃지 않는다.
+      if (motion.matches) {
+        beginRest();
+        return;
+      }
+      count = 0;
       show("prefix");
-      if (motion.matches) schedule(pointCompass, 상황읽을시간);
-      else schedule(advanceGuide, 대사글자간격);
+      schedule(advanceGuide, 대사글자간격);
     };
     const advanceNarrative = () => {
       narrativeCount += 1;
@@ -186,7 +204,7 @@ export function CompassIntroduction({
         completedEncounter.current = null;
         narrativeCount = motion.matches ? narrative.length : 0;
         show("narrative");
-        if (motion.matches || narrative.length === 0) schedule(beginGuide, 상황읽을시간);
+        if (motion.matches || narrative.length === 0) schedule(beginGuide, 대기(상황읽을시간));
         else schedule(advanceNarrative, 상황글자간격);
       }
     }, 0);
@@ -197,17 +215,13 @@ export function CompassIntroduction({
       if (phase === "narrative") {
         narrativeCount = narrative.length;
         show("narrative");
-        schedule(beginGuide, 상황읽을시간);
-      } else if (phase === "prefix") {
-        count = pauseAt;
-        show("prefix");
-        schedule(pointCompass, 나침반멈춤시간);
-      } else if (phase === "pause" || phase === "compass") {
+        schedule(beginGuide, 움직임줄인대기);
+      } else if (phase === "prefix" || phase === "pause" || phase === "compass") {
         beginRest();
       } else if (phase === "rest") {
         count = letters.length;
         show("rest");
-        schedule(complete, 대사읽을시간);
+        schedule(complete, 움직임줄인대기);
       }
     };
     motion.addEventListener("change", motionChanged);
@@ -239,5 +253,63 @@ export function CompassIntroduction({
     }}>
       {children}
     </IntroductionContext>
+  );
+}
+
+/**
+ * ## ⛔ 글자가 찍히는 동안에는 무대 어디를 눌러도 건너뛴다 (2026-09-23 사용자 확정 · ⑥ㄴ)
+ *
+ * **건너뛰는 기능은 이미 있었다** — 장면 글(`scene-card.tsx`)과 말풍선(`guide.tsx`)이
+ * `role="button"` 으로 서 있고 `prefers-reduced-motion` 에서는 연출이 통째로 사라진다
+ * (실측 6.36초 → 0.81초). **없던 것은 「누르면 된다」를 아이가 아는 길**이다.
+ *
+ * **⛔ 문장을 더하지 않고 푼다** (사용자 확정 — 갈래 ㄴ). 방법 셋을 겹친다.
+ * ① **누를 수 있는 자리를 무대 전체로 넓힌다** — 여기가 그 하나다. 만 10세는
+ *    글자를 정확히 겨누기보다 **아무 데나 누른다**
+ * ② 손 모양 커서 — `pressable` 이 이미 준다(마우스 기기에만 먹는다)
+ * ③ 찍히는 동안 **장면 판의 테두리가 보인다** — `game-stage.css`. **터치 기기에서
+ *    유일하게 먹는 단서**다
+ *
+ * **⚠ 이것으로 충분한지는 아직 모른다.** 커서는 태블릿에 없고 테두리는 「살아 있다」까지만
+ * 말한다. **아동 3명 회차에서 아이가 실제로 누르는지 보고**, 안 누르면 그때 말(갈래 ㄱ)로 간다.
+ *
+ * **⛔ 연출 길이(3.90초)는 안 건드렸다** — 그건 따로 판단할 것이다.
+ *
+ * **⛔ 읽어 주는 기계에는 새 버튼을 만들지 않는다** — 장면 글과 말풍선이 이미 그 이름으로
+ * 서 있고, 여기에 또 버튼을 두면 **같은 일을 하는 것이 셋**이 된다. 그래서 `role` 도
+ * `tabIndex` 도 안 준다. **마우스·손가락 전용 지름길**이다.
+ *
+ * **⛔ 이름만 영문이다** — `react-hooks/rules-of-hooks` 가 **컴포넌트를 첫 글자 대문자로**
+ * 검사하는데 **한글에는 대문자가 없다.** 한글 이름을 쓰면 이 안에서 훅을 아예 못 쓴다
+ * (`web/CLAUDE.md` 「이 패키지의 관례」 — 규칙의 예외가 아니라 도구의 제약이다).
+ */
+export function SkippableStage({ className, children, ...rest }: {
+  className?: string;
+  children: ReactNode;
+} & Record<string, unknown>) {
+  const introduction = useCompassIntroduction();
+  const 찍는중 = introduction != null && introduction.phase !== "complete";
+  /**
+   * ## ⛔ 안쪽이 이미 받은 누름은 여기서 또 세지 않는다 (2026-09-23 검사가 잡았다)
+   *
+   * 장면 글과 말풍선은 **이미 `role="button"` 으로 자기 누름을 받는다.** 그 위에 무대가
+   * 같은 일을 얹으니 **한 번 누른 것이 위로 타고 올라와 두 번** 세어졌고,
+   * **차례를 하나 건너뛰던 것이 둘을 건너뛰었다.**
+   * (`compass-intro.spec.ts` 「현재 차례를 마쳐도 다음 차례를 건너뛰지 않는다」)
+   *
+   * ⭐ **누른 자리가 이미 버튼이면 무대는 가만히 있는다.** 무대가 받는 것은
+   * **글자도 말풍선도 아닌 빈자리**를 눌렀을 때뿐이다 — 그게 이 지름길의 목적이다.
+   */
+  const 무대가받나 = (event: { target: unknown }) =>
+    !(event.target instanceof Element) || event.target.closest('[role="button"]') === null;
+  return (
+    <div
+      className={className}
+      data-건너뛸수있나={찍는중 ? "" : undefined}
+      onClick={찍는중 ? (event) => { if (무대가받나(event)) introduction.advance(); } : undefined}
+      {...rest}
+    >
+      {children}
+    </div>
   );
 }

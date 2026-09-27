@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type { components, paths } from "../src/api/types.gen";
 // **문장을 베껴 적지 않는다** — 2026-09-20 에 바뀐 문구를 이 줄만 안 따라와 깨져 있었다.
 import { 버튼 } from "../src/app/copy";
-import { 챕터보내는중라벨 } from "../src/components/chapter-writing";
+import { 챕터보내기라벨 } from "../src/components/chapter-writing";
 
 type Chapter = paths["/api/v1/chapters/current"]["get"]["responses"][200]["content"]["application/json"];
 type Turn = paths["/api/v1/turns"]["post"]["responses"][200]["content"]["application/json"];
@@ -125,6 +125,31 @@ async function bookRoundTrip(page: Page, destination: "/" | "/chapter") {
   await expect.poll(() => new URL(page.url()).pathname).toBe(destination);
 }
 
+/**
+ * **한 턴이 세 단계다** (2026-09-22 사용자 지시 · `문구.md` **1.18d**).
+ *
+ * 글을 보내면 **결과**가 먼저 서고, **아이가 눌러야** 새 장면이 열리고, 한 번 더 눌러야
+ * **다음 글쓰기 칸**이 열린다. 그래서 **글을 보낸 직후에는 새 서사가 화면에 없다** —
+ * 이 파일이 09-21 에서 멈춰 있어 그 사실을 몰랐고, 검사 열 개가 그래서 빨갰다.
+ *
+ * **⛔ 단계를 넘기는 것은 제출이 아니다.** 부르는 쪽이 `POST /turns` 개수를 넘겨주면
+ * **여기를 지나도 그 수가 그대로인지** 확인한다 — 버튼 두 번에 글이 다시 나가면
+ * 아이 글이 두 번 저장되고 턴도 두 번 는다.
+ */
+async function 다음글쓰기까지(page: Page, 제출수?: () => number) {
+  const 보낸수 = 제출수?.();
+  // ① 결과 — 아이가 쓴 글이 중심이고 입력칸은 없다.
+  await expect(page.locator("[data-쓴문장]")).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  // ② 글쓰기 — 새 서사가 쓰이고, 다 쓰이면 입력칸이 열린다.
+  // ⛔ **중간 버튼이 없다** (2026-09-22). 누르면 바로 글쓰기 단계이고, 입력칸은
+  // **서사 연출이 끝나야** 나온다 — 그래서 나타날 때까지 기다린다.
+  await page.locator("[data-그다음이야기]").click();
+  await expect(page.locator("[data-쓴문장]")).toHaveCount(0);
+  await expect(page.getByRole("textbox")).toBeVisible({ timeout: 20_000 });
+  if (제출수) expect(제출수()).toBe(보낸수);
+}
+
 async function submitCard(page: Page, text = original) {
   await page.getByRole("textbox").fill(text);
   await page.locator(".writing-actions button").click();
@@ -138,14 +163,19 @@ test("본편에서 책을 두 번 다녀와도 같은 장면과 최신 초안을
   await expect(page.getByText(chapter.narrative!, { exact: true })).toBeVisible();
   const draft = "매듭을 천천히 풀면서 배가 어디로 가는지 물어본다.";
   await page.getByRole("textbox").fill(draft);
-  const reads = api.count("/api/v1/chapters/current");
+  // **본편 화면이 장면을 다시 부르는지**를 잰다. 책 화면은 자기 몫으로 한 번 더 부르는데
+  // (아래에서 따로 센다) 그것까지 합치면 **무엇을 재는지가 흐려진다.**
+  const reads = api.countFrom("/api/v1/chapters/current", "/chapter");
   await bookRoundTrip(page, "/chapter");
   await expect(page.getByRole("textbox")).toHaveValue(draft);
   await expect(page.getByText(chapter.guide!.line, { exact: true })).toBeVisible();
   await page.getByRole("textbox").fill(`${draft}\n작은 종소리에도 귀를 기울인다.`);
   await bookRoundTrip(page, "/chapter");
   await expect(page.getByRole("textbox")).toHaveValue(`${draft}\n작은 종소리에도 귀를 기울인다.`);
-  expect(api.count("/api/v1/chapters/current")).toBe(reads);
+  expect(api.countFrom("/api/v1/chapters/current", "/chapter")).toBe(reads);
+  // **책 화면은 한 번 열 때 한 번만 묻는다** — 「본편을 쓰는 중」인지에 따라 안내 문장이
+  // 갈리기 때문이다(`book/page.tsx`). 두 번 다녀왔으니 두 번이다.
+  expect(api.countFrom("/api/v1/chapters/current", "/book")).toBe(2);
   expect(api.posts("/api/v1/turns")).toEqual([]);
   expect(api.posts("/api/v1/chapters")).toEqual([]);
   const stored = await page.evaluate(() => [...Object.values(localStorage), ...Object.values(sessionStorage)].join(" "));
@@ -164,7 +194,7 @@ test("본편 되묻기를 책 왕복 뒤에도 읽고 새 턴으로 진행한 �
   await page.getByRole("textbox").fill(original);
   await page.locator(".writing-actions button").click();
   await expect(page.getByText(question, { exact: true })).toBeVisible();
-  const reads = api.count("/api/v1/chapters/current");
+  const reads = api.countFrom("/api/v1/chapters/current", "/chapter");
   await bookRoundTrip(page, "/chapter");
   await expect(page.getByText(question, { exact: true })).toBeVisible();
   await expect(page.getByText(chapter.narrative!, { exact: true })).toBeVisible();
@@ -173,11 +203,14 @@ test("본편 되묻기를 책 왕복 뒤에도 읽고 새 턴으로 진행한 �
   api.turn = async () => ({ status: 200, json: nextTurn });
   await page.getByRole("textbox").fill(revised);
   await page.locator(".writing-actions button").click();
+  // **진행했으므로 단계가 넘어간다.** 되묻기와 갈리는 자리가 여기다.
+  await 다음글쓰기까지(page, () => api.posts("/api/v1/turns").length);
   await expect(page.getByText(nextTurn.narrative!, { exact: true })).toBeVisible();
   await bookRoundTrip(page, "/chapter");
+  // **책을 다녀와도 지금 단계 그대로다** — 글쓰기 칸이 열려 있고 서사가 남아 있다.
   await expect(page.getByText(nextTurn.narrative!, { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveValue("");
-  expect(api.count("/api/v1/chapters/current")).toBe(reads);
+  expect(api.countFrom("/api/v1/chapters/current", "/chapter")).toBe(reads);
   expect(api.posts("/api/v1/turns")).toEqual([
     { chapter_id: chapter.chapter_id, text: original }, { chapter_id: chapter.chapter_id, text: revised },
   ]);
@@ -254,17 +287,29 @@ for (const path of ["/chapter", "/"] as const) {
       await expect(page.getByRole("textbox")).toHaveAttribute("readonly", "");
       await expect(page.getByRole("textbox")).toHaveValue(original);
       await expect(page.locator(".writing-actions button")).toBeDisabled();
-      await expect(page.locator(".writing-actions button")).toHaveText(path === "/chapter" ? 챕터보내는중라벨 : 버튼.그림준비중);
+      // **⛔ 2026-09-23 에 기대가 바뀌었다** (사용자 지시 · `문구.md` 2.5).
+      // 종전에는 **버튼 글자가 「이야기를 잇는 중…」·「그림을 준비하는 중…」으로 갈리는 것**을
+      // 확인했다. 그런데 **같은 순간 다른 자리가 이미 진행 상태를 말하고 있었고**, 문서 2.5 가
+      // **「진행 중 문구가 두 군데 겹치지 않도록 한다」**고 적어 둔 그 자리였다.
+      // **약해지지 않았다** — 글자가 그대로인 것 · 잠긴 것 · **읽어 주는 기계에 처리 중이
+      // 전달되는 것(`aria-busy`)** 셋을 본다. 종전은 앞의 둘만 봤다.
+      await expect(page.locator(".writing-actions button"))
+        .toHaveText(path === "/chapter" ? 챕터보내기라벨 : 버튼.그림으로보기);
+      await expect(page.locator(".writing-actions button")).toHaveAttribute("aria-busy", "true");
       // aria-disabled인 링크는 기본 탐색이 남을 수 있다. 실제 포인터 클릭도 막혀야 한다.
       await link.click({ force: true });
       await expect.poll(() => new URL(page.url()).pathname).toBe(path);
-      expect(api.count("/api/v1/book")).toBe(0);
+      // **책 화면이 안 열렸다는 뜻**이다. 본편 화면도 `/book` 을 한 번 읽는데
+      // (「내 책 펼치기」를 그릴지 정하려고) **그건 이 화면의 몫**이라 섞어 세지 않는다.
+      expect(api.countFrom("/api/v1/book", "/book")).toBe(0);
       expect(api.posts(path === "/chapter" ? "/api/v1/turns" : "/api/v1/attempts")).toHaveLength(1);
     } finally {
       release();
     }
-    if (path === "/chapter") await expect(page.getByText(nextTurn.narrative!, { exact: true })).toBeVisible();
-    else await expect(page.locator("[data-쓴문장]")).toHaveText(original);
+    if (path === "/chapter") {
+      await 다음글쓰기까지(page, () => api.posts("/api/v1/turns").length);
+      await expect(page.getByText(nextTurn.narrative!, { exact: true })).toBeVisible();
+    } else await expect(page.locator("[data-쓴문장]")).toHaveText(original);
     await expect(page.locator("a.book-link:visible")).not.toHaveAttribute("aria-disabled", "true");
   });
 }
@@ -281,11 +326,11 @@ for (const kind of ["chapter_done", "TURN_LIMIT", "CHAPTER_DONE_TODAY"] as const
     await page.getByRole("textbox").fill(original);
     await page.locator(".writing-actions button").click();
     await expect(page.locator(".chapter-ending")).toContainText(line);
-    const reads = api.count("/api/v1/chapters/current");
+    const reads = api.countFrom("/api/v1/chapters/current", "/chapter");
     await bookRoundTrip(page, "/chapter");
     await expect(page.locator(".chapter-ending")).toContainText(line);
     await expect(page.getByRole("textbox")).toHaveCount(0);
-    expect(api.count("/api/v1/chapters/current")).toBe(reads);
+    expect(api.countFrom("/api/v1/chapters/current", "/chapter")).toBe(reads);
     expect(api.posts("/api/v1/turns")).toHaveLength(1);
     expect(api.posts("/api/v1/chapters")).toEqual([]);
   });
@@ -329,7 +374,7 @@ for (const path of ["/chapter", "/"] as const) {
     await page.goto(path);
     await page.getByRole("textbox").fill(original);
     await bookRoundTrip(page, path);
-    const reads = api.count(path === "/chapter" ? "/api/v1/chapters/current" : "/api/v1/cards/next");
+    const reads = api.countFrom(path === "/chapter" ? "/api/v1/chapters/current" : "/api/v1/cards/next", path);
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const respond = path === "/chapter" ? api.turn : api.attempt;
@@ -348,6 +393,7 @@ for (const path of ["/chapter", "/"] as const) {
       expect(api.posts(path === "/chapter" ? "/api/v1/turns" : "/api/v1/attempts")).toHaveLength(1);
       release();
       if (path === "/chapter") {
+        await 다음글쓰기까지(page, () => api.posts("/api/v1/turns").length);
         await expect(page.getByText(nextTurn.narrative!, { exact: true })).toBeVisible();
         await expect(page.getByRole("textbox")).not.toHaveAttribute("readonly", "");
         await expect(page.getByRole("textbox")).toHaveValue("");
@@ -356,7 +402,7 @@ for (const path of ["/chapter", "/"] as const) {
         await expect(page.locator("[data-다시써보기]")).toBeVisible();
       }
       expect(api.posts(path === "/chapter" ? "/api/v1/turns" : "/api/v1/attempts")).toHaveLength(1);
-      expect(api.count(path === "/chapter" ? "/api/v1/chapters/current" : "/api/v1/cards/next")).toBe(reads);
+      expect(api.countFrom(path === "/chapter" ? "/api/v1/chapters/current" : "/api/v1/cards/next", path)).toBe(reads);
     } finally {
       release();
     }
@@ -397,7 +443,7 @@ test("책을 보는 동안 아이가 바뀌면 새 아이 장면을 읽고 이�
   await page.goto("/chapter");
   await page.getByRole("textbox").fill(original);
   await bookRoundTrip(page, "/chapter");
-  const reads = api.count("/api/v1/chapters/current");
+  const reads = api.countFrom("/api/v1/chapters/current", "/chapter");
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   api.turn = async () => { await gate; return { status: 200, json: nextTurn }; };
@@ -419,7 +465,8 @@ test("책을 보는 동안 아이가 바뀌면 새 아이 장면을 읽고 이�
     await expect(page.getByText(anotherChapter.narrative, { exact: true })).toBeVisible();
     await expect(page.getByRole("textbox")).toHaveValue("");
     await expect(page.getByRole("textbox")).not.toHaveAttribute("readonly", "");
-    expect(api.count("/api/v1/chapters/current")).toBe(reads + 1);
+    // **새 아이의 장면을 한 번 읽는다.** 앞 아이의 것을 그대로 쓰지 않는다는 뜻이다.
+    expect(api.countFrom("/api/v1/chapters/current", "/chapter")).toBe(reads + 1);
 
     const oldResponse = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/turns");
     release();
@@ -463,7 +510,8 @@ test("책을 열지 않은 화면 복귀도 아이 확인 전에는 옛 카드�
     await expect(page.getByRole("textbox")).toHaveValue("");
     await expect(page.getByText(card.situation, { exact: true })).toHaveCount(0);
     expect(api.count("/api/v1/cards/next")).toBe(cardsRead + 1);
-    expect(api.count("/api/v1/book")).toBe(0);
+    // **책 화면은 한 번도 안 열렸다.** 본편 화면이 자기 몫으로 읽은 `/book` 은 여기 안 섞는다.
+    expect(api.countFrom("/api/v1/book", "/book")).toBe(0);
     expect(api.posts("/api/v1/attempts")).toEqual([]);
     expect(api.posts("/api/v1/turns")).toEqual([]);
   } finally {
@@ -488,6 +536,13 @@ test("처음 본편을 여는 요청 중 뒤로 갔다 앞으로 와도 새로 �
     await expect(page.getByText(card.situation, { exact: true })).toBeVisible();
     await expect(page.getByRole("textbox")).toBeVisible();
     // 홈 모험문의 별도 조회와 구분해 본편 진입에서 보낸 요청만 센다.
+    //
+    // ⛔ **모험문이 다시 서면 자기 몫으로 장면을 한 번 묻는다. 그 요청이 끝날 때까지
+    // 기다린 뒤에 앞으로 간다** (2026-09-22 실측). 안 기다리면 **그 읽기가 다음 화면
+    // 것으로 세어져** 같은 검사가 회차마다 1 과 3 을 오갔다 — 세 번 돌려서 확인했다.
+    // **제품이 흔들린 것이 아니라 세는 자리가 흔들린 것**이다: 총수는 늘 같았다.
+    await expect(page.locator("[data-모험문버튼]")).toBeVisible();
+    await expect.poll(() => api.countFrom("/api/v1/chapters/current", "/")).toBe(2);
     await page.goForward();
     await expect(page).toHaveURL(/\/chapter$/);
     await expect(page.locator(".chapter-status")).toBeVisible();
@@ -499,6 +554,7 @@ test("처음 본편을 여는 요청 중 뒤로 갔다 앞으로 와도 새로 �
     expect(api.posts("/api/v1/chapters")).toEqual([{}]);
     await page.getByRole("textbox").fill(original);
     await page.locator(".writing-actions button").click();
+    await 다음글쓰기까지(page, () => api.posts("/api/v1/turns").length);
     await expect(page.getByText(nextTurn.narrative!, { exact: true })).toBeVisible();
     await expect(page.getByRole("textbox")).toHaveValue("");
     expect(api.posts("/api/v1/turns")).toEqual([{ chapter_id: chapter.chapter_id, text: original }]);

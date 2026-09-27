@@ -135,7 +135,9 @@
     gap: 0.75rem;
   }
 
-  .attempt-label label {
+  /* **보이는 제목의 글자**. 2026-09-24 에 `label` → `.attempt-label-text` 로 옮겼다 —
+     읽어 주는 기계용 `<label>` 은 **행 밖**으로 나가서 이 규칙이 닿지 않는다. */
+  .attempt-label-text {
     font-size: 1.125rem;
     font-weight: 600;
   }

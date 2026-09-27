@@ -41,15 +41,39 @@
   box-shadow: 0 3px 10px rgb(55 36 19 / 18%);
 }
 
+/* ## ⛔ 방패와 그 위의 글자는 브라우저 폭을 따라 같이 자란다 (2026-09-24 사용자 지시)
+ *
+ * 종전에는 **어디서나 136×72 로 고정**이었다. 그래서 **좁은 화면에서는 크고 넓은 화면에서는
+ * 작았다** — 320 에서 결과 화면 액자 폭이 216px 인데 방패가 136px 이라 **그림의 63%** 를
+ * 덮었고, 2048 에서는 같은 방패가 화면에 파묻혔다.
+ *
+ * ⭐ **폭 하나로 셋을 묶는다** — 방패 폭이 정해지면 **높이는 136:72 비율로**, **글자는
+ * 136px 일 때 16px 이던 비율로** 따라온다. 셋이 따로 놀면 **글자만 크거나 방패만 큰** 상태가 난다.
+ *
+ * ⛔ **아래로는 5.3rem(84.8px) 에서 멈춘다** — 거기서 높이가 44.9px 이라 **손가락으로
+ * 누르는 최소 크기 44px** 에 닿는다. 이건 눌러서 설명을 여는 버튼이다. 더 줄일 수 없다.
+ * ⛔ **위로는 7rem(112px) 에서 멈춘다** — 원본 도안은 136px 이지만 **거기까지 키우면
+ * 그림 대비 너무 커진다**(2026-09-24 사용자 지시 — 넓이 비율로 잣대를 받았다).
+ * ⛔ **글자는 0.875rem 밑으로 안 내려간다** — 방패가 가장 작을 때 비율대로면 12.2px 인데,
+ * 만 10~12세가 읽는 글자로 너무 작다. **방패는 더 줄어도 글자는 거기서 버틴다.** */
 .tier-badge.tier-badge-crest {
+  /* ## 잣대는 「그림에서 뱃지가 차지하는 넓이」다 (2026-09-24 사용자 지시)
+     320 → 10~11% · 390 → 5~6% · 1024 → 5~6% · 1280 → 3~4%.
+     **폭이 아니라 넓이로 받은 이유**는 뱃지가 그림 위에 얹히기 때문이다 — 같은 84px 이라도
+     그림이 216px 일 때와 560px 일 때 **덮는 느낌이 다르다.**
+     그래서 **뱃지 폭을 화면 폭에 이어 놓고**, 그 결과 넓이가 위 범위에 들어오는지를 잰다. */
+  --tier-badge-width: clamp(5.3rem, 4.6rem + 3vw, 7rem);
   position: relative;
   display: inline-grid;
   flex: none;
   place-items: center;
   isolation: isolate;
-  width: 8.5rem;
+  width: var(--tier-badge-width);
   max-width: 100%;
-  height: 4.5rem;
+  /* ⛔ **누르는 높이는 44px 밑으로 안 내려간다** (2026-09-24). 방패가 그보다 작아지면
+     **방패만 작아지고 누르는 상자는 44px 로 남는다** — 아래 `.tier-badge-ornament` 가
+     제 비율을 지키며 가운데 선다. 손끝 기준과 보이는 크기를 갈라 놓은 것이다. */
+  height: max(2.75rem, calc(var(--tier-badge-width) * 72 / 136));
   min-height: 0;
   padding: 0;
   border: 0;
@@ -57,7 +81,14 @@
   background: transparent;
   color: var(--tier-ink);
   box-shadow: none;
-  font-size: 1rem;
+  /* ## ⛔ 글자는 방패 안쪽 칸에 맞춘다 (2026-09-24 실측으로 잡았다)
+     방패 도안의 **안쪽 파란 칸은 폭의 0.617 배**다(viewBox 136 중 26~110). 이름이 가장 긴
+     **「탐험가」 세 글자**가 그 칸에 들어가려면 **글자 크기 ≤ 폭의 0.22 배**여야 한다. 0.21 은 거기에 여유를 한 칸 더 둔 값이다 —
+     320 에서 방패가 60px 일 때 14px 로 두었더니 **글자 38px · 안쪽 칸 37px 로 1px 넘쳤다.**
+     ⛔ **1px 은 통과가 아니라 아슬아슬이다**(`프리테스트_결과_2026-09-14.md` 130행).
+     ⭐ **위는 0.875rem 에서 멈춘다** — 방패가 64px 만 넘으면 거기서 걸리므로,
+     **거의 모든 폭에서 14px 그대로**이고 가장 좁은 화면에서만 13.2px 로 내려간다. */
+  font-size: clamp(0.8125rem, calc(var(--tier-badge-width) * 0.21), 0.875rem);
   font-weight: 700;
   line-height: 1.25;
   text-align: center;
@@ -69,12 +100,15 @@
 
 .tier-badge.tier-badge-crest > .tier-badge-ornament {
   position: absolute;
-  inset: 0;
+  /* ⛔ **상자를 꽉 채우지 않는다** — 누르는 상자가 44px 로 버틸 때 방패까지 늘어나면
+     **136:72 가 찌그러진다.** 방패는 제 비율대로 서고 상자 가운데에 놓인다. */
+  inset: 50% 0 auto 0;
   z-index: -1;
   display: block;
   width: 100%;
-  height: 100%;
+  height: calc(var(--tier-badge-width) * 72 / 136);
   overflow: visible;
+  transform: translateY(-50%);
   pointer-events: none;
   filter: drop-shadow(0 1px 1px rgb(55 36 19 / 24%));
 }

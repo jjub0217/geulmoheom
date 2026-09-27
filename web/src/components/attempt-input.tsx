@@ -58,9 +58,11 @@ export function AttemptInput({
   onSend,
   보낼수있나,
   보내기라벨,
+  보내는중 = false,
   안내글,
   disabled = false,
   showCompass = true,
+  제목보임 = false,
   이어쓰기신호,
 }: {
   label: string;
@@ -74,6 +76,19 @@ export function AttemptInput({
   /** `문구.md` 2.2. **여기서 짓지 않는다** — 부모가 상수를 넘긴다. */
   보내기라벨: string;
   /**
+   * **보내는 중인가** (2026-09-23 사용자 지시 — 진행 상태를 두 곳에서 말하지 않는다).
+   *
+   * **⛔ 버튼 글자를 바꾸지 않는다.** 종전에는 부르는 쪽이 `보내기라벨` 자체를
+   * **「그림을 준비하는 중…」·「이야기를 잇는 중…」**으로 갈아 끼웠는데, **같은 순간
+   * 다른 자리가 이미 진행 상태를 말하고 있었다**(`StoryReading`). 한 화면이 같은 일을
+   * 두 번 설명했고, **카드 화면에서는 둘이 서로 다른 단계**를 말했다.
+   *
+   * **⛔ 프론트는 서버가 지금 어느 단계인지 모른다.** `POST /attempts`·`POST /turns` 는
+   * **요청 하나**다 — 읽는 중·평가 중·이야기 만드는 중·그림 굽는 중을 **가를 방법이 없다.**
+   * 그래서 **버튼은 원래 행동 글자를 그대로** 두고 **돌아가는 표시와 잠금**만 더한다.
+   */
+  보내는중?: boolean;
+  /**
    * 빈 칸에 뜨는 안내 (`문구.md` 1.18 「어떻게 할지 자세히 말해줘!」).
    *
    * **⛔ 여기서 짓지 않는다** — 부모가 상수를 넘긴다. **Stage 0 카드 화면은 안 넘긴다**:
@@ -84,6 +99,16 @@ export function AttemptInput({
   disabled?: boolean;
   /** 게임 무대에서는 입력창이 열리기 전에 상위 대화창이 나침반을 소개한다. */
   showCompass?: boolean;
+  /**
+   * **쓰는 칸의 이름을 화면에도 보일까** (2026-09-24 사용자 지시).
+   *
+   * **⛔ 지금은 어느 화면도 참이 아니다.** `문구.md` **1.18** 이 2026-09-22 에
+   * **「묻는 것은 래서판다 하나」**로 정해 다섯 글쓰기 화면 모두 이름을 감췄다.
+   * **그래도 값을 두는 이유**는 아래 제목 행이 **「보이는 것이 있을 때만」** 그려지는데,
+   * 그 조건이 **나침반 하나에만 걸려 있으면 뜻이 좁아지기 때문**이다.
+   * 보이는 제목이 다시 필요해지는 날 **이 값을 참으로 주면 행이 제자리를 찾는다.**
+   */
+  제목보임?: boolean;
   /**
    * **값이 바뀌면 입력칸에 초점을 주고 커서를 글 맨 뒤에 놓는다.** 되묻기가 왔을 때 쓴다.
    *
@@ -179,13 +204,37 @@ export function AttemptInput({
 
           **잃는 것 — 「차오른다 → 누른다」 짝.** 「보내기」 옆에 둬서 정체를 읽히게 했던 것인데,
           **이제 대사가 그 일을 말로 한다.** 자리로 설명하던 것을 문장이 대신하므로 짝을 놓아준다. */}
-      <div className="attempt-label">
-        <label htmlFor="attempt">
-          {label}
-        </label>
-        {/* 길이는 **가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
-        {showCompass && <CompassGlow length={value.length} introducing={introduction?.phase === "compass"} />}
-      </div>
+      {/* ⛔ **제목이 화면에서 안 보인다** (2026-09-22 사용자 지시 · `문구.md` 1.18).
+          래서판다가 바로 위에서 **같은 질문**을 하는데 이 제목이 그것을 되풀이했다 —
+          **묻는 것은 래서판다 하나**다.
+          ⛔ **라벨 자체를 없애지 않는다.** 화면을 못 보는 아이에게는 **쓰는 칸에 이름이
+          있어야** 하고, `htmlFor` 로 이어져 있어 읽어 주는 기계가 이 문장을 읽는다.
+          ⭐ **`sr-only` 는 이 저장소가 이미 쓰는 방법**이다(본편의 단계 알림 줄).
+
+          ## ⛔ 2026-09-24 에 이 줄을 제목 행 밖으로 꺼냈다 (사용자 지시)
+
+          **행 안에 두면 행이 남는다.** 읽어 주는 기계에만 남긴 이름인데 화면에서는
+          **빈 줄 하나**가 됐다 — 튜토리얼 세 화면에서 **라벨 24px + 뒤 간격 8px = 32px**
+          (모바일 30px)이 입력칸 위에 떠 있었다(2026-09-24 실측).
+          **본편은 `.chapter-console` 전용 `:has()` 규칙으로 그 행을 접고 있었고,
+          튜토리얼(`.game-console`)에는 그 규칙이 없어 둘이 갈렸다.**
+
+          ⭐ **화면별 CSS 로 가리지 않고 구조로 푼다** — 이름은 **행 밖**에 두고,
+          **행은 보이는 것이 있을 때만** 그린다. `sr-only` 는 `position: absolute` 라
+          **흐름 밖**이므로(실측) 여기서 부모의 간격을 만들지 않는다.
+          ⛔ **`display: none` 으로 만들지 않았다** — 그러면 읽어 주는 기계에서도 사라진다. */}
+      <label htmlFor="attempt" className="sr-only">
+        {label}
+      </label>
+      {/* **보이는 것이 하나라도 있을 때만 제목 행을 그린다.** 지금 화면에 서는 것은
+          나침반뿐이고, 보이는 제목이 다시 필요해지면 `제목보임` 이 그 자리를 연다. */}
+      {(제목보임 || showCompass) && (
+        <div className="attempt-label">
+          {제목보임 && <span className="attempt-label-text">{label}</span>}
+          {/* 길이는 **가린 뒤 문장 기준**이다 — 화면·로그·책이 같은 문자열을 센다. */}
+          {showCompass && <CompassGlow length={value.length} introducing={introduction?.phase === "compass"} />}
+        </div>
+      )}
       <div
         className="writing-surface"
       >
@@ -238,9 +287,11 @@ export function AttemptInput({
           <button
             type="button"
             disabled={!보낼수있나}
+            aria-busy={보내는중}
             onClick={onSend}
             className="pressable action-primary"
           >
+            {보내는중 && <span className="leave-spinner" aria-hidden="true" />}
             {보내기라벨}
           </button>
         </div>

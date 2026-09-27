@@ -41,6 +41,7 @@ export function GuideFigure({
   messageRef,
   messageClassName = "",
   figureData,
+  말풍선없이 = false,
 }: {
   guide: Guide;
   stage?: boolean;
@@ -56,6 +57,18 @@ export function GuideFigure({
    * 평시 갈래는 이 컴포넌트를 쓰면서 표식을 잃었다 — **검사 24건이 그 요소를 못 찾았다.**
    */
   figureData?: Record<string, string | undefined>;
+  /**
+   * **말풍선을 안 그린다. 캐릭터와 나침반만 남는다** (2026-09-22 사용자 지시).
+   *
+   * **⛔ 빈 대사를 넘겨서 지우지 않는다.** 그러면 **빈 말풍선이 그대로 서고**,
+   * 화면을 읽어 주는 기계는 **말이 없는 말풍선을 읽으려고 한다.**
+   *
+   * **쓰는 자리 둘** — ① **같은 소개를 두 번째부터 안 되풀이할 때**(나침반 소개)
+   * ② **결과 단계에서 한 말을 글쓰기 단계가 그대로 들고 서 있을 때.**
+   * 둘 다 **말이 틀린 것이 아니라 그 자리에서 할 말이 아닌 것**이라, 대사를
+   * 새로 짓지 않고 **자리를 비운다.**
+   */
+  말풍선없이?: boolean;
 }) {
   const introduction = useCompassIntroduction();
   const dialogue = introduction?.line === guide.line ? introduction : null;
@@ -92,6 +105,7 @@ export function GuideFigure({
       />
       {/* 서버 문장은 그대로다. 소개 중에도 전체 높이를 미리 잡아 입력창이 밀리지 않는다.
           스크린리더에는 한 글자씩 알리지 않고 처음부터 전체 문장 하나를 제공한다. */}
+      {!말풍선없이 && (
       <figcaption className="guide-line">
         {messageRef ? (
           <div ref={messageRef} className={messageClassName} tabIndex={-1}>
@@ -141,6 +155,7 @@ export function GuideFigure({
           </span>
         ) : stage ? <GuideText text={guide.line} /> : guide.line}
       </figcaption>
+      )}
       {compass}
     </figure>
   );

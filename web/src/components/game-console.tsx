@@ -5,14 +5,21 @@ import type { ReactNode } from "react";
 import { CompassArrival, CompassGlow } from "@/components/compass-glow";
 import { useCompassIntroduction } from "@/components/compass-introduction";
 
-/** 상황을 읽고 동료의 말을 들은 뒤에만 아이가 쓰는 자리를 연다. */
-export function GameConsole({ children }: { children: ReactNode }) {
+/**
+ * 상황을 읽고 동료의 말을 들은 뒤에만 아이가 쓰는 자리를 연다.
+ *
+ * **⛔ 본편도 이것을 쓴다** (2026-09-22 사용자 지시). 종전에는 본편만 **입력칸을 늘 그려서**,
+ * 서사가 한 글자씩 쓰이는 동안 **이미 입력칸이 서 있었다**(실측: 서사 10자 시점에 입력칸 있음).
+ * 지시는 **서사 → 래서판다 질문 → 입력칸** 순서다 — **튜토리얼이 이미 하던 일**이라
+ * 새 장치를 만들지 않고 이 부품을 같이 쓴다.
+ */
+export function GameConsole({ children, className = "" }: { children: ReactNode; className?: string }) {
   const introduction = useCompassIntroduction();
   const phase = introduction?.phase ?? "complete";
   const ready = phase === "complete";
 
   return (
-    <div className="game-console" data-introduction-phase={phase} hidden={!ready}>
+    <div className={`game-console${className ? ` ${className}` : ""}`} data-introduction-phase={phase} hidden={!ready}>
       <div
         className="game-response"
         data-response-visible={ready}

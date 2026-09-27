@@ -193,7 +193,9 @@ test("전송 중에는 취소·중복 전송을 막고 실패하면 머물거나
   await 모험화면(page);
   await 나가기버튼(page).click();
   const 머무는쪽 = 확인창(page).getByRole("button", { name: 나가기문구.확인.머문다 });
-  const 나가는쪽 = 확인창(page).getByRole("button", { name: 나가기문구.확인.나간다 });
+  // **⛔ 이름으로 잡지 않는다** (2026-09-23). 보내는 동안 **이 버튼의 글자 자체가
+  // 「나가는 중…」으로 바뀐다** — 이름으로 잡으면 그 순간 못 찾는다.
+  const 나가는쪽 = 확인창(page).locator("button.action-secondary");
 
   try {
     // 같은 프레임에 연달아 눌러도 응답을 기다리는 요청은 하나다.
@@ -205,7 +207,17 @@ test("전송 중에는 취소·중복 전송을 막고 실패하면 머물거나
     await expect(머무는쪽).toBeDisabled();
     await expect(나가는쪽).toBeDisabled();
     await expect(확인창(page)).toHaveAttribute("aria-busy", "true");
-    await expect(page.locator("[data-나가기대기]")).toBeVisible();
+    // **⛔ 2026-09-23 에 기대가 바뀌었다** (사용자 지시 · `문구.md` 2.3).
+    // 종전에는 **안내 아래에 밝은 상자가 하나 더**(`[data-나가기대기]`) 생기는 것을 봤다.
+    // 그 상자가 **입력칸처럼 생긴 상자를 둘로 쌓아** 무엇을 기다리는지 흐렸다.
+    // **약해지지 않았다** — 종전은 상자 하나만 봤고, 지금은 **셋**을 본다:
+    // ① 누른 버튼의 글자가 바뀐 것 ② 그 버튼에 처리 중이 표시된 것
+    // ③ **읽어 주는 기계에 전달되는 것**(보이지 않는 알림 줄).
+    await expect(나가는쪽).toHaveText(나가기문구.확인.나가는중);
+    await expect(나가는쪽).toHaveAttribute("aria-busy", "true");
+    await expect(확인창(page).locator("p.sr-only")).toHaveText(나가기문구.확인.나가는중);
+    // **새 상자를 만들지 않는다.**
+    await expect(page.locator("[data-나가기대기]")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(확인창(page)).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
@@ -217,7 +229,10 @@ test("전송 중에는 취소·중복 전송을 막고 실패하면 머물거나
     await expect(나가는쪽).toBeEnabled();
     await expect(머무는쪽).toBeFocused();
     await expect(확인창(page)).toHaveAttribute("aria-busy", "false");
-    await expect(page.locator("[data-나가기대기]")).toHaveCount(0);
+    // 실패하고 나면 **버튼 글자가 원래대로** 돌아온다.
+    await expect(나가는쪽).toHaveText(나가기문구.확인.나간다);
+    await expect(나가는쪽).toHaveAttribute("aria-busy", "false");
+    await expect(확인창(page).locator("p.sr-only")).toHaveText("");
     await page.keyboard.press("Escape");
     await expect(확인창(page)).toBeHidden();
 
@@ -275,4 +290,166 @@ test("아이 화면 금지어가 없다", async ({ page }) => {
   for (const 금지어 of ["점수", "채점", "연습", "학습", "보스", "앨범", "로그아웃"]) {
     expect(화면).not.toContain(금지어);
   }
+});
+
+// ── 보내는 동안에는 못 나간다 (2026-09-24 사용자 지시) ──────────────────────
+//
+// ## ⛔ 되돌릴 수 없는 쪽이 더 헐겁게 열려 있었다
+//
+// 같은 순간 **「내 책 펼치기」는 잠기는데**(`BookLink disabled`) **나가기는 안 잠겼다.**
+// 책으로 가는 것은 앱 안에서 되돌아올 수 있고, **나가는 것은 접속 코드를 다시 받아야** 한다.
+// **무거운 쪽이 더 열려 있던 것**이다.
+//
+// ⛔ **숨기지 않는다** — 사라졌다 나타나면 상단이 흔들리고, 아이는 나가는 길이 없어진 줄 안다.
+// ⛔ **`aria-disabled` 만으로는 안 된다** — 키보드로는 그대로 열린다. 네이티브 `disabled` 다.
+
+/** 보내기를 붙잡아 둔다. `풀기()` 를 부를 때까지 요청이 안 끝난다. */
+async function 보내는중으로만든다(page: Page, 응답: "성공" | "실패" = "성공") {
+  let 풀기!: () => void;
+  const 붙잡기 = new Promise<void>((resolve) => { 풀기 = resolve; });
+  await page.route("**/api/v1/attempts", async (route) => {
+    await 붙잡기;
+    if (응답 === "실패") return route.fulfill({ status: 503, json: { error: { code: "UPSTREAM_TIMEOUT", message: "잠깐 느려요" } } });
+    return route.fulfill({ status: 200, json: {
+      outcome: "result", attempt_id: "a1", tier: "rare",
+      guide: { expression: "compass_bright", line: "좋아!" },
+      artwork: { artwork_id: "aw1", status: "pending", url: null },
+      highlights: [], today: { cards_done: 2, cap: 5 }, can_retry: true,
+    } });
+  });
+  await page.getByRole("textbox").fill("등대 창문으로 바다를 살펴본다");
+  await page.locator(".writing-actions button").click();
+  await expect(나가기버튼(page)).toBeDisabled();
+  return 풀기;
+}
+
+test("평소에는 나가기를 눌러 확인 창을 연다", async ({ page }) => {
+  await 모험화면(page);
+
+  await expect(나가기버튼(page)).toBeVisible();
+  await expect(나가기버튼(page)).toBeEnabled();
+  await 나가기버튼(page).click();
+  await expect(확인창(page)).toBeVisible();
+});
+
+test("보내는 동안에는 나가기가 보이되 잠긴다 — 클릭·Enter·Space 가 다 막힌다", async ({ page }) => {
+  await 넘어갈길미리열기(page);
+  const 부른횟수 = await 로그아웃가로채기(page);
+  await 모험화면(page);
+  const 풀기 = await 보내는중으로만든다(page);
+
+  try {
+    // **숨지 않는다** — 자리를 지킨 채 못 누르게만 한다.
+    await expect(나가기버튼(page)).toBeVisible();
+
+    // **클릭이 안 닿는다** — `force` 로 눌러도 `disabled` 라 이벤트가 안 간다.
+    await 나가기버튼(page).click({ force: true });
+
+    // **키보드도 막힌다.** `disabled` 는 **초점을 못 받는다** — 직접 `focus()` 를 불러도
+    // 초점이 그 버튼에 안 앉고, 그래서 Enter·Space 가 이 버튼에 닿을 길이 없다.
+    const 초점이앉았나 = await 나가기버튼(page).evaluate((b: HTMLButtonElement) => {
+      b.focus();
+      return document.activeElement === b;
+    });
+    expect(초점이앉았나, "잠긴 나가기에 초점이 앉았다 — 키보드로 열린다").toBe(false);
+    await page.keyboard.press("Enter");
+    await page.keyboard.press(" ");
+
+    await expect(확인창(page)).toHaveCount(0);
+    expect(부른횟수.n).toBe(0);
+    await 안넘어갔다(page);
+  } finally {
+    풀기();
+  }
+});
+
+test("보내기가 실패해 화면에 머물면 나가기가 다시 열린다 — 쓰던 글도 남는다", async ({ page }) => {
+  await 모험화면(page);
+  const 글 = "등대 창문으로 바다를 살펴본다";
+  const 풀기 = await 보내는중으로만든다(page, "실패");
+
+  풀기();
+
+  // 요청이 끝나면 **같은 화면에 머물면서** 다시 나갈 수 있어야 한다.
+  await expect(나가기버튼(page)).toBeEnabled();
+  await expect(page.getByRole("textbox")).toHaveValue(글);
+  await 나가기버튼(page).click();
+  await expect(확인창(page)).toBeVisible();
+});
+
+test("결과 화면에서는 보내는 중이 아니므로 나가기가 열려 있다", async ({ page }) => {
+  await 모험화면(page);
+  // **삽화를 준비된 채로 준다** — `pending` 이면 화면이 **그림 대기**에 머물러
+  // 아이 글이 아직 안 나온다(2026-09-24 실측). 재려는 것은 **결과를 다 읽는 자리**다.
+  await page.route(/\/api\/v1\/artworks\//, (route) => route.fulfill({ status: 200, json: {
+    artwork_id: "aw1", status: "ready", url: "/aw.png", fallback: false,
+  } }));
+  await page.route("**/aw.png", (route) => route.fulfill({
+    status: 200, contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><rect width="240" height="240" fill="#a8bcaa"/></svg>',
+  }));
+  await page.route("**/api/v1/attempts", (route) => route.fulfill({ status: 200, json: {
+    outcome: "result", attempt_id: "a1", tier: "rare",
+    guide: { expression: "compass_bright", line: "좋아!" },
+    artwork: { artwork_id: "aw1", status: "ready", url: "/aw.png" },
+    highlights: [], today: { cards_done: 2, cap: 5 }, can_retry: true,
+  } }));
+  await page.getByRole("textbox").fill("등대 창문으로 바다를 살펴본다");
+  await page.locator(".writing-actions button").click();
+
+  await expect(page.locator("[data-쓴문장]")).toBeVisible();
+  await expect(나가기버튼(page)).toBeEnabled();
+  await 나가기버튼(page).click();
+  await expect(확인창(page)).toBeVisible();
+});
+
+/**
+ * **본편에서도 같은 값이 전달되는지** (2026-09-24 사용자 지시).
+ *
+ * 위 검사들은 **카드 화면**에서 잰다. 본편은 **다른 파일·다른 상태**(`ChapterStage` 의
+ * `보내는중`)를 거쳐 같은 부품에 닿으므로, **거기서도 실제로 닿는지**를 따로 잰다.
+ * **값 하나가 두 화면을 같이 움직이는지**가 이 검사의 전부다.
+ */
+test("본편에서도 보내는 동안 나가기가 잠기고, 실패 뒤에는 다시 열린다", async ({ page }) => {
+  const 서사 = "마을 광장에 들어서자 사람들이 모여 웅성거리고 있다.";
+  // **`beforeEach` 보다 나중에 등록한 것이 이긴다** — 본편 장면을 실제로 띄운다.
+  await page.route("**/api/v1/chapters/current", (route) => route.fulfill({ status: 200, json: {
+    chapter_id: "c-1", chapter_key: "ch01", turn: 1, beat: "intro", narrative: 서사,
+    choices: [], state: { hero: { hp: 3, items: [] }, location: "광장" }, turns_left: 9, artwork: null,
+  } }));
+  const 부른횟수 = await 로그아웃가로채기(page);
+
+  let 풀기!: () => void;
+  const 붙잡기 = new Promise<void>((resolve) => { 풀기 = resolve; });
+  await page.route("**/api/v1/turns", async (route) => {
+    await 붙잡기;
+    return route.fulfill({ status: 503, json: { error: { code: "UPSTREAM_TIMEOUT", message: "잠깐 느려요" } } });
+  });
+
+  await page.goto("/chapter");
+  await expect(page.getByRole("textbox")).toBeVisible({ timeout: 25_000 });
+
+  // ① 평소에는 열려 있다.
+  await expect(나가기버튼(page)).toBeEnabled();
+
+  const 글 = "분수로 가서 물이 왜 위로 가는지 본다";
+  await page.getByRole("textbox").fill(글);
+  await page.locator(".writing-actions button").click();
+
+  try {
+    // ② 보내는 동안 **보이되 잠긴다.**
+    await expect(나가기버튼(page)).toBeVisible();
+    await expect(나가기버튼(page)).toBeDisabled();
+
+    // ③ 눌러도 확인 창이 안 열리고 로그아웃도 안 나간다.
+    await 나가기버튼(page).click({ force: true });
+    await expect(확인창(page)).toHaveCount(0);
+    expect(부른횟수.n).toBe(0);
+  } finally {
+    풀기();
+  }
+
+  // ④ 실패해서 화면에 머물면 **다시 열리고 쓰던 글도 남는다.**
+  await expect(나가기버튼(page)).toBeEnabled();
+  await expect(page.getByRole("textbox")).toHaveValue(글);
 });

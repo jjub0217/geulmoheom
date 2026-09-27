@@ -7,8 +7,13 @@ import { ApiError, NetworkError, apiPostNoBody } from "@/lib/api";
 
 import { 나가기문구 } from "./leave-copy";
 
-// 2026-09-20 사용자 흐름 검수 · docs/문구.md 2.5.
-export const 나가기대기문구 = "나가는 중…";
+/**
+ * **⛔ 2026-09-23 에 자리를 옮겼다** (사용자 지시 · `문구.md` 2.3).
+ * 종전에는 **확인 창 안에 따로 선 문단**이었는데, 그 자리가
+ * **안내 문장 아래에 밝은 상자를 하나 더** 만들었다. 지금은 **누른 버튼의 글자**다.
+ * **값은 `나가기문구.확인.나가는중` 하나**이고 여기는 예전 이름을 잇는 별칭이다.
+ */
+export const 나가기대기문구 = 나가기문구.확인.나가는중;
 
 /**
  * 나가기 — 아이 로그아웃 (백로그 E-3 프론트 짝, `web/tasks/W4.md` 2번).
@@ -25,14 +30,48 @@ export const 나가기대기문구 = "나가는 중…";
  */
 
 /**
- * **자리는 화면 맨 아래다.** 「아이 눈에 띄는 자리에 두지 않는다」(`주차계획/W4.md`)를
- * **자리로 지킨다 — 글자를 작게 해서가 아니다.** 본문 16px 이상이 MUST 라
- * (`globals.css` 「글자」·PRD 7장 접근성) 읽을 수 없게 만드는 것은 답이 아니다.
+ * **자리는 화면 위, 아이 이름 옆이다** (2026-09-22 사용자 지시).
  *
- * 그래서 셋만 한다 — ① `<main>` 밖 맨 아래 ② 채운 버튼이 아니라 **맨 글자**
- * (「보내기」가 스카프 블루로 채워져 있어 그 옆에서 저절로 조용해진다) ③ 색을 안 준다.
+ * **⛔ 종전에는 화면 맨 아래였다. 근거를 지우지 않고 남긴다** —
+ * 「아이 눈에 띄는 자리에 두지 않는다」(`주차계획/W4.md`)를 **자리로 지킨다**는 것이었고,
+ * **글자를 작게 하는 것은 답이 아니다**(본문 16px 이상이 MUST · PRD 7장 접근성).
+ *
+ * **뒤집은 근거는 「이름과 나가는 행동을 같은 상단 영역에 둔다」**이다. 아래에 있으면
+ * **모바일에서 진행 버튼과 같은 구역을 다투고**, 실제로 결과 화면에서 잘려 보였다.
+ *
+ * **그래서 눈에 덜 띄게 하는 일은 생김새가 맡는다** — ① 채운 버튼이 아니라 **맨 글자**
+ * (`action-quiet`, 진행 버튼은 스카프 블루로 채워져 있다) ② 색을 안 준다
+ * ③ **누르면 바로 안 나가고 한 번 되묻는다.**
  */
-export function LeaveButton() {
+export function LeaveButton({ 쓰던글있나 = false, 잠금 = false }: {
+  /**
+   * **입력칸에 아직 안 보낸 글이 있나** (2026-09-22 사용자 지시 — 「작성 중인 글이 있을 때
+   * 실수로 나가지 않도록 처리」).
+   *
+   * **확인 창은 원래 늘 뜬다.** 이 값이 더하는 것은 **한 줄**이다 — 그때만 잃는 것이
+   * 하나 더 있어서다. **버튼을 잠그거나 단계를 늘리지 않는다**: 되돌릴 수 없는 것은
+   * 이미 한 번 되묻고 있고, 관문을 더 세우면 **나가는 길 자체가 어려워진다.**
+   */
+  쓰던글있나?: boolean;
+  /**
+   * **보내는 중인가** (2026-09-24 사용자 지시).
+   *
+   * ## ⛔ 왜 이 하나만 잠그나
+   *
+   * **되돌릴 수 없는 쪽이 더 헐겁게 열려 있었다.** 같은 순간 **「내 책 펼치기」는
+   * 잠기는데**(`BookLink disabled` · 본편 `bookDisabled`) **나가기는 안 잠겼다.**
+   * 책으로 가는 것은 앱 안에서 되돌아올 수 있고, **나가는 것은 접속 코드를 다시
+   * 받아야** 한다. 두 이동 중 **무거운 쪽이 더 열려 있던 것**이다.
+   *
+   * ⛔ **타자기가 도는 동안은 잠그지 않는다** — 그건 읽는 시간이지 보내는 중이 아니다.
+   * ⛔ **결과·새 장면 화면도 잠그지 않는다** — 보낸 요청이 이미 끝난 자리다.
+   * ⛔ **숨기지 않는다** — 사라졌다 나타나면 **상단이 흔들리고**, 아이는 나가는 길이
+   *    없어진 줄 안다. **자리는 그대로 두고 못 누르게만** 한다.
+   * ⭐ **`disabled` 를 쓴다** — 클릭·Enter·Space·초점 이동을 브라우저가 한 번에 막는다.
+   *    `aria-disabled` 만 붙이면 **키보드로는 그대로 열린다.**
+   */
+  잠금?: boolean;
+} = {}) {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const 머무는버튼 = useRef<HTMLButtonElement>(null);
@@ -46,7 +85,7 @@ export function LeaveButton() {
   }, [실패, 나가는중]);
 
   const 열기 = () => {
-    if (나가기요청중.current) return;
+    if (잠금 || 나가기요청중.current) return;
     // 지난번 실패가 남아 있으면 지운다. 다시 열었을 때 **없는 실패**를 보여주지 않는다.
     set실패(null);
     dialog.current?.showModal();
@@ -96,6 +135,7 @@ export function LeaveButton() {
     <>
       <button
         type="button"
+        disabled={잠금}
         onClick={열기}
         className="pressable action-quiet"
       >
@@ -106,26 +146,36 @@ export function LeaveButton() {
           그때는 창을 유지한다. 배경 클릭으로는 닫히지 않는다(네이티브 dialog 기본값). */}
       <dialog
         ref={dialog}
-        className="app-dialog"
+        className="app-dialog child-dialog"
         aria-busy={나가는중}
         onCancel={(event) => {
           if (나가기요청중.current) event.preventDefault();
         }}
       >
-        <div className="flex flex-col gap-5">
+        {/* **제목 → 설명 → 버튼의 위계를 간격이 만든다** (2026-09-23 사용자 지시). */}
+        <div className="flex flex-col gap-6">
           <h2 className="text-2xl font-semibold">{나가기문구.확인.제목}</h2>
 
           {/* **경고를 버튼 옆에 박지 않는다.** 3.4(학부모 재발급)가 그렇게 정한 것은
               거기에 확인 단계가 없기 때문이다. 여기는 이 창이 그 몫을 한다 —
               버튼 옆에 박으면 **버튼이 눈에 띄어** 위 「자리」와 정면으로 부딪힌다. */}
           <p>{나가기문구.확인.한줄}</p>
+          {/* **쓰던 글이 있을 때만 나온다.** 없는 손실을 말하지 않는다. */}
+          {쓰던글있나 && <p data-쓰던글경고>{나가기문구.확인.쓰던글}</p>}
 
-          {나가는중 && <p data-나가기대기 role="status">{나가기대기문구}</p>}
           {실패 !== null && <p data-나가기실패 role="status">{실패}</p>}
+
+          {/* **읽어 주는 기계에는 처리 중임을 그대로 전한다** (2026-09-23 사용자 지시).
+              화면에서는 버튼 글자 하나로 말하지만, **눈으로 버튼을 볼 수 없는 아이**에게는
+              그 변화가 안 닿는다. **보이지 않는 알림 줄**이 그 몫을 한다.
+              ⛔ **자리를 차지하지 않는다** — `sr-only` 라 창 높이가 안 바뀐다. */}
+          <p className="sr-only" role="status" aria-live="polite">
+            {나가는중 ? 나가기대기문구 : ""}
+          </p>
 
           {/* **머무는 쪽이 DOM 에서 먼저다.** `<dialog>` 는 첫 포커스 가능 요소에 포커스를 주므로
               **되돌릴 수 없는 쪽에 포커스가 앉지 않는다.** 보이는 순서도 같아 왼쪽이 안전한 쪽이다. */}
-          <div className="flex justify-end gap-3">
+          <div className="app-dialog-actions">
             <form
               method="dialog"
               onSubmit={(event) => {
@@ -138,7 +188,7 @@ export function LeaveButton() {
                 ref={머무는버튼}
                 type="submit"
                 disabled={나가는중}
-                className="pressable action-secondary"
+                className="pressable action-primary"
               >
                 {나가기문구.확인.머문다}
               </button>
@@ -146,13 +196,21 @@ export function LeaveButton() {
 
             {/* **`type="button"` 이어야 한다.** 위 `<form method="dialog">` 밖이지만,
                 기본 `submit` 로 두면 나중에 폼 안으로 옮겨졌을 때 **아무 말 없이 창만 닫는다.** */}
+            {/* ⛔ **되돌릴 수 없는 쪽이 보조 행동이다** (2026-09-23 사용자 지시).
+                종전에는 **나가는 쪽이 채운 버튼**이었다 — 잘못 눌렀을 때 잃는 것이 큰 쪽을
+                기본으로 두고 있었다. **읽기 어렵게 만들지는 않는다**: `action-secondary` 는
+                테두리와 글자를 그대로 두고 **채운 색만** 걷는다.
+                ⛔ **처리 중에도 글자 수가 비슷한 말로 바꾼다** — 「모험 나가기」(6자) →
+                「나가는 중…」(6자). **버튼 폭이 안 튀어서 창 높이도 안 변한다.** */}
             <button
               type="button"
               disabled={나가는중}
+              aria-busy={나가는중}
               onClick={() => void 나간다()}
-              className="pressable action-primary"
+              className="pressable action-secondary"
             >
-              {나가기문구.확인.나간다}
+              {나가는중 && <span className="leave-spinner" aria-hidden="true" />}
+              {나가는중 ? 나가기대기문구 : 나가기문구.확인.나간다}
             </button>
           </div>
         </div>

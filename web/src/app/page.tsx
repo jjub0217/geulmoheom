@@ -9,7 +9,10 @@ import { ArtworkFrame } from "@/components/artwork";
 import { BookLink } from "@/components/book-link";
 import { BookOrigin, useAdventureState, useAdventureRequest, useAdventureSession } from "@/components/book-journey";
 import { AttemptInput } from "@/components/attempt-input";
-import { CompassIntroduction } from "@/components/compass-introduction";
+import { 턴문구 } from "@/components/turn-copy";
+import { CompassIntroduction, SkippableStage } from "@/components/compass-introduction";
+// **`문구.md` 1.4b 의 그 문장**이다. 카드와 본편이 같은 문장을 쓰므로 상수도 하나다.
+import { 글쓰기질문, 소개와질문, 챕터동료소개 as 나침반소개문장 } from "@/components/chapter-writing";
 import { GameConsole, StageCompass } from "@/components/game-console";
 import { GuideFigure } from "@/components/guide";
 import { LeaveButton } from "@/components/leave";
@@ -61,9 +64,9 @@ type Screen =
    * 쓰는 중. `guide` 는 **서버가 마지막에 준 것**이다 —
    * 처음엔 카드의 것(`default`)이고, 되묻기·차단이 오면 그 응답의 것으로 바뀐다.
    */
-  | { kind: "card"; card: Card; guide: Guide }
+  | { kind: "card"; card: Card; guide: Guide; 카드첫말인가: boolean }
   /** 보내는 중. 같은 화면을 두고 버튼만 잠근다 — 쓴 것이 사라지면 아이는 날아간 줄 안다. */
-  | { kind: "sending"; card: Card; guide: Guide }
+  | { kind: "sending"; card: Card; guide: Guide; 카드첫말인가: boolean }
   /**
    * 결과를 받았다. **응답을 통째로 들고 있는다** — 삽화 참조·등급·하이라이트가 전부 여기 있고,
    * 연출이 붙을 때마다 화면 상태를 다시 고치지 않기 위해서다.
@@ -97,7 +100,73 @@ type Screen =
 
 type PreviousResult = { screen: Extract<Screen, { kind: "sent" }>; text: string };
 const 다시쓰기취소라벨 = "다시 쓰기 취소";
-const 다른장면라벨 = "다른 장면 써보기";
+/**
+ * **⛔ 2026-09-22 에 없어졌다** (사용자 지시). 튜토리얼 마지막의 「다른 장면 써보기」와
+ * 일반 카드의 「새 이야기 만나기」는 **같은 일을 한다** — 지금 카드 말고 다른 카드를 연다.
+ * **문구를 하나로 모았다**: `버튼.다른이야기써보기`.
+ */
+
+/**
+ * **나침반 소개를 이 카드에서 보일까** (2026-09-22 사용자 결정 · `문구.md` 1.4b).
+ *
+ * **아이에게 한 번만 보인다 — 짧은 카드와 본편을 합쳐서다.**
+ *
+ * **⛔ 새 저장 구조를 만들지 않았다.** 판단에 쓰는 것 둘 다 이미 있던 것이다 —
+ * **어느 튜토리얼 카드인가**(카드 응답)와 **`first_experience_complete`**(`GET /child/me`).
+ * 뒤엣것은 **서버가 아이별로 DB 를 보고 계산**하므로 **새로고침해도 유지되고 아이마다 다르다.**
+ *
+ * **⚠ 모르는 동안(`null`)에는 안 보인다.** 뒤늦게 나타나는 쪽이, 떴다가 사라지는 쪽보다 낫다.
+ */
+/**
+ * **이 화면에서 래서판다가 실제로 할 말** (2026-09-22 사용자 지시).
+ *
+ * **⛔ 한 곳에서 정한다.** 연출(`CompassIntroduction`)과 캐릭터(`GuideFigure`)가
+ * **다른 대사를 보면** 연출이 감춘 문장을 그대로 그린다 — 실측으로 잡은 자리다.
+ */
+function 화면대사(
+  screen: { guide: Guide; card: Card; 카드첫말인가: boolean },
+  첫경험완료: boolean | null,
+): Guide {
+  if (screen.카드첫말인가 && !소개를보인다(screen.guide.line, screen.card.card_id, 첫경험완료)) {
+    return { expression: "default", line: 글쓰기질문 };
+  }
+  /**
+   * ## ⛔ 소개를 보이는 화면에서는 소개가 질문을 겸한다 (2026-09-23 사용자 확정 · `문구.md` 1.4b)
+   *
+   * **⛔ 그 화면에만 눈에 보이는 행동 안내가 없었다.** 말풍선은 나침반을 설명하고,
+   * 쓰는 칸의 흐린 글자는 **칸이 비었을 때만** 보인다 — **한 글자라도 치면 사라진다.**
+   * 쓰다 멈춘 아이에게는 무엇을 하라는 말이 화면에 하나도 없었다.
+   *
+   * **되살린 이유는 걷은 전제가 사라져서다.** 09-22 에 이 질문을 걷은 근거가
+   * **「바로 아래 입력 라벨이 같은 질문을 되풀이해서」**였는데, **그 라벨이 그 뒤에
+   * 화면에서 감춰졌다**(`attempt-input.tsx` — 읽어 주는 기계에만 간다). **겹칠 상대가 없다.**
+   *
+   * **⭐ 새 문장을 안 지었다** — 둘째 장부터 이미 쓰는 값 그대로다. **값이 같아야
+   * 아이가 화면마다 다른 질문을 받지 않는다.**
+   *
+   * **⛔ 앞에 붙이지 않고 뒤에 붙인다** — 「여기 이 나침반,」으로 시작하는 것이
+   * 나침반 연출의 열쇠다(`compass-introduction.tsx` 가 그 낱말에서 멈춘다).
+   */
+  if (screen.카드첫말인가 && screen.guide.line === 나침반소개문장) {
+    return { ...screen.guide, line: 소개와질문 };
+  }
+  return screen.guide;
+}
+
+function 소개를보인다(대사: string, cardId: string, 첫경험완료: boolean | null): boolean {
+  // **⛔ 소개 문장이 아니면 손대지 않는다** (2026-09-22 실측으로 잡았다).
+  // 서버가 카드와 함께 싣는 첫 대사가 **늘 나침반 소개인 것은 아니다.** 감추는 조건을
+  // 「첫 대사인가」로 잡았더니 **소개가 아닌 대사까지 통째로 사라졌다.**
+  // **감추는 것은 「되풀이되는 소개」 하나**다.
+  if (대사 !== 나침반소개문장) return true;
+  const 차례 = 튜토리얼차례(cardId);
+  // 튜토리얼 첫 장 — 이 아이가 처음 보는 화면이다.
+  if (차례 === "t1") return true;
+  // 둘째·셋째 장에서는 이미 봤다.
+  if (차례 !== null) return false;
+  // 튜토리얼이 꺼져 있으면 **첫 일반 카드**가 처음 보는 화면이다.
+  return 첫경험완료 === false;
+}
 
 /** `guide.expression` 이 될 수 있는 값. **프론트가 고르지 않고 온 것을 확인만 한다.** */
 const 표정들: Guide["expression"][] = [
@@ -194,6 +263,21 @@ export default function Home() {
    * 다음 장면으로 갈 때** 둘뿐이다.
    */
   const [재시도원본, set재시도원본] = useAdventureState<string | null>("/", "retryOf", null);
+  /**
+   * **튜토리얼 닫는말을 이 아이에게 이미 했나** (2026-09-23 사용자 확정).
+   *
+   * **⛔ 「다시 써보기」로 같은 장면을 또 보내면 닫는말이 또 나왔다.** 그 말은
+   * **세 장면을 다 채웠다는 알림**이라 **두 번 할 자리가 아니다** — 두 번째부터는
+   * 이미 아는 사실을 되풀이하는 것이고, 그 아래 「긴 모험 시작하기」도 같이 되풀이된다.
+   *
+   * **⭐ 「보였다」가 아니라 「다시 쓰러 갔다」에서 켠다.** 보이는 순간에 켜면
+   * **그 화면이 스스로를 감춘다** — 켜자마자 다시 그려져 한 번도 못 본다.
+   * **T3 결과를 떠나는 길은 「다시 써보기」 하나**이므로 그 자리가 정확하다.
+   *
+   * **⛔ 새 저장 구조를 안 만들었다** — 화면 상태 저장은 이 파일이 이미 쓰는 것이고,
+   * 새로고침과 `/book` 왕복을 넘긴다.
+   */
+  const [닫는말봤나, set닫는말봤나] = useAdventureState("/", "tutorialClosingSeen", false);
 
   /**
    * **지금 누구인지** (`문구.md` **2.6**, 2026-09-15 신설 · 결과 ⑨).
@@ -259,7 +343,7 @@ export default function Home() {
     loadOnce("cards/next", () => apiGet<Card>("/cards/next"))
       .then((card) => {
         if (!isCurrent()) return;
-        setScreen({ kind: "card", card, guide: card.guide });
+        setScreen({ kind: "card", card, guide: card.guide, 카드첫말인가: true });
       })
       .catch((e: unknown) => {
         if (!isCurrent()) return;
@@ -298,7 +382,9 @@ export default function Home() {
     if (submitting.current || screen.kind !== "card" || text.trim() === "") return;
     submitting.current = true;
     setSendError(null);
-    setScreen({ kind: "sending", card, guide });
+    // **보내는 중에도 말풍선 규칙이 그대로여야 한다** — 값을 잃으면 감춰 뒀던 첫 말이
+    // 보내는 순간 다시 나타난다.
+    setScreen({ kind: "sending", card, guide, 카드첫말인가: screen.카드첫말인가 });
     try {
       const outcome = await apiPost<AttemptOutcome>("/attempts", {
         card_id: card.card_id,
@@ -324,7 +410,7 @@ export default function Home() {
         if (튜토리얼차례(card.card_id) === null) set첫경험완료(true);
         setScreen({ kind: "sent", card, result: outcome });
       } else {
-        setScreen({ kind: "card", card, guide: outcome.guide });
+        setScreen({ kind: "card", card, guide: outcome.guide, 카드첫말인가: false });
       }
     } catch (e) {
       if (!isCurrent()) return;
@@ -356,7 +442,7 @@ export default function Home() {
         if (e.code === "DAILY_CAP_REACHED") setScreen(거절화면(e));
         else {
           setSendError(e.서버문구 || 못닿음.보내기);
-          setScreen({ kind: "card", card, guide });
+          setScreen({ kind: "card", card, guide, 카드첫말인가: false });
         }
         return;
       }
@@ -365,7 +451,7 @@ export default function Home() {
         // 입력칸에 남은 문장이 **앞 장면에 쓴 글인 채로 새 장면에 붙는다.**
         // 되묻기·차단이 그 자리에 머무는 것과 같은 이유다 — **공들여 쓴 글이 사라지면 그것 자체가 벌**이다.
         setSendError(못닿음.보내기);
-        setScreen({ kind: "card", card, guide });
+        setScreen({ kind: "card", card, guide, 카드첫말인가: false });
         return;
       }
       throw e;
@@ -415,10 +501,12 @@ export default function Home() {
    */
   const 다시쓰기 = (card: Card, 앞시도: string) => {
     if (screen.kind !== "sent") return;
+    // 닫는말을 이미 본 아이다. 다시 보낸 결과에서는 그 말을 되풀이하지 않는다.
+    if (튜토리얼차례(card.card_id) === "t3") set닫는말봤나(true);
     setPreviousResult({ screen, text });
     set재시도원본(앞시도);
     setSendError(null);
-    setScreen({ kind: "card", card, guide: card.guide });
+    setScreen({ kind: "card", card, guide: card.guide, 카드첫말인가: true });
   };
 
   const 다시쓰기취소 = () => {
@@ -448,11 +536,22 @@ export default function Home() {
           **확인하라고 둔 표식을 안 보이는 자리에 두면 그것은 표식이 아니다** (PM 정정, 2.6).
 
           이름만 그대로 보여주되, 게임 화면에서는 오른쪽 위에 또렷하게 둔다. */}
-      {이름 !== null && (
-        <header className={gameScene ? "game-stage-header" : "page-frame adventure-header flex justify-end pt-3"}>
-          <p data-탐험가이름 title={이름} className="text-sm text-[var(--muted)]">
-            {이름}
-          </p>
+      {(이름 !== null || 인증확인됨(screen)) && (
+        <header className={gameScene ? "game-stage-header" : "page-frame adventure-header flex justify-end gap-3 pt-3"}>
+          {이름 !== null && (
+            <p data-탐험가이름 title={이름} className="text-sm text-[var(--muted)]">
+              {이름}
+            </p>
+          )}
+          {/* ⛔ **나가는 길이 이름 옆으로 올라왔다** (2026-09-22 사용자 지시).
+              종전에는 화면 맨 아래 `<footer>` 였고, 그 자리의 근거는 「아이 눈에 띄는
+              자리에 두지 않는다」였다. **눈에 덜 띄게 하는 일은 이제 생김새가 맡는다** —
+              맨 글자 버튼이라 옆의 진행 버튼과 굵기가 다르다. */}
+          {/* ⛔ **보내는 동안에는 못 누른다** (2026-09-24 사용자 지시). 같은 순간
+              「내 책 펼치기」는 이미 잠겨 있었는데 **되돌릴 수 없는 나가기만 열려 있었다.** */}
+          {인증확인됨(screen) && (
+            <LeaveButton 쓰던글있나={text.trim().length > 0} 잠금={screen.kind === "sending"} />
+          )}
         </header>
       )}
       {/* 쓰는 장면은 숲속, 결과는 삽화가 돋보이는 크래프트지 무대로 이어진다. */}
@@ -466,46 +565,107 @@ export default function Home() {
         {(screen.kind === "card" || screen.kind === "sending") && (
           // 상황 소개 → 동료와 나침반의 말 → 아이가 쓰는 자리 순서로 화면을 연다.
           <CompassIntroduction
-            guide={screen.guide}
+            /* ⛔ **연출과 캐릭터가 같은 대사를 봐야 한다** (2026-09-22 실측으로 잡았다).
+               여기에 원본을 넘기고 캐릭터에만 갈아 끼운 것을 넘겼더니, **연출이 소개
+               문장을 한 글자씩 그리고 있어** 감춘 소개가 화면에 그대로 남았다. */
+            guide={화면대사(screen, 첫경험완료)}
             situation={screen.card.situation}
             cardId={screen.card.card_id}
             skipOpening={screen.card.card_id === restoredCard || previousResult !== null}
           >
-          <div className="game-stage__world">
+          {/* **모험으로 들어가는 문** (`문구.md` 1.25 · W7 18번).
+              **⛔ 튜토리얼 중에는 안 그린다** — T1~T3 는 **첫 5~7분**이고
+              **A-6 이 「잠금·관문 없음」으로 세운 자리**다. 여기에 다른 길을 같이 내면
+              **아이가 무엇부터 할지 고르게 되고 그 5~7분이 관문이 된다.**
+              **T3 를 끝낸 뒤에 열린다** — 아래 결과 화면과 여기 둘 다.
+
+              ## ⛔ 무대 밖으로 꺼냈다 (2026-09-23 사용자 확정 · 실측으로 잡았다)
+
+              **종전에는 이 띠가 무대(`.game-stage__world`) 안에 있었다.** 띠는
+              `position: absolute` 라 **가장 가까운 자리 잡힌 조상**에 붙는데 그것이 무대였고,
+              **무대는 세로 가운데 맞춤을 받는다.** 그래서 **글자가 찍히는 동안** — 쓰는 칸이
+              아직 없어 묶음이 짧을 때 — **무대가 아래로 내려가면서 문도 따라 내려갔다.**
+
+              실측(연출 중): **390×844 에서 272.8 · 1280×800 에서 227.2** 로,
+              「왼쪽 위에 있다」의 한계(화면 높이의 20%)를 크게 넘었다. **연출이 끝나면
+              한계 안으로 돌아온다** — 즉 **아이가 보는 첫 몇 초에만 문이 화면 가운데로 흘렀다.**
+
+              ⭐ **무대 밖으로 꺼내 무대(`.game-stage`)에 붙인다.** 이름 띠가 이미 그렇게
+              서 있어 안 움직인다 — **본편도 이미 이 모양**이라(`chapter/page.tsx`) 두 화면이
+              같아진다. **덮이는 문제는 이미 `z-index: 4` 가 막고 있다**(`game-stage.css` 주석).
+
+              ⛔ **무대의 위 안쪽 여백은 그대로 둔다** — 띠가 떠 있는 자리를 비워 두는 일은
+              문이 어디 붙든 그대로 필요하다. */}
+          <div className="game-stage__toolbar">
+            {첫경험완료 === true && 튜토리얼차례(screen.card.card_id) === null && (
+              text.length === 0 && previousResult === null && screen.kind === "card"
+                ? <ChapterDoor /> : <BookLink disabled={screen.kind === "sending"} />
+            )}
+          </div>
+          {/* 글자가 찍히는 동안에는 무대 어디를 눌러도 건너뛴다 (⑥ㄴ · `SkippableStage` 주석). */}
+          <SkippableStage className="game-stage__world">
             {/* **⛔ 화면 맨 위의 튜토리얼 여는 말을 걷어냈다** (2026-09-21 사용자 판정).
                 「나침반이 아직 자고 있어」가 **아래 말풍선의 「네가 이야기를 쓰면 반짝여」와 뜻이
                 겹쳤고**, 자고 있다·깨어난다·반짝인다 **세 설정이 한 화면에 섞였다.**
                 **나침반이 이미 화면에 보이는데 「아직 자고 있다」는 눈에 보이는 것과 안 맞는다.**
                 **⛔ 다른 것으로 채우지 않는다** — 덜어낸 자리다. 화면 이름을 대신 넣는 방안이
                 거론됐으나 그건 **없던 문구를 새로 세우는 것**이라 같은 판정에 걸린다. */}
-            {/* **모험으로 들어가는 문** (`문구.md` 1.25 · W7 18번).
-                **⛔ 튜토리얼 중에는 안 그린다** — T1~T3 는 **첫 5~7분**이고
-                **A-6 이 「잠금·관문 없음」으로 세운 자리**다. 여기에 다른 길을 같이 내면
-                **아이가 무엇부터 할지 고르게 되고 그 5~7분이 관문이 된다.**
-                **T3 를 끝낸 뒤에 열린다** — 아래 결과 화면과 여기 둘 다. */}
-            <div className="game-stage__toolbar">
-              {첫경험완료 === true && 튜토리얼차례(screen.card.card_id) === null && (
-                text.length === 0 && previousResult === null && screen.kind === "card"
-                  ? <ChapterDoor /> : <BookLink disabled={screen.kind === "sending"} />
-              )}
-            </div>
             <div className="game-story">
               <SceneCard card={screen.card} />
             </div>
-            {/* 표정도 대사도 **서버가 마지막에 준 것**이다. 되묻기면 여기가 그 질문 자리가 된다. */}
-            <GuideFigure guide={screen.guide} stage compass={<StageCompass length={text.length} />} />
-          </div>
+            {/* 표정도 대사도 **서버가 마지막에 준 것**이다. 되묻기면 여기가 그 질문 자리가 된다.
+
+                ⛔ **나침반 소개는 아이에게 한 번만 한다** (2026-09-22 사용자 결정).
+                서버는 **카드를 줄 때마다** 같은 첫 말을 싣는다(`문구.md` 1.4b) — 그건
+                **소개**인데 둘째·셋째 카드에서도 그대로 나왔다.
+
+                **⛔ 앞서 `previousResult` 로 판단한 것은 틀렸다** (같은 날 실측으로 잡았다).
+                그 값은 **「다시 써보기」를 누른 동안에만** 채워지고 결과를 받거나 다음 카드를
+                열 때 비워진다 — **「이미 본 아이인가」와 아무 상관이 없었고**, 그래서
+                **감추는 자리가 정반대**였다.
+
+                **⭐ 지금은 아이별 서버 상태로 판단한다. 새 저장 구조를 만들지 않았다.**
+                ① **튜토리얼 첫 장(T1)** 이면 보인다 — 그 아이가 처음 보는 화면이다
+                ② **튜토리얼이 꺼져 있는 아이**는 `first_experience_complete` 가 거짓일 때만
+                   보인다 — **카드를 한 장도 안 썼다**는 뜻이다(`api/app/api/v1/child.py`)
+                ③ 나머지는 안 보인다. **새로고침해도 같다** — 화면 기억이 아니라 서버 값이다
+                ⛔ **되묻기·차단은 안 감춘다** — `카드첫말인가` 가 거짓이다.
+
+                **⛔ 2026-09-22 오후에 감추는 대신 갈아 끼우게 됐다** (사용자 지시).
+                종전에는 되풀이되는 소개를 **말풍선째 감췄는데**, 그러면 **큰 래서판다가
+                말풍선 없이** 서서 **조용한 동행자가 아니라 빠진 화면**으로 보였다.
+                **지금은 「이제 어떻게 할까?」로 바꾼다** — 글쓰기 화면에서 래서판다가
+                하는 일은 **묻는 것**이고, 그건 어느 카드에서나 같다. */}
+            <GuideFigure
+              guide={화면대사(screen, 첫경험완료)}
+              stage
+              compass={<StageCompass length={text.length} />}
+            />
+          </SkippableStage>
           <GameConsole>
             {/* 입력창은 **아래 전폭**이다. 오른쪽 절반에 가두면 줄이 짧아지고,
                 짧은 칸은 짧게 쓰게 만든다 — H2 합격선이 회당 150자다. */}
             <AttemptInput
               showCompass={false}
               label={screen.card.prompt_label}
+              /* ⛔ **2026-09-22 에 카드 화면에도 안내글을 넣었다** (사용자 지시 — 글쓰기 화면
+                 역할 통일). 종전에 안 넣은 근거는 **「물음(`prompt_label`)이 바로 위에
+                 보인다」**였는데, 같은 지시로 **그 제목을 화면에서 감췄다**(`sr-only`).
+                 그래서 **쓰는 칸에 아무 말도 없는 상태**가 됐다 — 2048×1152 에서 실측했다.
+                 ⭐ **묻는 것은 래서판다 하나, 쓸 자리를 가리키는 것은 이 한 줄**이다.
+                 본편과 같은 상수를 쓴다. */
+              안내글={턴문구.입력안내}
               value={text}
               onChange={setText}
               onMasked={가림알림}
               disabled={screen.kind === "sending"}
-              보내기라벨={screen.kind === "sending" ? 버튼.그림준비중 : 버튼.그림으로보기}
+              /* ⛔ **보내는 동안에도 글자를 안 바꾼다** (2026-09-23 사용자 지시).
+                 종전에는 「그림을 준비하는 중…」으로 갈렸는데, **같은 순간 입력칸 아래에서
+                 「네 이야기를 읽고 있어.」가 이미 진행 상태를 말하고 있었다.** 둘이
+                 **서로 다른 단계**를 말해서 지금 무엇을 하는 중인지가 오히려 흐려졌다.
+                 ⛔ **프론트는 서버가 어느 단계인지 모른다** — `POST /attempts` 는 요청 하나다. */
+              보내기라벨={버튼.그림으로보기}
+              보내는중={screen.kind === "sending"}
               // **글자 수로 잠그지 않는다.** 30자는 격려일 뿐 관문이 아니다
               // (`web/tasks/W2.md` 메모). 막는 것은 「아직 아무것도 안 썼다」와 「보내는 중」뿐이다.
               보낼수있나={text.trim() !== "" && screen.kind !== "sending"}
@@ -536,24 +696,52 @@ export default function Home() {
 
         {screen.kind === "sent" && (
           <div className="result-spread" data-artwork-state={삽화.kind}>
+            {/* ## ⛔ 읽는 순서를 아이 글부터로 바꿨다 (2026-09-23 사용자 확정)
+                종전에는 **그림이 왼쪽 · 아이 글이 오른쪽인 좌우 2열**이었다. 한국어는
+                왼쪽에서 읽으므로 **아이 눈에 먼저 닿는 것이 그림**이고, 그 그림을 만든
+                **원인(아이 문장)이 뒤**였다 — **결과가 원인보다 먼저** 보였다.
+                ⭐ **본편이 이미 쓰던 순서로 맞춘다** — 아이 글 → 삽화 → 배지 → 반응 →
+                다음 행동. 두 화면이 같은 순서라 아이가 한 번 배운 것을 다시 안 배운다.
+                ⛔ **좌우 2열의 근거를 문서에서 못 찾았다** — `문구.md`·PRD·`adr/` 에 없고
+                이 파일과 `result-stage.css` 주석뿐이라 **내부 구현 판단으로 바꿨다**
+                (PM 이 같은 결론을 확인했다).
+                ⚠ **아동 3명 회차에서 이미 쓰인 화면이다** — 바꾸면 그때 관찰과 조건이
+                달라진다. 알고 바꾸는 것이다. */}
             <div className="result-reading">
-              <ArtworkFrame 상태={삽화} waitingContent={<StoryOpening />} />
               {/* 그림을 기다릴 때는 액자 안 대사만 보인다. 못 받은 경우에는
                   빈 액자 없이 아이의 원문과 서버의 반응을 그대로 보여준다. */}
               {삽화.kind !== "기다림" && (
+                <WrittenLine text={text} highlights={screen.result.highlights} />
+              )}
+              {/* ## ⛔ 배지를 액자와 한 묶음에 둔다 (2026-09-24 사용자 확정)
+                  **읽는 차례는 그대로다** — 아이 글 → 액자 → 배지 → 반응. 묶음만 생겼다.
+                  **왜 묶나** — 배지를 **액자 모서리나 액자 옆**에 놓으려면 **액자를 기준으로
+                  자리를 잡아야** 하는데, 형제로 떨어져 있으면 기준이 될 상자가 없다.
+                  ⛔ **액자 높이를 CSS 가 모르기 때문**이다 — 액자 폭은 `--result-frame-size`
+                  로 정해지지만 **높이는 오는 그림의 비율이 정한다**(`lib/artwork-frame.ts` —
+                  1:1 과 0.58 두 모양이 공존한다). 그래서 「액자 높이만큼 위로」 같은 계산이
+                  성립하지 않고, **액자를 감싸는 상자 안에서 위·아래를 잡는 것**만 성립한다. */}
+              <div className="result-artwork-row">
+                <ArtworkFrame 상태={삽화} waitingContent={<StoryOpening />} />
+                {/* **⛔ 배지 아래 「첫 안내」 줄을 걷어냈다** (2026-09-21 사용자 판정).
+                    **설명이 세 겹이었다** — 배지에 올리면 툴팁, 누르면 설명 창,
+                    그 아래 또 한 줄. **조건은 앞의 둘이 살아 있는 것**이었고
+                    `tier-badge.tsx` 의 `role="tooltip"` 과 `TierBadgeHelp` 가 그대로다. */}
+                {삽화.kind !== "기다림" && <TierBadge tier={screen.result.tier} />}
+              </div>
+              {삽화.kind !== "기다림" && (
                 <div className="result-content">
-                  <WrittenLine text={text} highlights={screen.result.highlights} />
-                  {/* **⛔ 배지 아래 「첫 안내」 줄을 걷어냈다** (2026-09-21 사용자 판정).
-                      **설명이 세 겹이었다** — 배지에 올리면 툴팁, 누르면 설명 창,
-                      그 아래 또 한 줄. **조건은 앞의 둘이 살아 있는 것**이었고
-                      `tier-badge.tsx` 의 `role="tooltip"` 과 `TierBadgeHelp` 가 그대로다. */}
-                  <TierBadge tier={screen.result.tier} />
                   <GuideFigure guide={screen.result.guide} stage />
                 </div>
               )}
             </div>
 
-            {/* 작은 화면에서는 읽는 영역만 스크롤된다. 다음에 할 행동은 아래에 남긴다. */}
+            {/* ⛔ **다음에 할 행동을 화면 아래에 못 박지 않는다** (2026-09-23 사용자 확정).
+                종전에는 이 묶음이 **결과 영역 밖에서 아래에 고정**돼 있었다. 그래서
+                ① 390×844 에서 **래서판다 반응과 버튼 사이가 129.7px 비었고**
+                ② **반응을 못 본 채로 버튼을 누를 수 있었다** — 작은 화면에서는 반응이
+                   화면 밖이라 실제로 그랬다.
+                ⭐ **반응 바로 뒤에 둔다.** 아이가 「네 낱말이 좋았어」를 지나야 다음으로 간다. */}
             {삽화.kind !== "기다림" && (
               <div className="result-controls">
                 {튜토리얼차례(screen.card.card_id) === "t2" &&
@@ -562,7 +750,11 @@ export default function Home() {
                     {튜토리얼문구.다시쓰기권유}
                   </p>
                 )}
-                {튜토리얼차례(screen.card.card_id) === "t3" && (
+                {/* ⛔ **닫는말은 한 번만 한다** (2026-09-23 사용자 확정 · `문구.md` 1.22).
+                    「세 장면을 모두 완성했어!」는 **다 채웠다는 알림**이라, 「다시 써보기」로
+                    같은 장면을 또 보낸 결과에서 되풀이할 자리가 아니다. 그 아래 문도 같이
+                    되풀이됐다. **문장은 안 바꿨고 조건만 붙였다.** */}
+                {튜토리얼차례(screen.card.card_id) === "t3" && !닫는말봤나 && (
                   <div className="result-invitation">
                     <p data-튜토리얼안내 className="text-center text-lg/relaxed text-accent">
                       {튜토리얼문구.닫는말}
@@ -596,7 +788,7 @@ export default function Home() {
                     onClick={retry}
                     className={`pressable ${튜토리얼차례(screen.card.card_id) === "t3" ? "action-secondary" : "action-primary"}`}
                   >
-                    {튜토리얼차례(screen.card.card_id) === "t3" ? 다른장면라벨 : "새 이야기 만나기"}
+                    {버튼.다른이야기써보기}
                   </button>
                   {/* ⛔ **튜토리얼 중에는 안 그린다** (2026-09-21 사용자 판정).
                       **T1~T3 는 책에 안 쌓인다** (`api/app/api/v1/attempts.py` — 석 장이
@@ -668,11 +860,7 @@ export default function Home() {
           **인증된 뒤에는 상태를 안 가린다 — 어느 상태에서든 그 자리에 있다.** 「보내는 중」에만
           숨기는 규칙을 두려다 접었다: **오락가락하는 컨트롤이 오히려 눌러보게 만든다.**
           **두 규칙은 축이 다르다** — 앞은 「들어왔나」이고 뒤는 「들어온 뒤 무엇을 하는 중인가」다. */}
-      {인증확인됨(screen) && (
-        <footer className={gameScene ? "game-stage-footer" : "page-frame adventure-footer flex justify-center pb-3"}>
-          <LeaveButton />
-        </footer>
-      )}
+
     </div>
     </BookOrigin>
   );
