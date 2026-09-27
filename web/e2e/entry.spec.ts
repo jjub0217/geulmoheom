@@ -136,7 +136,10 @@ test("책도 같은 뿌리다 — 401 이면 인증 화면으로 보낸다", asy
   // **`"**/child/auth"` 로 두면 물음표 뒤가 붙는 순간 안 맞는다** — 여기가 그래서 빨간불이었다.
   await page.waitForURL("**/child/auth?kicked=1");
   await expect(본문(page).getByText(코드입력.제목)).toBeVisible();
-  await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toBeVisible();
+  // **조각 둘이 된 뒤에도 두 줄이 다 보여야 한다** (2026-09-23).
+  for (const 줄 of 코드입력.끊겨서왔을때) {
+    await expect(본문(page).getByText(줄)).toBeVisible();
+  }
 });
 
 /**
@@ -178,7 +181,8 @@ test("부모가 로그인한 브라우저에서 열어도 코드 입력까지 �
   // **표식을 안 단다.** 「부모님이 새 접속 코드를 받으셨어요」는 **끊긴 아이**에게 하는 말인데
   // (`문구.md` 3.3), 여기 온 아이는 **아직 한 번도 안 들어왔다** — 붙이면 거짓이다.
   expect(new URL(page.url()).searchParams.has("kicked")).toBe(false);
-  await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toHaveCount(0);
+  // **조각 둘이 된 뒤에는 앞 조각으로 찾는다** (2026-09-23). 값은 그대로이고 줄만 나뉘었다.
+  await expect(본문(page).getByText(코드입력.끊겨서왔을때[0])).toHaveCount(0);
 });
 
 test("책도 같은 뿌리다 — 403 이면 표식 없이 인증 화면으로 보낸다", async ({ page }) => {
@@ -192,7 +196,8 @@ test("책도 같은 뿌리다 — 403 이면 표식 없이 인증 화면으로 �
   // **401 과 갈린다.** 401 은 **들어와 있다가 끊긴 것**이라 표식을 달지만(위 검사),
   // 403 은 **부모 쿠키가 있는 것**이라 **새 코드를 받은 적이 없다.**
   expect(new URL(page.url()).searchParams.has("kicked")).toBe(false);
-  await expect(본문(page).getByText(코드입력.끊겨서왔을때)).toHaveCount(0);
+  // **조각 둘이 된 뒤에는 앞 조각으로 찾는다** (2026-09-23). 값은 그대로이고 줄만 나뉘었다.
+  await expect(본문(page).getByText(코드입력.끊겨서왔을때[0])).toHaveCount(0);
 });
 
 /**

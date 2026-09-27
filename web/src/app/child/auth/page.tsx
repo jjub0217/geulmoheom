@@ -164,9 +164,17 @@ export default function ChildAuth() {
             {/* **끊겨서 왔으면 기본 안내 대신 이 줄이다** (`문구.md` 3.3).
                 주어가 **부모**인 것이 전부다 — 「다시 한 번 들어와 주세요」는
                 **아이가 뭘 잘못한 것처럼 읽히는데 실제로 끊은 쪽은 어른**이다. */}
-            <p id="child-code-help" data-안내 className="account-description">
-              {screen.끊김 ? 코드입력.끊겨서왔을때 : 코드입력.안내}
-            </p>
+            {/* ⛔ **줄 단위로 그린다** (2026-09-23 사용자 지시). 끊겨서 온 안내는
+                **조각 둘**이라 문장 끝에서 줄이 나뉜다 — 앞은 무슨 일이 일어났나,
+                뒤는 그래서 무엇을 하나다. **부모 로그인 화면과 같은 방식**이다.
+                ⛔ **`id` 는 묶음에 둔다** — 읽어 주는 기계가 두 줄을 이어서 읽는다. */}
+            <div id="child-code-help">
+              {(screen.끊김 ? 코드입력.끊겨서왔을때 : [코드입력.안내]).map((줄) => (
+                <p key={줄} data-안내 className="account-description">
+                  {줄}
+                </p>
+              ))}
+            </div>
           </div>
 
           <label className="account-field child-entry-code">

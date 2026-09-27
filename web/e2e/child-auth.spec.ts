@@ -175,7 +175,10 @@ test("쓰다가 끊겨서 오면 주어가 부모인 한 줄을 말한다", asyn
 
   // **아이는 왜 끊겼는지도, 무엇을 해야 하는지도 몰랐다.**
   await expect(안내줄(page)).toHaveText(코드입력.끊겨서왔을때);
-  await expect(안내줄(page)).not.toHaveText(코드입력.안내);
+  // **⛔ 배열로 견준다** (2026-09-23). 끊겨서 온 안내가 **조각 둘**이 되면서
+  // `[data-안내]` 도 둘이다 — 문자열 하나로 견주면 **무엇이 틀렸는지가 아니라
+  // 「요소가 둘이다」로 막힌다.** 재는 것은 그대로다: **기본 안내를 말하지 않는다.**
+  await expect(안내줄(page)).not.toHaveText([코드입력.안내]);
 
   const 화면 = await page.locator("main").innerText();
   // **⛔ 아이에게 자기 계정이 사라졌다고 화면이 말하게 두지 않는다** — 그건 어른이 할 말이다.
@@ -289,9 +292,10 @@ test("맨 주소로 들어온 어른이 갇히지 않는다 — 접속 코드가
   await expect(page).toHaveURL(/\/child\/auth$/);
   await expect(page.getByRole("heading", { name: 코드입력.제목 })).toBeVisible();
 
-  // **자기 얘기인 사람만 걸리는 물음이다** — 코드를 들고 온 아이는 그냥 지나간다.
+  // **아이가 지금 할 수 있는 일을 말한다** (2026-09-22 사용자 지시 · `문구.md` 3.3).
+  // ⛔ **종전 둘째 줄이 없어졌다** — 「부모님이 먼저 가입하시면…」은 **아이가 할 수 없는 일**이라
+  // 아이 화면에서 설명할 것이 아니었다. 한 줄이면 된다.
   await expect(page.getByText(입장문구.코드없음)).toBeVisible();
-  await expect(page.getByText(입장문구.부모안내)).toBeVisible();
 
   const 가는길 = page.getByRole("link", { name: 입장문구.부모가입 });
   await expect(가는길).toBeVisible();
