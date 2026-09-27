@@ -194,6 +194,16 @@ export interface paths {
          * Delete Child
          * @description 자녀 데이터 즉시 파기 — attempts, books, artworks, events 는 FK `CASCADE` 로 함께 간다.
          *
+         *     **⛔ 삽화 파일이 먼저고 DB 가 나중이다** (2026-09-21 사용자 지시). 순서가 이 방향인
+         *     이유는 하나다 — **파일이 남았는데 아이 정보를 지우면 학부모는 파기됐다고 읽는다.**
+         *     행이 사라지면 **파일 경로를 읽을 길도 없어져** 나중에 지울 수도 없다.
+         *     **하나라도 못 지우면 아무것도 안 지우고 오류를 낸다** — `INTERNAL_ERROR` 는 학부모
+         *     화면에서 **「잠시 문제가 생겼습니다. 잠시 뒤에 다시 시도해 주세요.」**로 나가고
+         *     (`문구.md` 3.8), **아이가 목록에 남아 있어야 다시 누를 수 있다.**
+         *
+         *     **대가를 안다** — 저장소가 오래 멈춰 있으면 그동안 학부모가 못 지운다. 「즉시 파기」와
+         *     부딪치는 자리이고, **지운 척하는 쪽보다 낫다**고 판정했다.
+         *
          *     **`token_version` 을 먼저 올린다.** 행이 지워지면 `require_child` 가 어차피 401 을
          *     내지만, 지우는 순서가 바뀌거나 실패해도 토큰이 살아남지 않게 한 번 더 닫는다.
          *
@@ -914,6 +924,24 @@ export interface components {
             book_page_no?: number | null;
         };
         /**
+         * ChapterTurnView
+         * @description 이어하기 화면이 보여 줄 「지금까지 쓴 것」 한 줄 (`Stage1.md` 1절).
+         *
+         *     **⛔ 저장된 것을 읽어 보내는 것뿐이다.** `chapter_turns` 에 **아이 원문(`text`)**도
+         *     **GM 서사(`gm_narrative`)**도 이미 있다 — **새로 저장하는 것이 없다.**
+         *
+         *     **⛔ 등급이 여기 없다.** `grades` 를 안 내보내는 기존 규칙 그대로다 —
+         *     **내보내면 화면이 그것을 점수로 그린다**(`용어사전.md` 8장 금지어).
+         */
+        ChapterTurnView: {
+            /** Turn */
+            turn: number;
+            /** Text */
+            text: string;
+            /** Narrative */
+            narrative?: string | null;
+        };
+        /**
          * ChapterView
          * @description `POST /chapters` · `GET /chapters/current` 의 응답 (`Stage1.md` 1절).
          *
@@ -941,6 +969,8 @@ export interface components {
             turns_left: number;
             artwork?: components["schemas"]["ArtworkRef"] | null;
             guide?: components["schemas"]["Guide"] | null;
+            /** Turns */
+            turns?: components["schemas"]["ChapterTurnView"][];
         };
         /** ChildAuthRequest */
         ChildAuthRequest: {
