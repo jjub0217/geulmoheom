@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useAdventureRequest } from "@/components/book-journey";
 import { ApiError, apiGet } from "@/lib/api";
 
 import { 모험문 } from "@/app/chapter-door-copy";
@@ -36,9 +37,16 @@ export function ChapterDoor() {
   const [하던게있나, set하던게있나] = useState<boolean | null>(null);
   const [툴팁을보이나, set툴팁을보이나] = useState(false);
 
+  /**
+   * **같은 읽기를 두 번 보내지 않는다** (2026-09-22 실측으로 잡았다).
+   * 효과가 한 번 붙을 때 두 번 도는 경우가 있어 **같은 `GET /chapters/current` 가
+   * 1초 안에 두 번** 나갔다. `book-progress.ts` 의 두 훅과 같은 자리이고 같은 장치를 쓴다.
+   */
+  const 한번만 = useAdventureRequest();
+
   useEffect(() => {
     let 살아있나 = true;
-    apiGet("/chapters/current")
+    한번만("chapter-door", () => apiGet("/chapters/current"))
       .then(() => {
         if (살아있나) set하던게있나(true);
       })
@@ -51,7 +59,7 @@ export function ChapterDoor() {
     return () => {
       살아있나 = false;
     };
-  }, []);
+  }, [한번만]);
 
   const 이어간다 = 하던게있나 === true;
 

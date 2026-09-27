@@ -8,6 +8,7 @@ import { BookReader } from "@/components/book-reader";
 import { BookPrintButton, BookReturnLink } from "@/components/book-actions";
 import { 끊겨서보낼곳 } from "@/lib/kicked";
 import { BookTitle } from "@/components/book-title";
+import { useAdventureRequest } from "@/components/book-journey";
 import { useChapterInProgress } from "@/components/book-progress";
 import { ApiError, NetworkError, apiGet, 역할이다르다, 인증이풀렸다 } from "@/lib/api";
 
@@ -47,11 +48,24 @@ export default function BookScreen() {
    * **⛔ 책을 그리는 것을 막지 않는다** — 이 값을 기다리느라 책이 늦게 뜨면 안 된다.
    */
   const 본편이도나 = useChapterInProgress();
+  const 한번만 = useAdventureRequest();
 
+  /**
+   * **같은 책을 두 번 받지 않는다** (2026-09-22 실측으로 잡았다).
+   *
+   * 화면이 한 번 서는 동안 **똑같은 `GET /book` 이 두 번** 나갔다 — 주소도 응답도 같다.
+   * `book-progress.ts` · `chapter-door.tsx` 와 같은 자리이고 같은 장치를 쓴다.
+   *
+   * **⛔ 열쇠에 `attempt` 를 넣는다.** 「다시 시도」는 **일부러 다시 받는 것**이라
+   * 여기서 막으면 그 버튼이 아무 일도 안 하게 된다.
+   *
+   * **⭐ 삽화 갱신은 이 요청과 무관하다** — 준비 중인 그림은 `book-page.tsx` 가
+   * `GET /artworks/{id}` 로 따로 확인한다. 이 요청을 줄여도 그림은 그대로 갱신된다.
+   */
   useEffect(() => {
     let alive = true;
 
-    apiGet<Book>("/book")
+    한번만(`book-content:${attempt}`, () => apiGet<Book>("/book"))
       .then((book) => {
         if (alive) setScreen({ kind: "book", book });
       })
@@ -88,7 +102,7 @@ export default function BookScreen() {
     return () => {
       alive = false;
     };
-  }, [attempt, router]);
+  }, [attempt, router, 한번만]);
 
   return (
     <div className="book-shell">
