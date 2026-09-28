@@ -84,6 +84,37 @@
   justify-content: left;
 }
 
+/* **처음 온 사람에게 순서를 알려 주는 자리** (`문구.md` 3.13) — 「가입하기」 바로 아래.
+   두 문장은 한 덩이로 붙이고, 버튼은 그 문장 뒤에 선다. */
+.parent-entry--login > .parent-entry-first {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-self: stretch;
+  margin-top: -0.5rem;
+}
+.parent-entry-first .account-description {
+  margin: 0;
+}
+/* **옅은 숲 초록 배경을 준다** (2026-09-28 사용자 선택). 링크 하나만 받고 온 사람은 계정이 없어
+   **[로그인]이 주 행동이 아닌데**, 테두리만 있으면 입력칸이 비어 꺼진 [로그인] 옆에서 안 보인다.
+   ⛔ **거쳐 간 색 셋** — 옅은 파랑은 **꺼진 버튼처럼**, 옅은 주황은 **경고처럼** 보였고,
+   옅은 금빛은 **꺼진 [로그인]의 회색 베이지와 밝기가 같아** 구분이 안 됐다.
+   초록은 **왼쪽 숲 그림에서 뽑았다** — 색 토큰에 없는 값이라 이 버튼에만 쓴다.
+   글자도 진한 초록으로 맞춘다(남색이면 초록 바탕에서 탁해 보인다).
+   자녀 관리 화면의 [아이 화면 열기]는 건드리지 않는다. */
+.parent-entry-first .parent-entry-child {
+  align-self: flex-start;
+  margin-top: 0.75rem;
+  border-color: #7f9a5e;
+  background: #e4ecd6;
+  color: #2f4a24;
+}
+.parent-entry-first .parent-entry-child:hover {
+  border-color: #5f7b40;
+  background: #d8e4c6;
+}
+
 .parent-entry .account-signup-form {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -538,6 +539,27 @@ function AccessCodePanel({ 코드 }: { 코드: 발급된코드 }) {
 
       {/* **본 그 순간에 말한다.** 나중에 다시 열어보려 하는 것이 실제 실패 모드다. */}
       <p className="access-code-validity">{접속코드.한번만}</p>
+
+      {/* **위 네 줄의 순서를 안 바꾸고 그 아래에 붙인다** (`문구.md` 3.13).
+          ⛔ **새 탭으로 연다** — 같은 탭으로 가면 **이 코드가 화면에서 사라지고 다시 못 본다**
+          (서버는 해시만 갖는다). 새 탭이면 코드를 보면서 옆 탭에 넣는다.
+          곁 안내는 **브라우저 하나로 부모와 아이를 둘 다 해 보는 사람**을 위한 것이다 —
+          코드를 넣는 순간 부모 로그인이 끝나는데, 미리 말하지 않으면 고장으로 읽힌다. */}
+      <div data-아이화면열기 className="access-code-child">
+        <Link
+          href="/child/auth"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pressable action-secondary self-start"
+        >
+          {접속코드.아이화면열기}
+        </Link>
+        <div className="access-code-child-note">
+          {접속코드.아이화면안내.map((줄) => (
+            <p key={줄}>{줄}</p>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

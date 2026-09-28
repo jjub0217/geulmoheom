@@ -155,6 +155,15 @@ test("아이를 추가하면 접속 코드가 그 자리에서 뜬다", async ({
   await expect(코드칸(page).locator(".access-code-value")).toHaveAttribute("aria-label", "4 8 2 9 1 3");
   // **새 코드는 버튼을 누른 뒤 화면 중간에 조용히 생긴다** — 못 보는 부모에게는 읽어 줘야 한다.
   await expect(코드칸(page)).toHaveAttribute("role", "status");
+
+  // **아이 화면 열기는 새 탭이다** (`문구.md` 3.13) — 같은 탭으로 가면 이 코드가 사라지고
+  // 다시 못 본다. 곁 안내는 코드를 넣는 순간 부모 로그인이 끝난다는 것을 미리 말한다.
+  const 아이화면 = 코드칸(page).getByRole("link", { name: 접속코드.아이화면열기 });
+  await expect(아이화면).toHaveAttribute("href", /\/child\/auth\/?$/);
+  await expect(아이화면).toHaveAttribute("target", "_blank");
+  for (const 줄 of 접속코드.아이화면안내) {
+    await expect(코드칸(page)).toContainText(줄);
+  }
 });
 
 test("재발급 경고는 누르기 전에 보인다 — 끊기는 것이 기기라 버튼 옆 한 줄이다", async ({

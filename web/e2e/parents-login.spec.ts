@@ -218,19 +218,45 @@ test("왜 로그아웃되는지 먼저 말하고, 전문 용어를 쓰지 않는
   for (const 안쓰는말 of ["세션", "만료", "토큰", "쿠키", "다시 로그인해"]) {
     expect(화면).not.toContain(안쓰는말);
   }
-  // **아이 화면으로 가는 길을 여기 두지 않는다** — 아이는 접속 코드로 들어온다.
-  // 제품명 「글모험」은 허용하지만 안내·폼에 아이에게 하는 말이 섞이는 것은 계속 막는다.
+  // 제품명 「글모험」과 처음 온 사람에게 순서를 알려 주는 자리(`문구.md` 3.13)는 허용하지만
+  // 안내·폼에 아이에게 하는 말이 섞이는 것은 계속 막는다.
   const 브랜드외문구 = await page.locator("main").evaluate((main) => {
     const content = main.cloneNode(true) as HTMLElement;
-    content.querySelectorAll(".entry-brand").forEach((brand) => brand.remove());
+    content
+      .querySelectorAll(".entry-brand, [data-처음안내]")
+      .forEach((자리) => 자리.remove());
     return content.textContent ?? "";
   });
   for (const 안쓰는말 of ["탐험가", "나침반", "모험", "접속 코드"]) {
     expect(브랜드외문구).not.toContain(안쓰는말);
   }
 
-  // **나가는 길은 가입 하나뿐이다.**
   await expect(page.getByRole("link", { name: 로그인.가입으로 })).toBeVisible();
+});
+
+/**
+ * **⛔ 2026-09-28 에 「아이 화면으로 가는 길을 두지 않는다」를 뒤집었다** (`문구.md` 3.13).
+ * 외부에 건네는 링크가 이 화면 하나라, 처음 온 사람이 순서를 모르고 아이 화면 입구도 못 찾았다.
+ */
+test("처음 온 사람에게 순서를 알려 주고 아이 화면으로 가는 길을 둔다", async ({ page }) => {
+  await page.goto("/parents/login");
+
+  const 처음안내 = page.locator("[data-처음안내]");
+  for (const 줄 of 로그인.처음안내) {
+    await expect(처음안내).toContainText(줄);
+  }
+  // **「로그인이 풀린다」는 여기 안 쓴다** — 이 화면에 온 사람은 아직 풀릴 로그인이 없다.
+  await expect(처음안내).not.toContainText("로그인이 끝납니다");
+
+  const 아이화면 = page.getByRole("link", { name: 로그인.아이화면으로 });
+  await expect(아이화면).toHaveAttribute("href", /\/child\/auth\/?$/);
+  // **같은 탭이다.** 새 탭으로 여는 것은 받은 코드가 떠 있는 자녀 관리 화면뿐이다.
+  await expect(아이화면).not.toHaveAttribute("target", "_blank");
+
+  // **「가입하기」 바로 아래다** — 순서를 읽고 가입하러 가는 흐름이 끊기지 않게.
+  const 가입위 = await page.getByRole("link", { name: 로그인.가입으로 }).boundingBox();
+  const 안내위 = await 처음안내.boundingBox();
+  expect(가입위 && 안내위 && 안내위.y > 가입위.y).toBe(true);
 });
 
 /**

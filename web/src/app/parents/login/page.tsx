@@ -28,7 +28,8 @@ type LoginResponse = components["schemas"]["LoginResponse"];
  * **짧게 만드는 결정은 다시 들어올 길이 있어야 성립한다.**
  *
  * **여기는 아이 화면이 아니다** — `용어사전.md` 「아이 화면」 열의 말을 쓰지 않는다.
- * 그리고 **아이 화면으로 가는 길도 두지 않는다**: 아이는 접속 코드로 들어온다.
+ * **다만 아이 화면으로 가는 길은 둔다** (`문구.md` 3.13, 2026-09-28) — 외부에 건네는 링크가
+ * 이 화면 하나라, 처음 온 사람이 순서와 아이 화면 입구를 여기서 알아야 한다.
  *
  * **입력 열의 폭을 제한한다** (가입 화면과 같은 이유) — 1280 을 다 쓰면 한 줄이 너무 길고,
  * **이메일 칸이 화면을 가로지르면 「길게 쓰라」는 신호**가 된다.
@@ -185,13 +186,26 @@ export default function ParentLogin() {
         </button>
       </form>
 
-      {/* **나가는 길은 가입 하나뿐이다.** 아이 화면으로 가는 길을 여기 두지 않는다. */}
       <Link
         href="/parents/signup"
         className="pressable action-quiet account-alternate parent-entry-switch"
       >
         {로그인.가입으로}
       </Link>
+
+      {/* **「가입하기」 바로 아래에 순서 두 문장과 아이 화면 입구를 둔다** (`문구.md` 3.13).
+          **같은 탭으로 간다** — 이 화면에는 새 탭에 남겨 둘 것(받은 코드)이 없다.
+          「로그인이 풀린다」는 여기 안 쓴다: 이 화면에 온 사람은 아직 풀릴 로그인이 없다. */}
+      <div data-처음안내 className="parent-entry-first">
+        {로그인.처음안내.map((줄) => (
+          <p key={줄} className="account-description">
+            {줄}
+          </p>
+        ))}
+        <Link href="/child/auth" className="pressable action-secondary parent-entry-child">
+          {로그인.아이화면으로}
+        </Link>
+      </div>
       </div>
     </AccountEntry>
   );
